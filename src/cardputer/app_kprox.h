@@ -12,6 +12,7 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "KProx"; }
+    bool handlesGlobalBtnA() const override { return true; }
     uint16_t iconColor() const override { return 0x3297; } // header blue
 
 private:

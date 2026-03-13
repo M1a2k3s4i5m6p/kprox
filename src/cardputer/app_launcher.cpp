@@ -36,6 +36,28 @@ void AppLauncher::_drawStatusBar() {
     disp.setTextColor(wifiColor, barBg);
     disp.drawString(wifiOk ? "WiFi" : "No WiFi", 52, 4);
 
+    // Bluetooth status
+    bool btOn = bluetoothEnabled && bluetoothInitialized;
+    uint16_t btColor = btOn
+        ? (BLE_KEYBOARD_VALID && BLE_KEYBOARD.isConnected()
+            ? disp.color565(100, 160, 255)
+            : disp.color565(80, 80, 180))
+        : disp.color565(100, 100, 100);
+    disp.setTextColor(btColor, barBg);
+    disp.drawString(btOn ? "BT" : "--", 108, 4);
+
+    // USB status
+#ifdef BOARD_HAS_USB_HID
+    bool usbOn = usbEnabled && usbInitialized;
+    uint16_t usbColor = usbOn
+        ? (usbKeyboardReady
+            ? disp.color565(100, 220, 180)
+            : disp.color565(60, 130, 100))
+        : disp.color565(100, 100, 100);
+    disp.setTextColor(usbColor, barBg);
+    disp.drawString(usbOn ? "USB" : "---", 126, 4);
+#endif
+
     // Battery level
     int batLevel = M5Cardputer.Power.getBatteryLevel();
     if (batLevel < 0) batLevel = 0;

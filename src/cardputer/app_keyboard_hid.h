@@ -13,6 +13,7 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "Keyboard"; }
+    bool handlesGlobalBtnA() const override { return true; }
     uint16_t iconColor() const override { return 0x4A49; }  // ~rgb(80,80,80)
 
 private:

@@ -122,7 +122,7 @@ void AppKProx::_drawScreen() {
     // ---- Footer ----
     disp.fillRect(0, H - FTR, W, FTR, FTR_BG);
     disp.setTextColor(disp.color565(110, 110, 110), FTR_BG);
-    disp.drawString("< > reg+  <num>+ENTER goto  ESC menu", 2, H - FTR + 1);
+    disp.drawString("< > reg  ENTER play  <n>+ENTER goto  ESC menu", 2, H - FTR + 1);
 
     _needsRedraw = false;
 }
@@ -233,6 +233,12 @@ void AppKProx::onUpdate() {
             saveActiveRegister();
         }
         _needsRedraw = true;
+        return;
+    }
+    if (ki.enter && _numberBuf.length() == 0) {
+        if (!registers.empty() && !isHalted && !registers[activeRegister].isEmpty()) {
+            pendingTokenStrings.push_back(registers[activeRegister]);
+        }
         return;
     }
     if (ki.del && _numberBuf.length() > 0) { _numberBuf.remove(_numberBuf.length() - 1); _needsRedraw = true; }

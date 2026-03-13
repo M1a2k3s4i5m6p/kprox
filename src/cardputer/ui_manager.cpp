@@ -65,6 +65,7 @@ KeyInput pollKeys() {
             case '.': ki.arrowDown  = true; continue;
             case ';': ki.arrowUp    = true; continue;
             case '/': ki.arrowRight = true; continue;
+            case '`': ki.esc        = true; continue;
         }
 
         if (c >= 0x20 && c < 0x7F) ki.ch = c;
@@ -133,6 +134,15 @@ void UIManager::update() {
     if (_needsFullRedraw) {
         _needsFullRedraw = false;
         if (_currentApp < (int)_apps.size()) _apps[_currentApp]->onEnter();
+    }
+
+    // Global BtnA: play current register from any app that doesn't handle it itself
+    if (M5Cardputer.BtnA.wasPressed()) {
+        AppBase* app = _apps[_currentApp];
+        if (!app->handlesGlobalBtnA() && !registers.empty() && !isHalted) {
+            pendingTokenStrings.push_back(registers[activeRegister]);
+            notifyInteraction();
+        }
     }
 
     if (_currentApp < (int)_apps.size()) _apps[_currentApp]->onUpdate();
