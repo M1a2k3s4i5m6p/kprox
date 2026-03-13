@@ -5,6 +5,9 @@
 void saveWiFiSettings();
 void loadWiFiSettings();
 
+void saveWifiEnabledSettings();
+void loadWifiEnabledSettings();
+
 void saveBtSettings();
 void loadBtSettings();
 

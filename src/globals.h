@@ -118,6 +118,7 @@ extern bool usbMouseReady;
 #endif
 
 // ---- Network state ----
+extern bool          wifiEnabled;
 extern bool          mdnsEnabled;
 extern bool          udpEnabled;
 extern unsigned long lastUdpBroadcast;

@@ -23,6 +23,12 @@ KeyInput pollKeys() {
     ki.del    = ks.del;
     ki.tab    = ks.tab;
 
+    // fn+enter = next page in multi-page apps
+    if (ks.fn && ks.enter) {
+        ki.nextPage = true;
+        return ki;
+    }
+
     // fn + tab or tab alone = ESC for UI navigation.
     // On the Cardputer ADV keyboard, the physical ESC key may map to ks.tab.
     if (ks.tab) {

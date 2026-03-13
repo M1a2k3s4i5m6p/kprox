@@ -21,6 +21,18 @@ void loadWiFiSettings() {
     if (wifiPassword.isEmpty()) wifiPassword = DEFAULT_WIFI_PASSWORD;
 }
 
+void saveWifiEnabledSettings() {
+    preferences.begin("kprox", false);
+    preferences.putBool("wifiEnabled", wifiEnabled);
+    preferences.end();
+}
+
+void loadWifiEnabledSettings() {
+    preferences.begin("kprox", false);
+    wifiEnabled = preferences.getBool("wifiEnabled", true);
+    preferences.end();
+}
+
 void saveBtSettings() {
     preferences.begin("kprox", false);
     preferences.putBool("btEnabled", bluetoothEnabled);

@@ -3,6 +3,7 @@
 
 #include "app_base.h"
 #include "ui_manager.h"
+#include <WiFi.h>
 
 namespace Cardputer {
 
@@ -13,10 +14,12 @@ public:
     const char* appName() const override { return "Launcher"; }
 
 private:
-    int  _selected     = 0;
-    bool _needsRedraw  = true;
+    int           _selected          = 0;
+    bool          _needsRedraw       = true;
+    unsigned long _lastStatusUpdate  = 0;
 
     void _drawMenu();
+    void _drawStatusBar();
     void _drawIcon(int appIndex, int screenX, bool selected);
 };
 

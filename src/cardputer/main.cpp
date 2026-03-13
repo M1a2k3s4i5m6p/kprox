@@ -13,11 +13,57 @@
 #include "ui_manager.h"
 #include "app_launcher.h"
 #include "app_kprox.h"
-#include "app_setwifi.h"
 #include "app_keyboard_hid.h"
 #include "app_clock.h"
-#include "app_apikey.h"
+#include "app_settings.h"
 #include <M5Cardputer.h>
+#include "nvs_flash.h"
+#include "nvs.h"
+
+// ---- USB identity pre-init ----
+//
+// ARDUINO_USB_CDC_ON_BOOT=1 causes USB.begin() to be called inside
+// initArduino(), which runs in loopTask before setup() is ever reached.
+// USB.manufacturerName() / productName() must be called BEFORE that first
+// USB.begin(), so they must run during the C-runtime constructor phase.
+//
+// __attribute__((constructor(110))) executes after global C++ objects
+// (including the USB singleton, which has no explicit priority) are
+// constructed, but before loopTask / initArduino() fires.  At that point
+// the NVS flash is accessible via the raw ESP-IDF API; the Arduino
+// Preferences wrapper is not yet usable.
+//
+// Preferences::putBool stores as uint8_t; read back with nvs_get_u8.
+
+#ifdef BOARD_HAS_USB_HID
+static void usbIdentityPreInit() __attribute__((constructor(110)));
+static void usbIdentityPreInit() {
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
+
+    char mfg[64]  = DEFAULT_MANUFACTURER;
+    char prod[64] = DEFAULT_PRODUCT_NAME;
+    uint8_t usbEn = 1;
+
+    nvs_handle_t h;
+    if (nvs_open("kprox", NVS_READONLY, &h) == ESP_OK) {
+        size_t len;
+        nvs_get_u8(h, "usbEnabled", &usbEn);
+        len = sizeof(mfg);  nvs_get_str(h, "usbMfg",     mfg,  &len);
+        len = sizeof(prod); nvs_get_str(h, "usbProduct",  prod, &len);
+        nvs_close(h);
+    }
+
+    if (usbEn) {
+        USB.manufacturerName(mfg);
+        USB.productName(prod);
+        USB.serialNumber(USB_SERIAL_NUMBER);
+    }
+}
+#endif
 
 // ---- mDNS version compatibility (same as kprox.ino) ----
 
@@ -60,6 +106,8 @@ String wifiPassword  = DEFAULT_WIFI_PASSWORD;
 String apiKey        = DEFAULT_API_KEY;
 String usbManufacturer = DEFAULT_MANUFACTURER;
 String usbProduct    = DEFAULT_PRODUCT_NAME;
+
+bool wifiEnabled     = true;
 
 const char* hostname   = HOSTNAME;
 const char* deviceName = DEFAULT_PRODUCT_NAME;
@@ -158,6 +206,7 @@ void setup() {
     loadRegisters();
     loadBtSettings();
     loadWiFiSettings();
+    loadWifiEnabledSettings();
     loadApiKeySettings();
     loadUtcOffsetSettings();
     loadMTLSSettings();
@@ -182,9 +231,6 @@ void setup() {
     }
 
     if (usbEnabled) {
-        USB.manufacturerName(usbManufacturer.c_str());
-        USB.productName(usbProduct.c_str());
-        USB.serialNumber(USB_SERIAL_NUMBER);
         USB.begin(); USBKeyboard.begin(); USBMouse.begin();
         usbInitialized   = true;
         usbKeyboardReady = true;
@@ -202,6 +248,8 @@ void setup() {
     mouseBatch.hasMovement  = false;
 
     WiFi.setHostname(hostname);
+
+    if (wifiEnabled) {
     WiFi.mode(WIFI_STA);
     WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str());
 
@@ -241,6 +289,9 @@ void setup() {
     }
     delay(800);
     feedWatchdog();
+    } else {
+        WiFi.mode(WIFI_OFF);
+    }
 
     if (registers.empty()) {
         addRegister("{LEFT}{SLEEP 1000}{RIGHT}{SLEEP 1000}{UP}{SLEEP 1000}{DOWN}{SLEEP 1000}{ENTER}");
@@ -249,8 +300,10 @@ void setup() {
         addRegister("{CHORD CTRL+A}{SLEEP 500}{CHORD CTRL+C}{SLEEP 500}{CHORD CTRL+V}");
     }
 
-    setupRoutes();
-    server.begin();
+    if (wifiEnabled) {
+        setupRoutes();
+        server.begin();
+    }
 
     feedWatchdog();
 
@@ -264,17 +317,15 @@ void setup() {
     // Register apps: Launcher first, then real apps
     static Cardputer::AppLauncher    launcher;
     static Cardputer::AppKProx       appKProx;
-    static Cardputer::AppSetWifi     appSetWifi;
     static Cardputer::AppKeyboardHID appKeyboard;
     static Cardputer::AppClock       appClock;
-    static Cardputer::AppApiKey      appApiKey;
+    static Cardputer::AppSettings    appSettings;
 
     Cardputer::uiManager.addApp(&launcher);
     Cardputer::uiManager.addApp(&appKProx);
-    Cardputer::uiManager.addApp(&appSetWifi);
     Cardputer::uiManager.addApp(&appKeyboard);
     Cardputer::uiManager.addApp(&appClock);
-    Cardputer::uiManager.addApp(&appApiKey);
+    Cardputer::uiManager.addApp(&appSettings);
 
     // Start directly in KProx app (index 1)
     Cardputer::uiManager.launchApp(1);
@@ -285,11 +336,13 @@ void setup() {
 
 void loop() {
     feedWatchdog();
-    server.handleClient();
-    if (mtlsEnabled) serverHTTP.handleClient();
-    MDNS_UPDATE();
+    if (wifiEnabled) {
+        server.handleClient();
+        if (mtlsEnabled) serverHTTP.handleClient();
+        MDNS_UPDATE();
+    }
 
-    if (udpEnabled && WiFi.status() == WL_CONNECTED && millis() - lastUdpBroadcast > UDP_BROADCAST_INTERVAL) {
+    if (wifiEnabled && udpEnabled && WiFi.status() == WL_CONNECTED && millis() - lastUdpBroadcast > UDP_BROADCAST_INTERVAL) {
         broadcastDiscovery();
         lastUdpBroadcast = millis();
     }

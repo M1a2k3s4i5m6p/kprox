@@ -16,6 +16,7 @@ struct KeyInput {
     bool arrowLeft = false;
     bool arrowRight= false;
     bool fn        = false;
+    bool nextPage  = false;
     char ch        = 0;
     bool anyKey    = false;
 };
