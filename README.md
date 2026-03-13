@@ -1,4 +1,4 @@
-# KProx HID Automation
+# KProx HID Automation & Proxy
 
 KProx is a 1-key programmable BLE + USB keyboard and mouse with API.
 
