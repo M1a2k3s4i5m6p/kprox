@@ -38,7 +38,7 @@ void blinkLED(int count, uint8_t r, uint8_t g, uint8_t b, int dutyCycle) {
 void flashTxIndicator() {
     if (!ledEnabled) return;
 
-    bool bleConn = bluetoothEnabled && bluetoothInitialized && Keyboard.isConnected();
+    bool bleConn = bluetoothEnabled && bluetoothInitialized && BLE_KEYBOARD_VALID && BLE_KEYBOARD.isConnected();
 #ifdef BOARD_HAS_USB_HID
     bool usbConn = usbEnabled && usbInitialized && usbKeyboardReady;
 #else

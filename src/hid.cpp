@@ -7,56 +7,56 @@
 static bool anyHIDConnected() { return isBLEConnected() || isUSBConnected(); }
 
 static void hidPrint(const String& text) {
-    if (isBLEConnected()) Keyboard.print(text);
+    if (isBLEConnected()) BLE_KEYBOARD.print(text);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected()) USBKeyboard.print(text);
 #endif
 }
 
 static void hidPress(uint8_t key) {
-    if (isBLEConnected()) Keyboard.press(key);
+    if (isBLEConnected()) BLE_KEYBOARD.press(key);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected()) USBKeyboard.press(key);
 #endif
 }
 
 static void hidRelease(uint8_t key) {
-    if (isBLEConnected()) Keyboard.release(key);
+    if (isBLEConnected()) BLE_KEYBOARD.release(key);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected()) USBKeyboard.release(key);
 #endif
 }
 
 void hidReleaseAll() {
-    if (isBLEConnected()) Keyboard.releaseAll();
+    if (isBLEConnected()) BLE_KEYBOARD.releaseAll();
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected()) USBKeyboard.releaseAll();
 #endif
 }
 
 static void hidMouseMoveStep(int8_t x, int8_t y) {
-    if (isBLEConnected()) Mouse.move(x, y);
+    if (isBLEConnected()) BLE_MOUSE.move(x, y);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected() && usbMouseReady) USBMouse.move(x, y);
 #endif
 }
 
 static void hidMouseClick(int button) {
-    if (isBLEConnected()) Mouse.click(button);
+    if (isBLEConnected()) BLE_MOUSE.click(button);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected() && usbMouseReady) USBMouse.click(button);
 #endif
 }
 
 static void hidMousePress(int button) {
-    if (isBLEConnected()) Mouse.press(button);
+    if (isBLEConnected()) BLE_MOUSE.press(button);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected() && usbMouseReady) USBMouse.press(button);
 #endif
 }
 
 static void hidMouseRelease(int button) {
-    if (isBLEConnected()) Mouse.release(button);
+    if (isBLEConnected()) BLE_MOUSE.release(button);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected() && usbMouseReady) USBMouse.release(button);
 #endif
@@ -65,7 +65,7 @@ static void hidMouseRelease(int button) {
 // ---- Connection status ----
 
 bool isBLEConnected() {
-    return bluetoothEnabled && bluetoothInitialized && Keyboard.isConnected();
+    return bluetoothEnabled && bluetoothInitialized && BLE_KEYBOARD_VALID && BLE_KEYBOARD.isConnected();
 }
 
 bool isUSBConnected() {
@@ -87,7 +87,7 @@ void hidPressRaw(uint8_t hidUsage, uint8_t modifiers) {
     BleKeyReport report = {};
     report.modifiers = modifiers;
     report.keys[0]   = hidUsage;
-    if (isBLEConnected()) Keyboard.sendReport(&report);
+    if (isBLEConnected()) BLE_KEYBOARD.sendReport(&report);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected()) {
         KeyReport kr = {};
@@ -100,7 +100,7 @@ void hidPressRaw(uint8_t hidUsage, uint8_t modifiers) {
 
 void hidReleaseRaw() {
     BleKeyReport report = {};
-    if (isBLEConnected()) Keyboard.sendReport(&report);
+    if (isBLEConnected()) BLE_KEYBOARD.sendReport(&report);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected()) {
         KeyReport kr = {};

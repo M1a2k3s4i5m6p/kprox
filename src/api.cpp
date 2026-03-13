@@ -640,7 +640,7 @@ void handleSettings() {
             if (en != bluetoothEnabled) {
                 bluetoothEnabled = en;
                 saveBtSettings();
-                if (bluetoothEnabled && !bluetoothInitialized) { Keyboard.begin(); Mouse.begin(); bluetoothInitialized = true; }
+                if (bluetoothEnabled && !bluetoothInitialized && BLE_KEYBOARD_VALID) { BLE_KEYBOARD.begin(); BLE_MOUSE.begin(); bluetoothInitialized = true; }
                 if (ledEnabled) setLED(bluetoothEnabled ? LED_COLOR_BT_ENABLE : LED_COLOR_BT_DISABLE, 500);
             }
         }

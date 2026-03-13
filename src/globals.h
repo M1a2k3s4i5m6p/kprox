@@ -88,8 +88,19 @@ extern WebServer        server;     // HTTP on 80; TLS terminated externally whe
 extern WebServer        serverHTTP; // reserved for HTTP->HTTPS redirect when mTLS active
 extern WiFiUDP          udp;
 extern Preferences      preferences;
+#ifdef BOARD_M5STACK_CARDPUTER
+extern BleComboKeyboard* Keyboard;
+extern BleComboMouse*    Mouse;
+#define BLE_KEYBOARD (*Keyboard)
+#define BLE_MOUSE    (*Mouse)
+#define BLE_KEYBOARD_VALID (Keyboard != nullptr)
+#else
 extern BleComboKeyboard Keyboard;
 extern BleComboMouse    Mouse;
+#define BLE_KEYBOARD Keyboard
+#define BLE_MOUSE    Mouse
+#define BLE_KEYBOARD_VALID true
+#endif
 extern CRGB             leds[];
 
 #ifdef BOARD_HAS_USB_HID

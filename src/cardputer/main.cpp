@@ -20,43 +20,27 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-// ---- USB identity pre-init ----
-//
-// ARDUINO_USB_CDC_ON_BOOT=1 causes USB.begin() to be called inside
-// initArduino(), which runs in loopTask before setup() is ever reached.
-// USB.manufacturerName() / productName() must be called BEFORE that first
-// USB.begin(), so they must run during the C-runtime constructor phase.
-//
-// __attribute__((constructor(110))) executes after global C++ objects
-// (including the USB singleton, which has no explicit priority) are
-// constructed, but before loopTask / initArduino() fires.  At that point
-// the NVS flash is accessible via the raw ESP-IDF API; the Arduino
-// Preferences wrapper is not yet usable.
-//
-// Preferences::putBool stores as uint8_t; read back with nvs_get_u8.
-
+// USB descriptor strings must reach TinyUSB before initArduino() calls USB.begin().
+// Bluetooth name is handled in setup() via pointer construction — no timing issue there.
 #ifdef BOARD_HAS_USB_HID
-static void usbIdentityPreInit() __attribute__((constructor(110)));
-static void usbIdentityPreInit() {
+static void usbPreInit() __attribute__((constructor(110)));
+static void usbPreInit() {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase();
         nvs_flash_init();
     }
-
     char mfg[64]  = DEFAULT_MANUFACTURER;
     char prod[64] = DEFAULT_PRODUCT_NAME;
     uint8_t usbEn = 1;
-
     nvs_handle_t h;
     if (nvs_open("kprox", NVS_READONLY, &h) == ESP_OK) {
         size_t len;
         nvs_get_u8(h, "usbEnabled", &usbEn);
-        len = sizeof(mfg);  nvs_get_str(h, "usbMfg",     mfg,  &len);
-        len = sizeof(prod); nvs_get_str(h, "usbProduct",  prod, &len);
+        len = sizeof(mfg);  nvs_get_str(h, "usbMfg",    mfg,  &len);
+        len = sizeof(prod); nvs_get_str(h, "usbProduct", prod, &len);
         nvs_close(h);
     }
-
     if (usbEn) {
         USB.manufacturerName(mfg);
         USB.productName(prod);
@@ -91,8 +75,10 @@ WiFiUDP          udp;
 Preferences      preferences;
 CRGB             leds[NUM_LEDS];
 
-BleComboKeyboard Keyboard(DEFAULT_PRODUCT_NAME, DEFAULT_MANUFACTURER, BATTERY_LEVEL);
-BleComboMouse    Mouse(&Keyboard);
+// Constructed in setup() after settings are loaded so the BT device name
+// and battery level reflect persisted values on every boot.
+BleComboKeyboard* Keyboard = nullptr;
+BleComboMouse*    Mouse    = nullptr;
 
 USBHIDKeyboard USBKeyboard;
 USBHIDMouse    USBMouse;
@@ -224,9 +210,16 @@ void setup() {
     feedWatchdog();
     keymapInit();
 
+    // Construct BLE objects here — after settings are loaded — so the device
+    // name and manufacturer are the persisted values, not compile-time defaults.
+    // Battery level is read live on Cardputer; other boards report 100.
+    uint8_t batLevel = (uint8_t)constrain(M5Cardputer.Power.getBatteryLevel(), 0, 100);
+    Keyboard = new BleComboKeyboard(usbProduct.c_str(), usbManufacturer.c_str(), batLevel);
+    Mouse    = new BleComboMouse(Keyboard);
+
     if (bluetoothEnabled) {
-        Keyboard.begin();
-        Mouse.begin();
+        Keyboard->begin();
+        Mouse->begin();
         bluetoothInitialized = true;
     }
 
@@ -238,7 +231,7 @@ void setup() {
     }
 
     delay(500);
-    if (bluetoothEnabled) Keyboard.releaseAll();
+    if (bluetoothEnabled) BLE_KEYBOARD.releaseAll();
     if (usbEnabled && usbInitialized) USBKeyboard.releaseAll();
     feedWatchdog();
 
@@ -417,6 +410,14 @@ void loop() {
         if (!requestInProgress && !isHalted) { hidReleaseAll(); delay(KEY_RELEASE_DELAY); }
         lastPeriodicCleanup = millis();
         feedWatchdog();
+    }
+
+    // Update BLE battery level every 30 seconds
+    static unsigned long lastBatUpdate = 0;
+    if (Keyboard && bluetoothInitialized && millis() - lastBatUpdate > 30000) {
+        uint8_t bat = (uint8_t)constrain(M5Cardputer.Power.getBatteryLevel(), 0, 100);
+        BLE_KEYBOARD.setBatteryLevel(bat);
+        lastBatUpdate = millis();
     }
 
     if (ESP.getFreeHeap() < 8000) {
