@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>KProx HID Controller</title>
+        <link rel="stylesheet" href="css/kprox.css">
+        <style>
+            .danger-btn {
+                width: 100%;
+                padding: 10px;
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: bold;
+                margin-bottom: 8px;
+            }
+            
+            .danger-btn:hover {
+                background-color: #c82333;
+            }
+            
+            .danger-btn:active {
+                background-color: #bd2130;
+            }
+
+            .register-reorder-buttons {
+                display: flex;
+                gap: 2px;
+                margin-left: auto;
+            }
+
+            .reorder-btn {
+                background: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 2px 6px;
+                cursor: pointer;
+                font-size: 11px;
+                line-height: 1;
+            }
+
+            .reorder-btn:hover:not(:disabled) {
+                background: #495057;
+            }
+
+            .reorder-btn:disabled {
+                opacity: 0.35;
+                cursor: not-allowed;
+            }
+
+            .register-name-input {
+                width: 100%;
+                padding: 4px 8px;
+                border: 1px solid #dee2e6;
+                border-radius: 3px;
+                font-size: 12px;
+                color: #6c757d;
+                box-sizing: border-box;
+                margin-bottom: 4px;
+                background: #f8f9fa;
+            }
+
+            .register-name-input:focus {
+                border-color: #80bdff;
+                outline: none;
+                background: white;
+                color: #212529;
+            }
+
+
+            .sidebar-logo {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+                margin-bottom: 12px;
+            }
+            .sidebar-logo h2 {
+                margin: 0;
+                font-size: 1.3em;
+            }
+            .logo-img {
+                width: 100%;
+                height: auto;
+                display: block;
+                border-radius: 6px;
+                object-fit: contain;
+            }
+
+            #mtlsStatus.success { color: #28a745; }
+            #mtlsStatus.warning { color: #ffc107; }
+            #mtlsStatus.error   { color: #dc3545; }
+            #otaStatus.success { color: #28a745; }
+            #otaStatus.warning { color: #ffc107; }
+            #otaStatus.error   { color: #dc3545; }
+        </style>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const apiEndpointInput = document.getElementById('apiEndpoint');
+                apiEndpointInput.value = window.location.protocol + "//" + window.location.host;
+            });
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <div class="sidebar">
+                <div class="sidebar-logo">
+                    <img src="kprox.png" alt="KProx" class="logo-img" id="sidebarLogo" onerror="this.alt='KProx';this.style.width='auto';this.style.height='auto'">
+                    <h2>Settings</h2>
+                </div>
+
+                <div class="settings-controls">
+                    <button id="connectBtn" class="connect-btn" onclick="connect()">Connect</button>
+                    <button class="clear-debug-btn" onclick="clearDebugLog()">Clear Debug Log</button>
+                </div>
+
+                <div class="api-config">
+                    <div class="status-label">API Endpoint</div>
+                    <input type="url" id="apiEndpoint" placeholder="http://10.69.69.242" />
+                    <button onclick="updateApiEndpoint()" style="width: 100%; margin-top: 10px;">Save Endpoint</button>
+
+                    <div class="status-label" style="margin-top: 12px;">API Key</div>
+                    <input type="password" id="apiKeyInput" placeholder="kprox1337" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;" />
+                    <button onclick="saveApiKey()" style="width: 100%; margin-top: 6px;">Save Locally</button>
+
+                    <div class="status-label" style="margin-top: 12px;">Update Device API Key</div>
+                    <input type="password" id="currentApiKeyInput" placeholder="Current API key" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;" />
+                    <input type="password" id="newApiKeyInput" placeholder="New API key (min 8 chars)" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;margin-top:4px;" />
+                    <input type="password" id="newApiKeyConfirm" placeholder="Confirm new API key" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;margin-top:4px;" />
+                    <button onclick="updateDeviceApiKey()" style="width: 100%; margin-top: 6px;">Update Device Key</button>
+                    <div id="apiKeyStatus" style="font-size:12px;margin-top:4px;"></div>
+
+                    <div id="debugInfo" class="debug-info" style="display: none;"></div>
+
+                    <div class="status-label" style="margin-top: 12px;">UTC Offset (seconds)</div>
+                    <input type="number" id="utcOffsetInput" placeholder="e.g. 3600 for UTC+1" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;" />
+                    <button onclick="saveUtcOffset()" style="width: 100%; margin-top: 6px;">Save UTC Offset</button>
+                    <div id="utcOffsetStatus" style="font-size:12px;margin-top:4px;"></div>
+                </div>
+
+                <div class="status-item">
+                    <div class="status-label">BLE Connection</div>
+                    <div class="status-value" id="connectionStatus">Not Connected</div>
+                </div>
+
+                <div class="status-item">
+                    <div class="status-label">Request Status</div>
+                    <div class="status-value" id="requestStatus">Idle</div>
+                </div>
+
+                <div class="status-item">
+                    <div class="status-label">Active Register</div>
+                    <div class="status-value" id="sidebarActiveRegister">-</div>
+                </div>
+
+                <div class="status-item">
+                    <div class="status-label">Loop Status</div>
+                    <div class="status-value" id="loopStatus">Inactive</div>
+                </div>
+
+                <!-- Bluetooth Settings -->
+                <div class="bluetooth-settings">
+                    <div class="status-label">Bluetooth Settings</div>
+                    <button id="bluetoothToggle" class="bluetooth-toggle" onclick="toggleBluetooth()">Enable Bluetooth</button>
+                    <div class="bluetooth-status">
+                        <span class="status-label">Status:</span>
+                        <span class="status-value" id="bluetoothStatus">Unknown</span>
+                    </div>
+                </div>
+
+                <!-- WiFi Settings -->
+                <div class="wifi-settings">
+                    <div class="status-label">WiFi Settings</div>
+                    <div class="wifi-info">
+                        <div class="wifi-info-row">
+                            <span class="status-label">SSID:</span>
+                            <span class="status-value" id="wifiSSID">-</span>
+                        </div>
+                        <div class="wifi-info-row">
+                            <span class="status-label">Status:</span>
+                            <span class="status-value" id="wifiConnectionStatus">Unknown</span>
+                        </div>
+                        <div class="wifi-info-row">
+                            <span class="status-label">RSSI:</span>
+                            <span class="status-value" id="wifiRSSI">-</span>
+                        </div>
+                    </div>
+                    <div class="wifi-controls">
+                        <input type="text" id="newWifiSSID" placeholder="Network SSID" class="wifi-input">
+                        <input type="password" id="newWifiPassword" placeholder="Password" class="wifi-input">
+                        <button onclick="connectToWiFi()" class="wifi-connect-btn">Connect</button>
+                    </div>
+                </div>
+
+                <!-- Keymap Settings -->
+                <div class="wifi-settings">
+                    <div class="status-label">Keymap</div>
+                    <div class="wifi-info">
+                        <div class="wifi-info-row">
+                            <span class="status-label">Active:</span>
+                            <span class="status-value" id="keymapActive">-</span>
+                        </div>
+                    </div>
+                    <div class="wifi-controls">
+                        <select id="keymapSelect" class="wifi-input" style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;background:#fff;">
+                            <option value="">Loading...</option>
+                        </select>
+                        <button onclick="setKeymap()" class="wifi-connect-btn">Set Keymap</button>
+                    </div>
+                    <div class="wifi-controls" style="margin-top:8px;">
+                        <div class="status-label" style="margin-bottom:4px;">Upload Keymap (.json)</div>
+                        <input type="file" id="keymapUploadFile" accept=".json" style="width:100%;font-size:12px;margin-bottom:6px;">
+                        <button onclick="uploadKeymap()" class="wifi-connect-btn">Upload</button>
+                        <button onclick="deleteKeymap()" class="danger-btn" style="margin-top:4px;">Delete Selected</button>
+                        <div id="keymapStatus" style="font-size:12px;margin-top:4px;"></div>
+                    </div>
+                </div>
+
+                <!-- Device Settings -->
+                <div class="device-settings">
+                    <div class="status-label">Device Settings</div>
+                    <div class="device-info">
+                        <div class="wifi-info-row">
+                            <span class="status-label">Manufacturer:</span>
+                            <span class="status-value" id="deviceManufacturer">-</span>
+                        </div>
+                        <div class="wifi-info-row">
+                            <span class="status-label">Product:</span>
+                            <span class="status-value" id="deviceProduct">-</span>
+                        </div>
+                    </div>
+                    <div class="wifi-controls">
+                        <input type="text" id="newDeviceManufacturer" placeholder="Manufacturer" class="wifi-input">
+                        <input type="text" id="newDeviceProduct" placeholder="Product Name" class="wifi-input">
+                        <button onclick="updateDeviceSettings()" class="wifi-connect-btn">Update</button>
+                    </div>
+                </div>
+
+                <!-- Keymap Settings -->
+                <div class="system-controls">
+                    <div class="status-label">Keymap</div>
+                    <div class="wifi-controls">
+                        <div class="wifi-info-row" style="margin-bottom:6px;">
+                            <span class="status-label">Active:</span>
+                            <span class="status-value" id="keymapActive">-</span>
+                        </div>
+                        <select id="keymapSelect" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;margin-bottom:6px;box-sizing:border-box;">
+                            <option value="">Loading...</option>
+                        </select>
+                        <button onclick="setKeymap()" class="wifi-connect-btn" style="margin-bottom:8px;">Set Keymap</button>
+                        <div class="status-label" style="margin-bottom:4px;">Upload Keymap (.json)</div>
+                        <input type="file" id="keymapFile" accept=".json" style="width:100%;margin-bottom:6px;font-size:12px;box-sizing:border-box;">
+                        <button onclick="uploadKeymap()" class="wifi-connect-btn" style="margin-bottom:6px;">Upload</button>
+                        <button onclick="deleteKeymap()" class="danger-btn">Delete Selected</button>
+                        <div id="keymapStatus" style="font-size:12px;margin-top:4px;"></div>
+                    </div>
+                </div>
+
+                <!-- System Controls -->
+                <div class="system-controls">
+                    <div class="status-label">System Controls</div>
+                    <div class="wifi-controls">
+                        <button onclick="wipeSettings()" class="danger-btn">Wipe Settings</button>
+                        <button onclick="wipeRegisters()" class="danger-btn">Wipe Registers</button>
+                        <button onclick="wipeEverything()" class="danger-btn">Wipe Everything</button>
+                    </div>
+                </div>
+
+                <!-- OTA Firmware Update -->
+                <div class="system-controls">
+                    <div class="status-label">Firmware Update (OTA)</div>
+                    <div class="wifi-controls">
+                        <input type="file" id="otaFile" accept=".bin" style="width:100%; margin-bottom:8px; font-size:12px;">
+                        <progress id="otaProgress" value="0" max="100" style="width:100%; display:none; margin-bottom:6px;"></progress>
+                        <button id="otaUploadBtn" onclick="uploadOTA('firmware')" class="wifi-connect-btn">Upload Firmware</button>
+                        <div id="otaStatus" style="margin-top:6px; font-size:12px;"></div>
+                    </div>
+                </div>
+
+                <!-- OTA Filesystem Update -->
+                <div class="system-controls">
+                    <div class="status-label">Filesystem Update (OTA)</div>
+                    <div class="wifi-controls">
+                        <input type="file" id="spiffsFile" accept=".bin" style="width:100%; margin-bottom:8px; font-size:12px;">
+                        <progress id="spiffsProgress" value="0" max="100" style="width:100%; display:none; margin-bottom:6px;"></progress>
+                        <button id="spiffsUploadBtn" onclick="uploadOTA('spiffs')" class="wifi-connect-btn">Upload Filesystem</button>
+                        <div id="spiffsStatus" style="margin-top:6px; font-size:12px;"></div>
+                    </div>
+                </div>
+
+
+                <!-- Security (mTLS) Settings -->
+                <div class="system-controls">
+                    <div class="status-label">mTLS</div>
+                    <div class="wifi-controls">
+                        <div class="wifi-info-row" style="margin-bottom:6px;">
+                            <span class="status-label">Status:</span>
+                            <span class="status-value" id="mtlsEnabledStatus">-</span>
+                        </div>
+                        <div class="wifi-info-row" style="margin-bottom:8px;">
+                            <span class="status-label">Certs:</span>
+                            <span class="status-value" id="mtlsCertsStatus">-</span>
+                        </div>
+
+                        <div class="status-label" style="margin-bottom:4px;">Server Certificate (PEM)</div>
+                        <textarea id="serverCertPem" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" style="width:100%;height:80px;box-sizing:border-box;font-size:11px;font-family:monospace;padding:6px;border:1px solid #ccc;border-radius:4px;resize:vertical;"></textarea>
+
+                        <div class="status-label" style="margin-top:6px;margin-bottom:4px;">Server Private Key (PEM)</div>
+                        <textarea id="serverKeyPem" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" style="width:100%;height:80px;box-sizing:border-box;font-size:11px;font-family:monospace;padding:6px;border:1px solid #ccc;border-radius:4px;resize:vertical;"></textarea>
+
+                        <div class="status-label" style="margin-top:6px;margin-bottom:4px;">CA Certificate (PEM)</div>
+                        <textarea id="caCertPem" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" style="width:100%;height:80px;box-sizing:border-box;font-size:11px;font-family:monospace;padding:6px;border:1px solid #ccc;border-radius:4px;resize:vertical;"></textarea>
+
+                        <button onclick="uploadMTLSCerts()" class="wifi-connect-btn" style="margin-top:6px;">Upload Certificates</button>
+                        <button onclick="clearMTLSCerts()" class="danger-btn" style="margin-top:4px;">Clear Certificates</button>
+
+                        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer;">
+                            <input type="checkbox" id="mtlsEnabledToggle" onchange="toggleMTLS(this.checked)">
+                            Enable mTLS (requires restart)
+                        </label>
+
+                        <div id="mtlsStatus" style="margin-top:6px;font-size:12px;"></div>
+                    </div>
+                </div>
+
+                <!-- Device Information -->
+                <div class="device-info">
+                    <div class="status-label">Device Information</div>
+                    <div class="device-info-grid">
+                        <span class="status-label">Board:</span>
+                        <span class="status-value" id="deviceName">-</span>
+                        <span class="status-label">Chip:</span>
+                        <span class="status-value" id="chipModel">-</span>
+                        <span class="status-label">IP:</span>
+                        <span class="status-value" id="ipAddress">-</span>
+                        <span class="status-label">Hostname:</span>
+                        <span class="status-value" id="hostname">-</span>
+                        <span class="status-label">CPU:</span>
+                        <span class="status-value" id="cpuFreq">-</span>
+                        <span class="status-label">Flash:</span>
+                        <span class="status-value" id="flashSize">-</span>
+                        <span class="status-label">Memory:</span>
+                        <span class="status-value" id="freeHeap">-</span>
+                        <span class="status-label">Uptime:</span>
+                        <span class="status-value" id="uptime">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="tabs">
+                    <div class="tab active" onclick="showTab('registers')">Registers</div>
+                    <div class="tab" onclick="showTab('controls')">Mouse</div>
+                    <div class="tab" onclick="showTab('reference')">Code Reference</div>
+                </div>
+
+                <div id="registers-tab" class="tab-content active">
+                    <!-- Raw Send Section - Moved to top -->
+                    <div class="section">
+                       <h3>Raw Send</h3>
+                       <div class="raw-send-controls">
+                            <div class="register-dropdown-container">
+                                <label>Register:</label>
+                                <select id="rawSendRegisterSelect" class="register-select">
+                                    <option value="-1">New Register</option>
+                                </select>
+                            </div>
+                            <div class="raw-send-buttons">
+                                <button onclick="saveToRegister()" class="save-button">Save</button>
+                                <button onclick="loadFromRegister()" class="load-button">Load</button>
+                            </div>
+                        </div>
+                       <div class="input-group">
+                            <label>Text:</label>
+                            <textarea id="textInput" placeholder="Hello, world{SLEEP 1000}{ENTER}"></textarea>
+                            <button onclick="sendText()">Send</button>
+                        </div>
+                        <div class="busy-indicator" id="textBusy">Sending text...</div>
+                        <div class="response-box" id="textResponse"></div>
+                    </div>
+
+                    <div class="section">
+                        <h3>Register Management</h3>
+
+                        <div class="token-examples">
+                            <div class="token-examples-header" onclick="toggleTokenExamples('registers')">
+                                <h4>Reference</h4>
+                                <span class="token-examples-toggle" id="tokenToggleRegisters">▼</span>
+                            </div>
+                            <div class="token-examples-content" id="tokenExamplesContentRegisters">
+
+                                <h4>Hardware Controls</h4>
+                                <ul>
+                                    <li><strong>Single Click:</strong> Play the currently active register</li>
+                                    <li><strong>Double Click:</strong> Cycle to the next register and set it as active</li>
+                                    <li><strong>Hold 2s:</strong> Toggle halt/resume all operations</li>
+                                    <li><strong>Hold 5s:</strong> Delete all registers (emergency reset)</li>
+                                    <li><strong>LED Feedback:</strong> The LED blinks to indicate the current active register number</li>
+                                </ul>
+
+                                <h4>Special Key Tokens</h4>
+                                <ul>
+                                    <li>{ENTER} - Press Enter key</li>
+                                    <li>{TAB} - Press Tab key</li>
+                                    <li>{ESC} or {ESCAPE} - Press Escape key</li>
+                                    <li>{SPACE} - Press Space key</li>
+                                    <li>{BACKSPACE} - Press Backspace key</li>
+                                    <li>{DELETE} - Press Delete key</li>
+                                </ul>
+
+                                <h4>Arrow Keys</h4>
+                                <ul>
+                                    <li>{LEFT} - Press Left Arrow key</li>
+                                    <li>{RIGHT} - Press Right Arrow key</li>
+                                    <li>{UP} - Press Up Arrow key</li>
+                                    <li>{DOWN} - Press Down Arrow key</li>
+                                </ul>
+
+                                <h4>Navigation Keys</h4>
+                                <ul>
+                                    <li>{INSERT} - Press Insert key</li>
+                                    <li>{HOME} - Press Home key</li>
+                                    <li>{END} - Press End key</li>
+                                    <li>{PAGEUP} - Press Page Up key</li>
+                                    <li>{PAGEDOWN} - Press Page Down key</li>
+                                    <li>{PRINTSCREEN} - Press Print Screen key</li>
+                                    <li>{SYSRQ} - Press System Request key (same as Print Screen)</li>
+                                </ul>
+
+                                <h4>Function Keys</h4>
+                                <ul>
+                                    <li>{F1} - Press F1 key</li>
+                                    <li>{F2} - Press F2 key</li>
+                                    <li>{F3} - Press F3 key</li>
+                                    <li>{F4} - Press F4 key</li>
+                                    <li>{F5} - Press F5 key</li>
+                                    <li>{F6} - Press F6 key</li>
+                                    <li>{F7} - Press F7 key</li>
+                                    <li>{F8} - Press F8 key</li>
+                                    <li>{F9} - Press F9 key</li>
+                                    <li>{F10} - Press F10 key</li>
+                                    <li>{F11} - Press F11 key</li>
+                                    <li>{F12} - Press F12 key</li>
+                                </ul>
+
+                                <h4>System Control Tokens</h4>
+                                <ul>
+                                    <li>{BLUETOOTH_ENABLE} - Enable Bluetooth connectivity</li>
+                                    <li>{BLUETOOTH_DISABLE} - Disable Bluetooth connectivity</li>
+                                    <li>{USB_ENABLE} - Enable USB connectivity</li>
+                                    <li>{USB_DISABLE} - Disable USB connectivity</li>
+                                    <li>{HALT} - Halt all operations immediately</li>
+                                    <li>{RESUME} - Resume halted operations</li>
+                                    <li>{WIFI ssid password} - Connect to WiFi network</li>
+                                </ul>
+
+                                <h4>Timing Tokens</h4>
+                                <ul>
+                                    <li>{SLEEP 1000} - Wait 1000 milliseconds</li>
+                                    <li>{SLEEP {RAND 500 2000}} - Wait random time between 500-2000ms</li>
+                                    <li>{SCHEDULE 14:30} - Wait until 14:30 wall-clock time (uses NTP). Blocks until the device clock reaches that time.</li>
+                                    <li>{SCHEDULE 09:00:00} - Wait until 09:00:00 (with seconds precision)</li>
+                                    <li><em>SCHEDULE requires WiFi + NTP sync. The device syncs time on WiFi connect. Times are UTC unless your timezone offset is configured.</em></li>
+                                    <li><strong>Example:</strong> {SCHEDULE 08:00}Good morning!{ENTER} - Types a message every day at 8 AM when the register loops</li>
+                                    <li><strong>Example:</strong> {LOOP}{SCHEDULE 12:00}{CHORD GUI+L}{SLEEP 60000}{ENDLOOP} - Lock screen at noon daily</li>
+                                </ul>
+
+                                <h4>Loop Tokens</h4>
+                                <ul>
+                                    <li>{LOOP}{ENDLOOP} - Infinite loop</li>
+                                    <li>{LOOP 5000}{ENDLOOP} - Loop for 5000 milliseconds (5 seconds)</li>
+                                    <li>{LOOP i 1 1 5}{ENDLOOP} - Loop variable i from 1 to 5, increment by 1</li>
+                                    <li>{LOOP j 10 -2 0}{ENDLOOP} - Loop variable j from 10 to 0, decrement by 2</li>
+                                    <li>{ENDLOOP} - End loop marker</li>
+                                    <li>{BREAK i 3} - Break out of loop when variable i equals 3</li>
+                                </ul>
+
+                                <h4>Input Control Tokens</h4>
+                                <ul>
+                                    <li>{CHORD CTRL+C} - Press Ctrl+C</li>
+                                    <li>{CHORD ALT+TAB} - Press Alt+Tab</li>
+                                    <li>{CHORD SHIFT+A} - Press Shift+A</li>
+                                    <li>{CHORD GUI+L} - Press Windows/Cmd+L (GUI = Windows/Cmd key)</li>
+                                    <li>{CHORD CTRL+SHIFT+ESC} - Multiple modifiers (Task Manager)</li>
+                                    <li>{CHORD ALT+F4} - Alt+F4 (Close window)</li>
+                                    <li>{CHORD CTRL+ALT+DELETE} - Three-key combination</li>
+                                    <li>{CHORD F1} - Function keys</li>
+                                    <li>{CHORD SHIFT+F10} - Shift + Function key</li>
+                                    <li>{CHORD GUI+R} - Windows+R (Run dialog)</li>
+                                    <li>{CHORD CTRL+SHIFT+N} - Ctrl+Shift+N (New incognito window)</li>
+                                    <li><em>CHORD supports any combination of CTRL, ALT, SHIFT, GUI with any key</em></li>
+                                </ul>
+
+                                <h4>Raw HID Control Tokens</h4>
+                                <ul>
+                                    <li>{HID 0x04} - Send keycode 0x04 (A key)</li>
+                                    <li>{HID 4} - Send keycode 4 (A key, decimal)</li>
+                                    <li>{HID 0x02 0x04} - Send Ctrl+A (0x02=Ctrl modifier, 0x04=A key)</li>
+                                    <li>{HID 2 4} - Send Ctrl+A (decimal modifiers and keycodes)</li>
+                                    <li>{HID 0x01 0x2A} - Send Shift+Backspace (0x01=Shift, 0x2A=Backspace)</li>
+                                    <li>{HID 0x08 0x17} - Send GUI+T (0x08=GUI/Windows key, 0x17=T)</li>
+                                    <li>{HID 0x02 0x16 0x17 0x18} - Send Ctrl+STU (multiple keys with modifier)</li>
+                                    <li>{HID 0xE2} - Send volume down (0xE2 consumer control)</li>
+                                    <li>{HID 0xE9} - Send volume up (0xE9 consumer control)</li>
+                                    <li>{HID 0xEA} - Send volume mute (0xEA consumer control)</li>
+                                    <li>{HID 0xB5} - Send next track (0xB5 consumer control)</li>
+                                    <li>{HID 0xB6} - Send previous track (0xB6 consumer control)</li>
+                                    <li>{HID 0xCD} - Send play/pause (0xCD consumer control)</li>
+                                    <li><em>HID accepts hex (0x prefix) or decimal values. Modifiers: 1=Shift, 2=Ctrl, 4=Alt, 8=GUI</em></li>
+                                </ul>
+
+                                <h4>Mouse Control Tokens</h4>
+                                <ul>
+                                    <li>{SETMOUSE 400 300} - Set mouse to absolute position (400, 300)</li>
+                                    <li>{MOVEMOUSE 10 -5} - Move mouse 10 pixels right, 5 pixels up</li>
+                                    <li>{MOUSECLICK} - Left mouse click</li>
+                                    <li>{MOUSECLICK 2} - Right mouse click (1=left, 2=right, 3=middle)</li>
+                                    <li>{MOUSEDOUBLECLICK} - Double left click</li>
+                                    <li>{MOUSEPRESS 1} - Hold down left mouse button</li>
+                                    <li>{MOUSERELEASE 1} - Release left mouse button</li>
+                                    <li>{SETMOUSE {MATH 200 + 100 * cos({MATH {i} * 3.14159 / 180})} {MATH 200 + 100 * sin({MATH {i} * 3.14159 / 180})}} - Circular positioning</li>
+                                </ul>
+
+                                <h4>Math Tokens</h4>
+                                <ul>
+                                    <li>{MATH 10 + 5} - Basic arithmetic (returns 15)</li>
+                                    <li>{MATH 3.14 * 2} - Floating point math (returns 6.28)</li>
+                                    <li>{MATH 100 / 3} - Division with decimals (returns 33.33)</li>
+                                    <li>{MATH cos(1.57)} - Cosine function (returns ~0)</li>
+                                    <li>{MATH sin(1.57)} - Sine function (returns ~1)</li>
+                                    <li>{MATH {i} * 2} - Using loop variables in calculations</li>
+                                    <li>{MATH cos({MATH {i} * 3.14159 / 180})} - Nested math expressions</li>
+                                </ul>
+
+                                <h4>Data Generation Tokens</h4>
+                                <ul>
+                                    <li>{ASCII 65} - Send raw character 'A' (decimal 65)</li>
+                                    <li>{ASCII 0x41} - Send raw character 'A' (hex 0x41)</li>
+                                    <li>{ASCII {RAND 65 90}} - Send random uppercase letter</li>
+                                    <li>{RAND 1 100} - Generate random number between 1 and 100</li>
+                                    <li>{RAND {i} {i}} - Generate number equal to loop variable i</li>
+                                    <li><em>ASCII accepts decimal values or hex with 0x prefix</em></li>
+                                </ul>
+
+                                <h4>Variable Tokens</h4>
+                                <ul>
+                                    <li>{i} - Loop variable 'i' value</li>
+                                    <li>{j} - Loop variable 'j' value</li>
+                                    <li>{counter} - Loop variable 'counter' value</li>
+                                    <li><em>Any variable name defined in LOOP statements</em></li>
+                                </ul>
+
+                                <h4>Escape Sequences</h4>
+                                <ul>
+                                    <li>\n - Newline character</li>
+                                    <li>\t - Tab character</li>
+                                    <li>\r - Carriage return</li>
+                                    <li>\b - Backspace character</li>
+                                    <li>\f - Form feed character</li>
+                                    <li>\v - Vertical tab character</li>
+                                    <li>\\ - Literal backslash</li>
+                                    <li>\{ - Literal opening brace</li>
+                                    <li>\} - Literal closing brace</li>
+                                </ul>
+
+                                <h4>Simple Examples</h4>
+                                <ul>
+                                    <li>Hello World{ENTER} - Type text and press Enter</li>
+                                    <li>{MOUSECLICK}{SLEEP 100}Test - Click mouse, wait, then type</li>
+                                    <li>{SETMOUSE 100 200}{MOUSECLICK} - Click at specific position</li>
+                                    <li>{MATH 5 + 3} = 8 - Simple calculation</li>
+                                    <li>Random: {RAND 1 10} - Random number 1-10</li>
+                                    <li>{LOOP i 1 1 3}{i} {ENDLOOP} - Outputs "1 2 3 "</li>
+                                    <li>{HID 0xE9} - Volume up</li>
+                                    <li>{ASCII 65} - Output 'A' character</li>
+                                    <li>{WIFI MyNetwork MyPassword} - Connect to WiFi</li>
+                                </ul>
+
+                                <h4>Complex Examples</h4>
+                                <ul>
+                                    <li>{SETMOUSE 400 300}{LOOP i 0 1 360}{SETMOUSE {MATH 400 + 100 * cos({MATH {i} * 3.14159 / 180})} {MATH 300 + 100 * sin({MATH {i} * 3.14159 / 180})}}{SLEEP 10}{ENDLOOP} - Draw 100px radius circle</li>
+                                    <li>{MOUSEPRESS 1}{LOOP i 0 10 100}{SETMOUSE {MATH 100 + {i}} {MATH 100 + {i}}}{SLEEP 50}{ENDLOOP}{MOUSERELEASE 1} - Drag diagonal line</li>
+                                    <li>{LOOP i 32 1 126}ASCII {i}: {ASCII {i}}\n{ENDLOOP} - Print ASCII table</li>
+                                    <li>Password: {LOOP i 1 1 8}{ASCII {RAND 48 57}}{ENDLOOP} - 8-digit random password</li>
+                                    <li>{LOOP}{CHORD ALT+TAB}{SLEEP {RAND 2000 5000}}{ENDLOOP} - Random window switching</li>
+                                    <li>{LOOP i 1 1 10}Step {i}{ENTER}{SLEEP 1000}{BREAK i 5}{ENDLOOP} - Count to 5</li>
+                                    <li>{SETMOUSE 200 200}{MOUSEDOUBLECLICK}{SLEEP 500}{CHORD CTRL+A}Select All - Double-click and select all</li>
+                                    <li>{LOOP angle 0 5 360}{SETMOUSE {MATH 300 + 150 * cos({MATH {angle} * 3.14159 / 180})} {MATH 200 + 150 * sin({MATH {angle} * 3.14159 / 180})}}{MOUSECLICK}{SLEEP 20}{ENDLOOP} - Click points in circle</li>
+                                    <li>{HID 0x02 0x2C}{SLEEP 100}{HID 0x02 0x19} - Ctrl+Space, wait, Ctrl+V (paste special)</li>
+                                    <li>{LOOP i 1 1 5}{HID 0xE2}{SLEEP 500}{ENDLOOP} - Volume down 5 times with delay</li>
+                                    <li>{HID 0x01 0x15}{SLEEP 3000}{HID 0x01 0x08}{SLEEP 3000}{HID 0x01 0x16}{SLEEP 3000}{HID 0x01 0x16}{SLEEP 3000}{HID 0x01 0x1C}{SLEEP 3000}{HID 0x01 0x05} - Linux Magic SysRq REISUB sequence</li>
+                                    <li>{WIFI GuestNetwork password123}{SLEEP 5000}Connected to guest network! - Connect to WiFi and confirm</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="register-section">
+                            <h4>Register Contents</h4>
+                            <div class="register-actions">
+                                <button class="add-register-button" onclick="addRegister()">➕ Add New Register</button>
+                                <button class="delete-all-button" onclick="deleteAllRegisters()">🗑️ Delete All Registers</button>
+                            </div>
+                            <div class="register-actions" style="margin-top:8px; gap:6px; display:flex; flex-wrap:wrap;">
+                                <button class="save-button" onclick="exportRegisters()">⬇ Export Registers</button>
+                                <label class="save-button" style="cursor:pointer;">
+                                    ⬆ Import Registers
+                                    <input type="file" id="importRegistersFile" accept=".json" style="display:none" onchange="importRegisters()">
+                                </label>
+                            </div>
+                            <div id="registerList">
+                                <!-- Register list is dynamically populated -->
+                            </div>
+                            <div style="margin-top: 15px;">
+                                <button onclick="loadRegisters()" class="save-button">Reload from Device</button>
+                                <button onclick="saveAllRegisters()" class="save-button">Save All to Device</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="controls-tab" class="tab-content">
+                    <div class="section">
+                        <h3>Mouse Movement</h3>
+
+                        <div class="trackpad-container">
+                            <h4 style="margin-bottom: 10px;">Trackpad</h4>
+                            <div class="trackpad-settings">
+                                <div>
+                                    <label for="sensitivity">Sensitivity:</label>
+                                    <input type="range" id="sensitivity" min="1" max="20" step="1" value="10">
+                                    <span id="sensitivityValue">1.0</span>
+                                </div>
+                                <div>
+                                    <label for="smoothing">Smoothing:</label>
+                                    <input type="checkbox" id="smoothing" checked>
+                                    <span>Enabled</span>
+                                </div>
+                            </div>
+                            <div id="trackpad" class="trackpad"></div>
+                            <div class="trackpad-buttons" style="display:flex;gap:8px;margin-top:8px;">
+                                <button onmousedown="event.preventDefault()" onclick="sendTrackpadClick(1)" style="flex:1;padding:10px 0;font-size:14px;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#f8f9fa;">Left Click</button>
+                                <button onmousedown="event.preventDefault()" ondblclick="sendTrackpadDoubleClick(1);event.preventDefault()" onclick="sendTrackpadClick(1)" style="flex:0 0 auto;padding:10px 14px;font-size:12px;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#f8f9fa;" title="Double-click for double-click">2×</button>
+                                <button onmousedown="event.preventDefault()" onclick="sendTrackpadClick(2)" style="flex:1;padding:10px 0;font-size:14px;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#f8f9fa;">Right Click</button>
+                            </div>
+                            <div class="trackpad-info">
+                                <span>Drag to move · Left/Right buttons to click</span>
+                                <span id="trackpadStatus">Delta: 0, 0</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div id="reference-tab" class="tab-content">
+                    <div class="section">
+                        <h3>Code Reference</h3>
+                        <input type="text" id="searchBox" class="search-box" placeholder="Search by character, ASCII, or HID code..." onkeyup="filterTable()">
+                        <table class="reference-table" id="referenceTable">
+                            <thead>
+                                <tr>
+                                    <th>Character</th>
+                                    <th>Description</th>
+                                    <th>ASCII Dec</th>
+                                    <th>ASCII Hex</th>
+                                    <th>HID Dec</th>
+                                    <th>HID Hex</th>
+                                    <th>Shift Required</th>
+                                    <th>Token</th>
+                                </tr>
+                            </thead>
+                            <tbody id="referenceTableBody">
+                                <!-- Table is dynamically generated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script src="js/kprox.js"></script>
+
+    </body>
+</html>

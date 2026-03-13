@@ -1,0 +1,54 @@
+#pragma once
+#ifdef BOARD_M5STACK_CARDPUTER
+
+#include "app_base.h"
+#include <vector>
+
+namespace Cardputer {
+
+struct KeyInput {
+    bool enter     = false;
+    bool del       = false;
+    bool esc       = false;
+    bool tab       = false;
+    bool arrowUp   = false;
+    bool arrowDown = false;
+    bool arrowLeft = false;
+    bool arrowRight= false;
+    bool fn        = false;
+    char ch        = 0;
+    bool anyKey    = false;
+};
+
+KeyInput pollKeys();
+
+class UIManager {
+public:
+    static constexpr unsigned long SCREEN_TIMEOUT_MS = 60000;
+
+    UIManager();
+
+    void addApp(AppBase* app);
+    void launchApp(int index);
+    void returnToLauncher();
+    void update();
+    void wakeScreen();
+    void notifyInteraction();
+
+    int currentAppIndex() const { return _currentApp; }
+    AppBase* currentApp() { return _apps[_currentApp]; }
+    const std::vector<AppBase*>& apps() const { return _apps; }
+    bool isScreenOn() const { return _screenOn; }
+
+private:
+    std::vector<AppBase*> _apps;
+    int           _currentApp      = 0;
+    bool          _screenOn        = true;
+    bool          _needsFullRedraw = false;
+    unsigned long _lastInteraction = 0;
+};
+
+extern UIManager uiManager;
+
+} // namespace Cardputer
+#endif // BOARD_M5STACK_CARDPUTER

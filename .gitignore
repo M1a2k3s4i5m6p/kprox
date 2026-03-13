@@ -1,0 +1,9 @@
+.pio
+.log
+.json
+node_modules
+tools/**.json
+**.json
+data
+package-lock.json
+**.bin

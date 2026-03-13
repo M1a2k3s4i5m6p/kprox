@@ -1,0 +1,2560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KProx Control</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1976D2 0%, #2196F3 100%);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 15px 0;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .status {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #4A90E2;
+        }
+        
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .error {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
+        
+        .warning {
+            color: #FFC107;
+            font-weight: bold;
+        }
+        
+        .info {
+            color: #2196F3;
+            font-weight: bold;
+        }
+        
+        .device-status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8em;
+            text-align: center;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        
+        .device-status-indicator.no-device {
+            background: rgba(255, 107, 107, 0.8);
+            border: 2px solid #ff6b6b;
+        }
+        
+        .device-status-indicator.device-found {
+            background: rgba(74, 144, 226, 0.8);
+            border: 2px solid #4A90E2;
+        }
+        
+        .device-status-indicator.device-selected {
+            background: rgba(76, 175, 80, 0.8);
+            border: 2px solid #4CAF50;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #4A90E2, #357ABD);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 8px;
+            width: 100%;
+            max-width: 200px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        button:disabled {
+            background: rgba(128, 128, 128, 0.5);
+            cursor: not-allowed;
+        }
+        
+        button.small {
+            padding: 6px 12px;
+            font-size: 0.8em;
+            margin: 4px;
+            max-width: 100px;
+        }
+        
+        button.danger {
+            background: linear-gradient(45deg, #ff6b6b, #e74c3c);
+        }
+        
+        .device-found {
+            background: rgba(74, 144, 226, 0.3);
+            border-left: 4px solid #4A90E2;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .device-found:active {
+            background: rgba(74, 144, 226, 0.5);
+            transform: scale(0.98);
+        }
+        
+        .device-found.selected {
+            border: 2px solid #4CAF50;
+            background: rgba(76, 175, 80, 0.3);
+        }
+        
+        .device-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .device-ip {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        
+        /* Register Grid Styles */
+        .register-grid {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .register-grid.active {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+        }
+        
+        .register-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .register-number {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #4A90E2;
+        }
+        
+        .register-active-indicator {
+            color: #4CAF50;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .register-input-container {
+            margin-bottom: 10px;
+        }
+        
+        .register-input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 1em;
+        }
+        
+        .register-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .register-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .register-button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: all 0.3s ease;
+            color: white;
+        }
+        
+        .set-active-button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+        }
+        
+        .play-button {
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+        }
+        
+        .save-button {
+            background: linear-gradient(45deg, #FF9800, #F57C00);
+        }
+        
+        .delete-button {
+            background: linear-gradient(45deg, #f44336, #d32f2f);
+        }
+        
+        .register-button:disabled {
+            background: rgba(128, 128, 128, 0.5);
+            cursor: not-allowed;
+        }
+        
+        /* Navigation Styles */
+        .nav-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 15px;
+            margin: 15px 0;
+            backdrop-filter: blur(10px);
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .nav-button {
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            margin: 0;
+        }
+        
+        .nav-button.active {
+            background: linear-gradient(45deg, #4A90E2, #357ABD);
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.4);
+        }
+        
+        .nav-button:not(.active) {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        input[type="text"], textarea, input[type="number"] {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 1em;
+            margin: 5px;
+        }
+        
+        input[type="text"]::placeholder, textarea::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        /* Quick Access (Tabs/Buttons) Styles */
+        .tabs-container {
+            margin: 20px 0;
+        }
+        
+        .tab-header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        
+        .tab-button {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+            margin: 2px;
+            max-width: none;
+            width: auto;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .tab-button.active {
+            background: linear-gradient(45deg, #4A90E2, #357ABD);
+            box-shadow: 0 4px 15px rgba(74, 144, 226, 0.4);
+        }
+        
+        .tab-button .tab-name {
+            margin-right: 8px;
+        }
+        
+        .tab-button .tab-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .tab-button .edit-tab, .tab-button .close-tab {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+        }
+        
+        .tab-content {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 200px;
+        }
+        
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .custom-button {
+            background: linear-gradient(45deg, #4A90E2, #357ABD);
+            border: none;
+            color: white;
+            padding: 15px 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+            position: relative;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: none;
+            margin: 0;
+        }
+        
+        .custom-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+        }
+        
+        .custom-button .button-label {
+            font-weight: bold;
+            margin-bottom: 4px;
+            text-align: center;
+        }
+        
+        .custom-button .button-preview {
+            font-size: 0.7em;
+            opacity: 0.7;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            white-space: nowrap;
+            max-width: 90px;
+            text-align: center;
+        }
+        
+        .custom-button .button-actions {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            display: flex;
+            gap: 2px;
+        }
+        
+        .custom-button .edit-button, .custom-button .delete-button {
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .button-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        /* Register Styles */
+        .register-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid transparent;
+        }
+        
+        .register-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .register-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        .register-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .register-actions button {
+            padding: 5px 10px;
+            font-size: 0.8em;
+            max-width: 60px;
+            margin: 0;
+        }
+        
+        .register-content {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            padding: 8px;
+            margin: 8px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            word-break: break-word;
+            white-space: pre-wrap;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        
+        .register-edit {
+            width: 100%;
+            min-height: 60px;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            resize: vertical;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1976D2 0%, #2196F3 100%);
+            margin: 15% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .close-modal {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 5px;
+            margin: 0;
+            width: auto;
+            max-width: none;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .success { color: #4CAF50; }
+        .error { color: #ff6b6b; }
+        .warning { color: #ffd93d; }
+        .info { color: #87ceeb; }
+        
+        .empty-message {
+            text-align: center;
+            opacity: 0.7;
+            margin: 40px 0;
+            font-style: italic;
+        }
+        
+        .section-content {
+            display: none;
+        }
+        
+        .section-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="device-status-indicator no-device" id="deviceStatusIndicator">
+        NO<br>DEVICE
+    </div>
+    
+    <div class="container">
+        <h1>🔍 KProx Control</h1>
+        
+        <div id="devices"></div>
+        
+        <!-- Navigation -->
+        <div class="nav-container" id="navigationContainer" style="display: none;">
+            <button class="nav-button active" onclick="showSection('quickaccess')">Quick Access</button>
+            <button class="nav-button" onclick="showSection('registers')">Registers</button>
+        </div>
+        
+        <!-- Quick Access Section (Tabs/Buttons) -->
+        <div class="card section-content active" id="quickaccessSection">
+            <!-- Raw Send Section -->
+            <div style="background: rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                <h4 style="margin-bottom: 15px; color: #4CAF50;">🚀 Raw Send</h4>
+                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                    <div style="flex: 1;">
+                        <label for="rawSendInput" style="display: block; margin-bottom: 5px; font-size: 0.9em;">Text to Send:</label>
+                        <textarea id="rawSendInput" placeholder="Type any text to send to the device..." 
+                                rows="2" 
+                                style="width: 100%; padding: 10px; border: none; border-radius: 8px; background: rgba(255, 255, 255, 0.2); color: white; font-size: 1em; resize: vertical; min-height: 50px;"
+                                onkeydown="handleRawSendKeydown(event)"></textarea>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <button onclick="pasteFromClipboard()" id="pasteBtn" 
+                                style="padding: 8px 15px; background: linear-gradient(45deg, #2196F3, #1976D2); white-space: nowrap; font-size: 0.9em;">
+                            📋 Paste
+                        </button>
+                        <button onclick="clearRawSend()" 
+                                style="padding: 8px 15px; background: linear-gradient(45deg, #FF9800, #F57C00); white-space: nowrap; font-size: 0.9em;">
+                            🗑️ Clear
+                        </button>
+                        <button onclick="sendRawText()" id="rawSendBtn" 
+                                style="padding: 8px 15px; background: linear-gradient(45deg, #4CAF50, #388E3C); white-space: nowrap; font-size: 0.9em;">
+                            Send
+                        </button>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <button onclick="sendFromClipboard()" id="clipboardSendBtn" 
+                            style="width: 100%; padding: 12px; background: linear-gradient(45deg, #FF9800, #F57C00); border: none; color: white; border-radius: 8px; font-size: 1em; cursor: pointer;">
+                        📋 Send From Clipboard
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Tab Mode Control Buttons -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; justify-content: center;">
+                <button id="tabNormalModeBtn" onclick="setTabMode('normal')" style="background: linear-gradient(45deg, #4CAF50, #388E3C);">Normal Mode</button>
+                <button id="tabEditModeBtn" onclick="setTabMode('edit')" style="background: linear-gradient(45deg, #2196F3, #1976D2);">Edit Mode</button>
+                <button id="tabDeleteModeBtn" onclick="setTabMode('delete')" style="background: linear-gradient(45deg, #f44336, #d32f2f);">Delete Mode</button>
+            </div>
+            
+            <div class="tabs-container">
+                <div class="tab-header">
+                    <div id="tabButtons"></div>
+                    <button onclick="showAddTabModal()" class="small">+ Tab</button>
+                </div>
+                <div class="tab-content" id="tabContent">
+                    <div class="empty-message">No tabs created yet. Click "+ Tab" to create your first tab.</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Registers Section -->
+        <div class="card section-content" id="registersSection">
+            <h3>Text Registers</h3>
+            <div class="register-controls">
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button id="addNewRegisterBtn" onclick="addNewRegister()" style="background: linear-gradient(45deg, #4CAF50, #388E3C);">➕ Add New Register</button>
+                    <button id="deleteAllBtn" onclick="removeAllRegs()" style="flex: 1; background: linear-gradient(45deg, #f44336, #d32f2f);">🗑️ Delete All</button>
+                </div>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button onclick="loadRegistersFromDevice()" style="flex: 1;" id="loadRegistersBtn">Reload from Device</button>
+                    <button onclick="saveAllRegistersToDevice()" style="flex: 1;" id="saveAllRegistersBtn">Save All to Device</button>
+                </div>
+            </div>
+            <div id="registersList">
+                <div class="empty-message">No registers created yet</div>
+            </div>
+            <div id="registersResult" style="margin-top: 10px;"></div>
+        </div>
+        
+        <!-- Auto-Discover Section -->
+        <div class="card">
+            <div class="status">
+                <strong>Status:</strong> <span id="status">Initializing...</span>
+            </div>
+            
+            <div style="text-align: center;">
+                <button id="autoBtn" onclick="startAutoDiscovery()">Auto Discover</button>
+                <button id="stopBtn" onclick="stopDiscovery()" disabled>Stop</button>
+            </div>
+        </div>
+        
+        <div id="devices"></div>
+        
+        <div class="card">
+            <h3>Network Info</h3>
+            <div id="networkInfo">Loading...</div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button onclick="refreshNetworkInfo()" style="flex: 1; background: linear-gradient(45deg, #2196F3, #1976D2);">
+                    🔄 Refresh Network
+                </button>
+                <button onclick="startAutoDiscovery()" style="flex: 1; background: linear-gradient(45deg, #4CAF50, #388E3C);">
+                    🔍 Rediscover Devices
+                </button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>⚙️ Settings</h3>
+            <div class="form-group">
+                <label for="apiKeyInput" style="display:block; margin-bottom:8px; font-weight:bold;">API Key:</label>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="text" id="apiKeyInput" placeholder="Enter API key..." style="flex:1; margin:0;">
+                    <button onclick="saveApiKey()" style="max-width:80px; margin:0;">Save</button>
+                </div>
+                <div style="font-size:0.8em; opacity:0.7; margin-top:6px;">Default: kprox1337 — must match device API key</div>
+            </div>
+            <div id="settingsResult" style="margin-top:8px;"></div>
+        </div>
+
+        <div class="card">
+            <h3>Configuration</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button onclick="saveConfiguration()" style="background: linear-gradient(45deg, #4CAF50, #388E3C);">
+                    💾 Save Tabs & Buttons to File
+                </button>
+                <button onclick="loadConfiguration()" style="background: linear-gradient(45deg, #2196F3, #1976D2);">
+                    📂 Load Tabs & Buttons from File
+                </button>
+            </div>
+            <div id="configResult" style="margin-top: 10px;"></div>
+        </div>
+    </div>
+
+    <!-- Add Tab Modal -->
+    <div id="addTabModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="tabModalTitle">Add New Tab</h3>
+                <button class="close-modal" onclick="closeModal('addTabModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="tabNameInput">Tab Name:</label>
+                <input type="text" id="tabNameInput" placeholder="Enter tab name..." style="width: 100%;">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="saveTabBtn" onclick="saveTab()" style="flex: 1;">Create Tab</button>
+                <button id="deleteTabBtn" onclick="deleteCurrentTab()" class="danger" style="flex: 1; display: none;">Delete Tab</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Button Modal -->
+    <div id="buttonModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="buttonModalTitle">Add Button</h3>
+                <button class="close-modal" onclick="closeModal('buttonModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="buttonLabelInput">Button Label:</label>
+                <input type="text" id="buttonLabelInput" placeholder="Enter button label..." style="width: 100%;">
+            </div>
+            <div class="form-group">
+                <label for="buttonStringInput">Text to Send:</label>
+                <textarea id="buttonStringInput" placeholder="Enter text to send to device..." rows="4" style="width: 100%;"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Copy from Register:</label>
+                <select id="registerSelector" onchange="onRegisterSelected()" style="width: 100%; padding: 8px; border-radius: 5px; background: rgba(255, 255, 255, 0.2); color: white; border: none;">
+                    <option value="">Select register to copy from...</option>
+                </select>
+                <div style="margin-top: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9em;">
+                        <input type="checkbox" id="linkToRegisterCheckbox" onchange="onCheckboxChanged()" style="margin: 0;">
+                        <span>Link to register (button will always play current register content)</span>
+                    </label>
+                </div>
+                <div style="font-size: 0.8em; color: rgba(255, 255, 255, 0.6); margin-top: 5px;">
+                    💡 If no registers appear, go to the Registers tab and click "Reload from Device" first
+                </div>
+            </div>
+            <button id="saveButtonBtn" onclick="saveButton()" style="width: 100%;">Save Button</button>
+        </div>
+    </div>
+
+    <script>
+        let isScanning = false;
+        let foundDevices = new Map();
+        let selectedDevice = null;
+        let tabs = [];
+        let textRegisters = [];
+        let numRegisters = 0;
+        let currentActiveRegister = -1;
+        let tabMode = 'normal'; // Can be 'normal', 'edit', or 'delete'
+        
+        function removeReg(regNum) {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            if (!confirm('Delete register ' + (regNum + 1) + '?\n\nThis cannot be undone.')) {
+                return;
+            }
+            document.getElementById('registersResult').innerHTML = '<span class="warning">Deleting register ' + (regNum + 1) + '...</span>';
+            var payload = { action: 'delete', register: regNum };
+            var callbackId = 'delete_reg_' + Date.now();
+            AndroidApp.saveRegisters(selectedDevice.ip, JSON.stringify(payload), callbackId);
+        }
+        
+        function removeAllRegs() {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            if (numRegisters === 0) {
+                alert('No registers to delete');
+                return;
+            }
+            if (!confirm('Delete ALL ' + numRegisters + ' registers?\n\nThis cannot be undone.')) {
+                return;
+            }
+            document.getElementById('registersResult').innerHTML = '<span class="warning">Deleting all registers...</span>';
+            var callbackId = 'delete_all_' + Date.now();
+            AndroidApp.deleteAllRegisters(selectedDevice.ip, callbackId);
+        }
+        
+        function setTabMode(mode) {
+            tabMode = mode;
+            
+            // Update button styles
+            const editBtn = document.getElementById('tabEditModeBtn');
+            const deleteBtn = document.getElementById('tabDeleteModeBtn');
+            const normalBtn = document.getElementById('tabNormalModeBtn');
+            
+            if (!editBtn || !deleteBtn || !normalBtn) return; // Buttons not loaded yet
+            
+            // Reset all buttons
+            editBtn.style.background = 'linear-gradient(45deg, #2196F3, #1976D2)';
+            deleteBtn.style.background = 'linear-gradient(45deg, #f44336, #d32f2f)';
+            normalBtn.style.background = 'linear-gradient(45deg, #4CAF50, #388E3C)';
+            editBtn.style.boxShadow = '';
+            deleteBtn.style.boxShadow = '';
+            normalBtn.style.boxShadow = '';
+            
+            // Highlight active button
+            if (mode === 'edit') {
+                editBtn.style.background = 'linear-gradient(45deg, #1976D2, #0D47A1)';
+                editBtn.style.boxShadow = '0 0 15px rgba(33, 150, 243, 0.5)';
+            } else if (mode === 'delete') {
+                deleteBtn.style.background = 'linear-gradient(45deg, #d32f2f, #B71C1C)';
+                deleteBtn.style.boxShadow = '0 0 15px rgba(244, 67, 54, 0.5)';
+            } else {
+                normalBtn.style.background = 'linear-gradient(45deg, #388E3C, #1B5E20)';
+                normalBtn.style.boxShadow = '0 0 15px rgba(76, 175, 80, 0.5)';
+            }
+            
+            console.log('Tab mode changed to:', mode);
+            
+            // Re-render tabs AND tab content to update click behaviors
+            renderTabs();
+        }
+        let currentTabId = null;
+        let editingButtonId = null;
+        let editingTabId = null;
+        let currentSection = 'quickaccess';
+        
+        function saveApiKey() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if (!key) { alert('API key cannot be empty'); return; }
+            if (typeof AndroidApp !== 'undefined') {
+                AndroidApp.setApiKey(key);
+                const result = document.getElementById('settingsResult');
+                result.innerHTML = '<span class="success">✅ API key saved — rediscover devices to apply</span>';
+                setTimeout(() => result.innerHTML = '', 4000);
+            }
+        }
+        
+        // Load data from localStorage on startup
+        function loadDataFromStorage() {
+            const savedTabs = localStorage.getItem('kproxTabs');
+            if (savedTabs) {
+                try {
+                    tabs = JSON.parse(savedTabs);
+                    if (tabs.length > 0) {
+                        currentTabId = tabs[0].id;
+                    }
+                } catch (e) {
+                    console.error('Error loading tabs from storage:', e);
+                    tabs = [];
+                }
+            }
+            
+            const savedRegisters = localStorage.getItem('kproxTextRegisters');
+            if (savedRegisters) {
+                try {
+                    textRegisters = JSON.parse(savedRegisters);
+                } catch (e) {
+                    console.error('Error loading registers from storage:', e);
+                    textRegisters = [];
+                }
+            }
+        }
+        
+        // Save tabs to localStorage
+        function saveTabsToStorage() {
+            try {
+                localStorage.setItem('kproxTabs', JSON.stringify(tabs));
+            } catch (e) {
+                console.error('Error saving tabs to storage:', e);
+            }
+        }
+        
+        // Save registers to localStorage
+        function saveRegistersToStorage() {
+            try {
+                localStorage.setItem('kproxTextRegisters', JSON.stringify(textRegisters));
+            } catch (e) {
+                console.error('Error saving registers to storage:', e);
+            }
+        }
+          
+        // Update device status indicator
+        function updateDeviceStatusIndicator() {
+            const indicator = document.getElementById('deviceStatusIndicator');
+            
+            if (selectedDevice) {
+                indicator.className = 'device-status-indicator device-selected';
+                indicator.innerHTML = 'DEVICE<br>READY';
+            } else if (foundDevices.size > 0) {
+                indicator.className = 'device-status-indicator device-found';
+                indicator.innerHTML = 'DEVICE<br>FOUND';
+            } else {
+                indicator.className = 'device-status-indicator no-device';
+                indicator.innerHTML = 'NO<br>DEVICE';
+            }
+        }
+        
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, checking AndroidApp...');
+            
+            loadDataFromStorage();
+            updateDeviceStatusIndicator();
+            renderTabs();
+            renderRegisters();
+            setTabMode('normal');
+            renderRegisters();
+            
+            if (typeof AndroidApp !== 'undefined') {
+                console.log('AndroidApp found, getting local IP...');
+                
+                const storedApiKey = AndroidApp.getApiKey();
+                if (storedApiKey) {
+                    document.getElementById('apiKeyInput').value = storedApiKey;
+                }
+                
+                const localIP = AndroidApp.getLocalIP();
+                console.log('Local IP result:', localIP);
+                
+                if (localIP) {
+                    const parts = localIP.split('.');
+                    const range = `${parts[0]}.${parts[1]}.${parts[2]}`;
+                    document.getElementById('networkInfo').innerHTML = `
+                        <strong>Your IP:</strong> ${localIP}<br>
+                        <strong>Network:</strong> ${range}.x<br>
+                        <strong>Status:</strong> <span class="success">Auto-discovering devices...</span>
+                    `;
+                    
+                    setTimeout(() => {
+                        startAutoDiscovery();
+                    }, 1000);
+                } else {
+                    document.getElementById('networkInfo').innerHTML = '<span class="error">Could not detect network</span>';
+                    document.getElementById('status').textContent = 'Error: Could not detect network';
+                }
+            } else {
+                console.log('AndroidApp not found');
+                document.getElementById('status').textContent = 'Error: Android interface not available';
+                document.getElementById('networkInfo').innerHTML = '<span class="error">Android interface missing</span>';
+            }
+        });
+        
+        // Navigation Functions
+        function showSection(section) {
+            currentSection = section;
+            
+            // Update nav buttons
+            document.querySelectorAll('.nav-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Hide all sections
+            document.querySelectorAll('.section-content').forEach(sec => {
+                sec.classList.remove('active');
+            });
+            
+            // Show selected section
+            document.getElementById(section + 'Section').classList.add('active');
+        }
+        
+        function startAutoDiscovery() {
+            if (isScanning || typeof AndroidApp === 'undefined') {
+                console.log('Cannot start discovery: isScanning=' + isScanning + ', AndroidApp=' + (typeof AndroidApp));
+                return;
+            }
+            
+            console.log('Starting auto discovery...');
+            
+            isScanning = true;
+            foundDevices.clear();
+            selectedDevice = null;
+            updateDeviceStatusIndicator();
+            document.getElementById('devices').innerHTML = '';
+            document.getElementById('autoBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('status').textContent = 'Discovering devices...';
+            document.getElementById('navigationContainer').style.display = 'none';
+            
+            const udpCallbackId  = 'udp_'  + Date.now();
+            const mdnsCallbackId = 'mdns_' + Date.now();
+            AndroidApp.startUdpDiscovery(udpCallbackId);
+            AndroidApp.startMdnsSearch(mdnsCallbackId);
+            
+            setTimeout(() => {
+                if (isScanning) {
+                    console.log('mDNS timeout (2s), falling back to network scan');
+                    AndroidApp.stopMdnsSearch();
+                    
+                    const networkInterfaces = AndroidApp.getAllNetworkInterfaces();
+                    console.log('Detected 10.x network interfaces:', networkInterfaces);
+                    
+                    if (networkInterfaces && networkInterfaces.length > 0) {
+                        const networks = networkInterfaces.split(',');
+                        console.log('Scanning', networks.length, 'detected 10.x networks');
+                        document.getElementById('status').textContent = `Scanning ${networks.length} detected 10.x networks...`;
+                        
+                        networks.forEach(ip => {
+                            const parts = ip.split('.');
+                            const baseRange = `${parts[0]}.${parts[1]}.${parts[2]}`;
+                            console.log('Scanning network range:', baseRange + '.x');
+                            scanRange(baseRange);
+                        });
+                        
+                        setTimeout(() => {
+                            if (isScanning) {
+                                console.log('Network scan timeout');
+                                stopDiscovery();
+                            }
+                        }, 30000);
+                    } else {
+                        console.log('No 10.x networks detected');
+                        document.getElementById('status').textContent = 'No 10.x networks detected — listening for UDP broadcasts...';
+                    }
+                }
+            }, 2000);
+        }
+        
+        function scanAll10Networks() {
+            console.log('Starting comprehensive 10.x.x.x network scan');
+            document.getElementById('status').textContent = 'Scanning all 10.x.x.x networks...';
+            
+            const callbackId = 'netscan_' + Date.now();
+            AndroidApp.scanAllNetworks(callbackId);
+            
+            setTimeout(() => {
+                if (isScanning) {
+                    console.log('Network scan timeout');
+                    stopDiscovery();
+                }
+            }, 35000);
+        }
+        
+        function handleMdnsDeviceFound(callbackId, ip) {
+            console.log('mDNS device found:', ip);
+            try {
+                const deviceData = window._tempDeviceData;
+                delete window._tempDeviceData;
+                addDevice(deviceData);
+            } catch (e) {
+                console.error('Error processing mDNS device:', e);
+            }
+        }
+        
+        function handleUdpDeviceFound(callbackId, ip) {
+            console.log('UDP device found:', ip);
+            try {
+                const deviceData = window._tempDeviceData;
+                delete window._tempDeviceData;
+                addDevice(deviceData);
+            } catch (e) {
+                console.error('Error processing UDP device:', e);
+            }
+        }
+        
+        function handleMdnsComplete(callbackId, success) {
+            console.log('mDNS discovery completed, success:', success);
+        }
+        
+        function handleScanDeviceFound(callbackId, ip) {
+            console.log('Network scan found device:', ip);
+            try {
+                const deviceData = window._tempDeviceData;
+                delete window._tempDeviceData;
+                addDevice(deviceData);
+            } catch (e) {
+                console.error('Error processing scan device:', e);
+            }
+        }
+        
+        function handleScanProgress(callbackId, scanned, found) {
+            document.getElementById('status').textContent = 
+                `Scanned ${scanned} IPs, found ${found} devices...`;
+        }
+        
+        function handleScanComplete(callbackId) {
+            console.log('Network scan completed');
+            if (isScanning) {
+                stopDiscovery();
+            }
+        }
+        
+        function scanRange(baseRange) {
+            console.log('Starting scan of range:', baseRange);
+            let requestCount = 0;
+            
+            const scanOrder = [];
+            
+            for (let i = 100; i <= 254; i++) {
+                scanOrder.push(i);
+            }
+            
+            for (let i = 1; i <= 99; i++) {
+                scanOrder.push(i);
+            }
+            
+            scanOrder.forEach((i, index) => {
+                const ip = `${baseRange}.${i}`;
+                
+                setTimeout(() => {
+                    if (!isScanning) {
+                        console.log('Scanning stopped, skipping', ip);
+                        return;
+                    }
+                    
+                    requestCount++;
+                    if (requestCount % 50 === 0) {
+                        console.log('Sent', requestCount, 'requests so far...');
+                    }
+                    
+                    const callbackId = 'scan_' + Date.now() + '_' + i;
+                    AndroidApp.testDevice(ip, callbackId);
+                }, index * 50);
+            });
+            
+            setTimeout(() => {
+                if (isScanning) {
+                    console.log('Auto-stopping discovery after timeout');
+                    stopDiscovery();
+                }
+            }, scanOrder.length * 50 + 5000);
+        }
+        
+        function stopDiscovery() {
+            isScanning = false;
+            
+            if (typeof AndroidApp !== 'undefined') {
+                AndroidApp.stopMdnsSearch();
+                AndroidApp.stopUdpDiscovery();
+            }
+            
+            document.getElementById('autoBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            
+            const count = foundDevices.size;
+            document.getElementById('status').textContent = count > 0 ? 
+                `Discovery complete - ${count} device(s) found` : 
+                'Discovery complete - no KProx devices found';
+                
+            updateDeviceStatusIndicator();
+        }
+        
+        function handleDeviceTestResult(callbackId, result) {
+            if (callbackId.startsWith('scan_')) {
+                if (result === 'SUCCESS_STORED') {
+                    console.log('AUTO DISCOVERY SUCCESS:', callbackId);
+                } else if (Math.random() < 0.01) {
+                    console.log('Scan sample result:', callbackId, result);
+                }
+            } else {
+                console.log('Callback received:', callbackId, 'Result:', result);
+            }
+            
+            if (result === 'SUCCESS_STORED') {
+                try {
+                    const deviceData = window._tempDeviceData;
+                    delete window._tempDeviceData;
+                    
+                    console.log('Adding device from callback:', callbackId);
+                    addDevice(deviceData);
+                } catch (e) {
+                    console.error('Error processing stored device data:', e);
+                }
+            }
+        }
+        
+        function addDevice(deviceData) {
+            console.log('=== ADD DEVICE START ===');
+            console.log('Device data received:', deviceData);
+            
+            const deviceId = deviceData.device_id || deviceData.ip;
+            console.log('Device ID:', deviceId);
+            
+            if (foundDevices.has(deviceId)) {
+                console.log('Device already exists, skipping:', deviceId);
+                return;
+            }
+            
+            foundDevices.set(deviceId, deviceData);
+            console.log('Device added to foundDevices map, size now:', foundDevices.size);
+            updateDeviceStatusIndicator();
+            
+            const devicesContainer = document.getElementById('devices');
+            if (!devicesContainer) {
+                console.error('ERROR: Devices container not found in DOM!');
+                return;
+            }
+            
+            const deviceElement = document.createElement('div');
+            deviceElement.className = 'device-found';
+            deviceElement.onclick = () => {
+                selectDevice(deviceData);
+            };
+            
+            const deviceName = deviceData.device_name || deviceData.hostname || 'KProx Device';
+            const hostname = deviceData.hostname || 'Unknown hostname';
+            const ip = deviceData.ip;
+            
+            deviceElement.innerHTML = `
+                <div class="device-name">${deviceName}</div>
+                <div style="opacity: 0.8; margin: 5px 0;">
+                    ${hostname}
+                </div>
+                <div class="device-ip">${ip}</div>
+                <div style="margin-top: 10px; font-size: 0.9em; opacity: 0.7;">
+                    Tap to select for controls or double-tap to open web interface
+                </div>
+            `;
+            
+            deviceElement.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                console.log('Device double-clicked, opening URL:', `http://${deviceData.ip}`);
+                if (typeof AndroidApp !== 'undefined') {
+                    AndroidApp.openUrl(`http://${deviceData.ip}`);
+                }
+            });
+            
+            devicesContainer.appendChild(deviceElement);
+            console.log('Device element created and appended to DOM');
+            
+            const statusText = `Found ${foundDevices.size} device(s) - Tap to select, double-tap to connect`;
+            document.getElementById('status').textContent = statusText;
+            console.log('=== ADD DEVICE END ===');
+        }
+
+        function selectDevice(deviceData) {
+            selectedDevice = deviceData;
+            updateDeviceStatusIndicator();
+            
+            // Update visual selection
+            const deviceElements = document.querySelectorAll('.device-found');
+            deviceElements.forEach(el => {
+                el.classList.remove('selected');
+            });
+            
+            event.target.closest('.device-found').classList.add('selected');
+            
+            // Show navigation
+            const navContainer = document.getElementById('navigationContainer');
+            navContainer.style.display = 'flex';
+            
+            // Update status
+            document.getElementById('status').textContent = `Selected: ${deviceData.device_name || deviceData.hostname || 'KProx Device'} (${deviceData.ip})`;
+            
+            console.log('Device selected:', deviceData);
+            
+            // Auto-load registers from the newly connected device
+            setTimeout(() => {
+                loadRegistersFromDevice();
+            }, 500); // Small delay to ensure UI is ready
+        }
+        
+        // Tab Management Functions
+        function generateId() {
+            return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        function showAddTabModal() {
+            editingTabId = null;
+            document.getElementById('tabModalTitle').textContent = 'Add New Tab';
+            document.getElementById('tabNameInput').value = '';
+            document.getElementById('saveTabBtn').textContent = 'Create Tab';
+            document.getElementById('deleteTabBtn').style.display = 'none';
+            document.getElementById('addTabModal').style.display = 'block';
+        }
+        
+        function showEditTabModal(tabId) {
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab) return;
+            
+            editingTabId = tabId;
+            document.getElementById('tabModalTitle').textContent = 'Edit Tab';
+            document.getElementById('tabNameInput').value = tab.name;
+            document.getElementById('saveTabBtn').textContent = 'Save Changes';
+            document.getElementById('deleteTabBtn').style.display = 'block';
+            document.getElementById('addTabModal').style.display = 'block';
+        }
+        
+        function saveTab() {
+            const tabName = document.getElementById('tabNameInput').value.trim();
+            if (!tabName) {
+                alert('Please enter a tab name');
+                return;
+            }
+            
+            if (editingTabId) {
+                // Edit existing tab
+                const tab = tabs.find(t => t.id === editingTabId);
+                if (tab) {
+                    tab.name = tabName;
+                }
+            } else {
+                // Create new tab
+                const newTab = {
+                    id: generateId(),
+                    name: tabName,
+                    buttons: []
+                };
+                tabs.push(newTab);
+                currentTabId = newTab.id;
+            }
+            
+            saveTabsToStorage();
+            renderTabs();
+            closeModal('addTabModal');
+        }
+        
+        function deleteCurrentTab() {
+            if (!editingTabId) return;
+            
+            if (confirm('Are you sure you want to delete this tab and all its buttons?')) {
+                tabs = tabs.filter(tab => tab.id !== editingTabId);
+                
+                if (currentTabId === editingTabId) {
+                    currentTabId = tabs.length > 0 ? tabs[0].id : null;
+                }
+                
+                saveTabsToStorage();
+                renderTabs();
+                closeModal('addTabModal');
+            }
+        }
+        
+        function deleteTab(tabId) {
+            if (confirm('Are you sure you want to delete this tab and all its buttons?')) {
+                tabs = tabs.filter(tab => tab.id !== tabId);
+                
+                if (currentTabId === tabId) {
+                    currentTabId = tabs.length > 0 ? tabs[0].id : null;
+                }
+                
+                saveTabsToStorage();
+                renderTabs();
+            }
+        }
+        
+        function switchTab(tabId) {
+            currentTabId = tabId;
+            renderTabs();
+        }
+        
+        function renderTabs() {
+            const tabButtonsContainer = document.getElementById('tabButtons');
+            const tabContent = document.getElementById('tabContent');
+            
+            // Clear existing content
+            tabButtonsContainer.innerHTML = '';
+            
+            if (tabs.length === 0) {
+                tabContent.innerHTML = '<div class="empty-message">No tabs created yet. Click "+ Tab" to create your first tab.</div>';
+                return;
+            }
+            
+            // Render tab buttons
+            tabs.forEach(tab => {
+                const tabButton = document.createElement('div');
+                tabButton.className = 'tab-button';
+                if (tab.id === currentTabId) {
+                    tabButton.classList.add('active');
+                }
+                
+                let tabActions = '';
+                let tabNameClick = '';
+                
+                if (tabMode === 'normal') {
+                    // No action buttons in normal mode - clean interface
+                    tabActions = '';
+                    tabNameClick = `onclick="switchTab('${tab.id}')"`;
+                } else if (tabMode === 'edit') {
+                    // Only edit button in edit mode, tab name also edits
+                    tabActions = `<div class="tab-actions">
+                        <button class="edit-tab" onclick="event.stopPropagation(); showEditTabModal('${tab.id}')">✎</button>
+                    </div>`;
+                    tabNameClick = `onclick="showEditTabModal('${tab.id}')"`;
+                } else if (tabMode === 'delete') {
+                    // Only delete button in delete mode, tab name also deletes
+                    tabActions = `<div class="tab-actions">
+                        <button class="close-tab" onclick="event.stopPropagation(); if(confirm('Delete this tab?')) deleteTab('${tab.id}')">&times;</button>
+                    </div>`;
+                    tabNameClick = `onclick="if(confirm('Delete this tab?')) deleteTab('${tab.id}')"`;
+                }
+                
+                tabButton.innerHTML = `
+                    <span class="tab-name" ${tabNameClick}>${tab.name}</span>
+                    ${tabActions}
+                `;
+                
+                tabButtonsContainer.appendChild(tabButton);
+            });
+            
+            // Render current tab content
+            renderTabContent();
+        }
+        
+        function renderTabContent() {
+            const tabContent = document.getElementById('tabContent');
+            const currentTab = tabs.find(tab => tab.id === currentTabId);
+            
+            if (!currentTab) {
+                tabContent.innerHTML = '<div class="empty-message">No tab selected.</div>';
+                return;
+            }
+            
+            const hasButtons = currentTab.buttons && currentTab.buttons.length > 0;
+            
+            tabContent.innerHTML = `
+                <div class="button-controls">
+                    <button onclick="showAddButtonModal()" class="small">+ Add Button</button>
+                </div>
+                
+                ${hasButtons ? 
+                    '<div class="button-grid" id="buttonGrid"></div>' : 
+                    '<div class="empty-message">No buttons in this tab yet. Click "+ Add Button" to create your first button.</div>'
+                }
+            `;
+            
+            if (hasButtons) {
+                renderButtons(currentTab.buttons);
+            }
+        }
+        
+        function renderButtons(buttons) {
+            const buttonGrid = document.getElementById('buttonGrid');
+            buttonGrid.innerHTML = '';
+            
+            buttons.forEach(button => {
+                const buttonElement = document.createElement('button');
+                buttonElement.className = 'custom-button';
+                
+                // Always set the main click behavior - modes affect this directly
+                if (tabMode === 'normal') {
+                    buttonElement.onclick = () => {
+                        console.log('Normal mode: sending text:', button.string);
+                        sendButtonText(button.string);
+                    };
+                } else if (tabMode === 'edit') {
+                    buttonElement.onclick = () => showEditButtonModal(button.id);
+                } else if (tabMode === 'delete') {
+                    buttonElement.onclick = () => {
+                        console.log('Delete mode: deleting button:', button.id, button.label);
+                        // Only confirm once here, don't confirm again in deleteButton
+                        deleteButtonDirectly(button.id);
+                    };
+                }
+                
+                // No additional action buttons - mode determines the main button behavior
+                let buttonPreview = button.string;
+                const registerLinkMatch = button.string.match(/^\{\{REGISTER_LINK:(\d+)\}\}$/);
+                const isLinkedButton = button.isLinkedToRegister || !!registerLinkMatch;
+                
+                if (isLinkedButton && registerLinkMatch) {
+                    const registerIndex = parseInt(registerLinkMatch[1]);
+                    const registerContent = textRegisters[registerIndex] || '';
+                    buttonPreview = `🔗 Register ${registerIndex + 1}${registerContent ? ': ' + registerContent.substring(0, 15) + (registerContent.length > 15 ? '...' : '') : ' (empty)'}`;
+                } else if (isLinkedButton) {
+                    // Handle case where isLinkedToRegister is true but string doesn't match pattern (corrupted data)
+                    buttonPreview = '🔗 [Invalid Link]';
+                } else {
+                    buttonPreview = button.string.substring(0, 20) + (button.string.length > 20 ? '...' : '');
+                }
+                
+                buttonElement.innerHTML = `
+                    <div class="button-label">${button.label}</div>
+                    <div class="button-preview">${buttonPreview}</div>
+                `;
+                
+                buttonGrid.appendChild(buttonElement);
+            });
+        }
+        
+        // Button Management Functions
+        function showAddButtonModal() {
+            editingButtonId = null;
+            document.getElementById('buttonModalTitle').textContent = 'Add Button';
+            document.getElementById('buttonLabelInput').value = '';
+            document.getElementById('buttonStringInput').value = '';
+            document.getElementById('saveButtonBtn').textContent = 'Add Button';
+            
+            // Clear the checkbox
+            document.getElementById('linkToRegisterCheckbox').checked = false;
+            
+            populateRegisterSelector();
+            
+            // Show suggestion to load registers if none are available
+            if (numRegisters === 0) {
+                console.log('No registers loaded. User should load from device first.');
+            }
+            
+            document.getElementById('buttonModal').style.display = 'block';
+        }
+        
+        function showEditButtonModal(buttonId) {
+            const currentTab = tabs.find(tab => tab.id === currentTabId);
+            const button = currentTab.buttons.find(b => b.id === buttonId);
+            
+            if (!button) return;
+            
+            editingButtonId = buttonId;
+            document.getElementById('buttonModalTitle').textContent = 'Edit Button';
+            document.getElementById('buttonLabelInput').value = button.label;
+            document.getElementById('buttonStringInput').value = button.string;
+            document.getElementById('saveButtonBtn').textContent = 'Save Changes';
+            
+            // Restore checkbox state - check both stored state and string pattern
+            const isRegisterLink = button.string.match(/^\{\{REGISTER_LINK:(\d+)\}\}$/);
+            const checkboxState = button.isLinkedToRegister || !!isRegisterLink;
+            document.getElementById('linkToRegisterCheckbox').checked = checkboxState;
+            
+            console.log('Editing button:', button.label, 'isLinkedToRegister:', button.isLinkedToRegister, 'detected link:', !!isRegisterLink, 'final checkbox state:', checkboxState);
+            
+            populateRegisterSelector();
+            
+            // If this button has a register link, select the appropriate register in dropdown
+            if (isRegisterLink) {
+                const registerIndex = parseInt(isRegisterLink[1]);
+                const selector = document.getElementById('registerSelector');
+                if (selector && registerIndex >= 0 && registerIndex < numRegisters) {
+                    selector.value = registerIndex;
+                }
+            }
+            
+            // Show suggestion to load registers if none are available
+            if (numRegisters === 0) {
+                console.log('No registers loaded. User should load from device first.');
+            }
+            
+            document.getElementById('buttonModal').style.display = 'block';
+        }
+        
+        function populateRegisterSelector() {
+            const selector = document.getElementById('registerSelector');
+            if (!selector) {
+                console.error('Register selector not found');
+                return;
+            }
+            
+            console.log('Populating register selector. numRegisters:', numRegisters, 'textRegisters:', textRegisters);
+            selector.innerHTML = '<option value="">Select register to copy from...</option>';
+            
+            if (numRegisters === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No registers available - Load from device first';
+                option.disabled = true;
+                selector.appendChild(option);
+            } else {
+                for (let i = 0; i < numRegisters; i++) {
+                    const content = textRegisters[i] || '';
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = `Register ${i + 1}${content ? ': ' + content.substring(0, 30) + (content.length > 30 ? '...' : '') : ' (empty)'}`;
+                    selector.appendChild(option);
+                }
+            }
+            
+            console.log('Register selector populated with', numRegisters, 'options');
+        }
+        
+        function updateRegisterSelector() {
+            populateRegisterSelector();
+        }
+        
+        function onRegisterSelected() {
+            const selector = document.getElementById('registerSelector');
+            const linkCheckbox = document.getElementById('linkToRegisterCheckbox');
+            const registerIndex = parseInt(selector.value);
+            
+            console.log('onRegisterSelected called. registerIndex:', registerIndex, 'numRegisters:', numRegisters);
+            console.log('linkCheckbox.checked:', linkCheckbox.checked);
+            
+            if (isNaN(registerIndex) || registerIndex < 0 || registerIndex >= numRegisters) {
+                // Clear the text field if no valid register selected
+                if (linkCheckbox.checked) {
+                    // If checkbox is checked but no register selected, keep field empty 
+                    // This will be handled in validation
+                    document.getElementById('buttonStringInput').value = '';
+                } else {
+                    // For copy mode, also clear if no selection
+                    document.getElementById('buttonStringInput').value = '';
+                }
+                return;
+            }
+            
+            const content = textRegisters[registerIndex] || '';
+            const labelInput = document.getElementById('buttonLabelInput');
+            
+            console.log('Selected register content:', content);
+            
+            if (linkCheckbox.checked) {
+                // Create a link to the register
+                console.log('Creating link to register', registerIndex + 1);
+                document.getElementById('buttonStringInput').value = `{{REGISTER_LINK:${registerIndex}}}`;
+                
+                // Auto-fill label if empty
+                if (!labelInput.value.trim()) {
+                    labelInput.value = `Link to Register ${registerIndex + 1}`;
+                }
+            } else {
+                // Copy register content directly
+                if (!content) {
+                    alert('Selected register is empty');
+                    document.getElementById('buttonStringInput').value = '';
+                    return;
+                }
+                
+                console.log('Copying register content to text field');
+                document.getElementById('buttonStringInput').value = content;
+                
+                // Auto-fill label if empty
+                if (!labelInput.value.trim()) {
+                    labelInput.value = `Register ${registerIndex + 1}`;
+                }
+            }
+        }
+        
+        function onCheckboxChanged() {
+            const selector = document.getElementById('registerSelector');
+            const checkbox = document.getElementById('linkToRegisterCheckbox');
+            
+            console.log('Checkbox changed to:', checkbox.checked);
+            
+            // If checkbox state changed and a register is selected, re-process the selection
+            if (selector.value) {
+                onRegisterSelected();
+            } else {
+                // If no register selected, clear the text field appropriately
+                if (checkbox.checked) {
+                    document.getElementById('buttonStringInput').value = '';
+                } else {
+                    document.getElementById('buttonStringInput').value = '';
+                }
+            }
+        }
+        
+        
+        function saveButton() {
+            const label = document.getElementById('buttonLabelInput').value.trim();
+            const string = document.getElementById('buttonStringInput').value.trim();
+            const isLinkedToRegister = document.getElementById('linkToRegisterCheckbox').checked;
+            
+            // Validation
+            if (!label) {
+                alert('Please enter a button label');
+                return;
+            }
+            
+            if (isLinkedToRegister) {
+                // For linked buttons, check if we have a valid register link
+                const registerLinkMatch = string.match(/^\{\{REGISTER_LINK:(\d+)\}\}$/);
+                if (!registerLinkMatch) {
+                    alert('Please select a register to link to, or uncheck the link option');
+                    return;
+                }
+            } else {
+                // For regular buttons, require text content
+                if (!string) {
+                    alert('Please enter text to send, or select a register to copy from');
+                    return;
+                }
+            }
+            
+            const currentTab = tabs.find(tab => tab.id === currentTabId);
+            
+            if (editingButtonId) {
+                // Edit existing button
+                const button = currentTab.buttons.find(b => b.id === editingButtonId);
+                if (button) {
+                    button.label = label;
+                    button.string = string;
+                    button.isLinkedToRegister = isLinkedToRegister; // Save checkbox state
+                }
+            } else {
+                // Add new button
+                const newButton = {
+                    id: generateId(),
+                    label: label,
+                    string: string,
+                    isLinkedToRegister: isLinkedToRegister // Save checkbox state
+                };
+                currentTab.buttons.push(newButton);
+            }
+            
+            saveTabsToStorage();
+            renderTabContent();
+            closeModal('buttonModal');
+        }
+        
+        function deleteButton(buttonId) {
+            console.log('deleteButton called with ID:', buttonId);
+            
+            const currentTab = tabs.find(tab => tab.id === currentTabId);
+            if (!currentTab) {
+                console.error('No current tab found, currentTabId:', currentTabId);
+                alert('No tab selected');
+                return;
+            }
+            
+            console.log('Current tab:', currentTab);
+            
+            if (!currentTab.buttons) {
+                console.log('No buttons array in current tab');
+                currentTab.buttons = [];
+                return;
+            }
+            
+            const button = currentTab.buttons.find(b => b.id === buttonId);
+            if (!button) {
+                console.error('Button not found with ID:', buttonId, 'Available buttons:', currentTab.buttons.map(b => b.id));
+                alert('Button not found');
+                return;
+            }
+            
+            console.log('Found button to delete:', button);
+            
+            if (confirm(`Are you sure you want to delete button "${button.label}"?`)) {
+                const originalLength = currentTab.buttons.length;
+                currentTab.buttons = currentTab.buttons.filter(b => b.id !== buttonId);
+                console.log('Buttons before deletion:', originalLength, 'after:', currentTab.buttons.length);
+                
+                saveTabsToStorage();
+                renderTabContent();
+                console.log('Button deleted successfully:', button.label);
+            }
+        }
+        
+        function deleteButtonDirectly(buttonId) {
+            console.log('deleteButtonDirectly called with ID:', buttonId);
+            
+            const currentTab = tabs.find(tab => tab.id === currentTabId);
+            if (!currentTab) {
+                console.error('No current tab found, currentTabId:', currentTabId);
+                alert('No tab selected');
+                return;
+            }
+            
+            console.log('Current tab for direct delete:', currentTab.name);
+            
+            if (!currentTab.buttons) {
+                console.log('No buttons array in current tab');
+                currentTab.buttons = [];
+                return;
+            }
+            
+            const button = currentTab.buttons.find(b => b.id === buttonId);
+            if (!button) {
+                console.error('Button not found with ID:', buttonId, 'Available buttons:', currentTab.buttons.map(b => ({id: b.id, label: b.label})));
+                alert('Button not found');
+                return;
+            }
+            
+            console.log('Found button to delete directly:', button);
+            
+            const originalLength = currentTab.buttons.length;
+            currentTab.buttons = currentTab.buttons.filter(b => b.id !== buttonId);
+            console.log('Buttons before deletion:', originalLength, 'after:', currentTab.buttons.length);
+            
+            saveTabsToStorage();
+            renderTabContent();
+            console.log('Button deleted successfully without confirmation:', button.label);
+        }
+        
+        function deleteTab(tabId) {
+            console.log('deleteTab called with ID:', tabId);
+            
+            const tab = tabs.find(t => t.id === tabId);
+            if (!tab) {
+                console.error('Tab not found with ID:', tabId);
+                alert('Tab not found');
+                return;
+            }
+            
+            console.log('Found tab to delete:', tab);
+            
+            if (confirm(`Are you sure you want to delete tab "${tab.name}"?`)) {
+                tabs = tabs.filter(t => t.id !== tabId);
+                
+                // If we deleted the current tab, select another one
+                if (currentTabId === tabId) {
+                    currentTabId = tabs.length > 0 ? tabs[0].id : null;
+                }
+                
+                saveTabsToStorage();
+                renderTabs();
+                console.log('Tab deleted successfully:', tab.name);
+            }
+        }
+        
+        function sendButtonText(text) {
+            console.log('sendButtonText called with text:', text);
+            
+            if (!selectedDevice) {
+                console.error('No device selected');
+                alert('Please select a device first');
+                return;
+            }
+            
+            if (typeof AndroidApp === 'undefined') {
+                console.error('AndroidApp is not available');
+                alert('AndroidApp interface not available');
+                return;
+            }
+            
+            // Check if this is a register link
+            const registerLinkMatch = text.match(/^\{\{REGISTER_LINK:(\d+)\}\}$/);
+            if (registerLinkMatch) {
+                const registerIndex = parseInt(registerLinkMatch[1]);
+                
+                if (registerIndex < 0 || registerIndex >= numRegisters) {
+                    alert(`Linked register ${registerIndex + 1} does not exist. Please edit this button to fix the link.`);
+                    return;
+                }
+                
+                const registerContent = textRegisters[registerIndex] || '';
+                if (!registerContent) {
+                    alert(`Linked register ${registerIndex + 1} is empty. Please add content to the register or edit this button.`);
+                    return;
+                }
+                
+                console.log(`Playing linked register ${registerIndex + 1} with content:`, registerContent);
+                text = registerContent; // Use register content instead of link text
+            }
+            
+            console.log('Sending button text to device:', selectedDevice.ip);
+            console.log('Text to send:', text);
+            
+            const callbackId = 'button_' + Date.now();
+            console.log('Using callback ID:', callbackId);
+            
+            try {
+                AndroidApp.sendText(selectedDevice.ip, text, callbackId);
+                console.log('AndroidApp.sendText called successfully');
+            } catch (error) {
+                console.error('Error calling AndroidApp.sendText:', error);
+                alert('Error sending text: ' + error.message);
+            }
+        }
+        
+        // Raw Send Functions
+        function sendRawText() {
+            const input = document.getElementById('rawSendInput');
+            const text = input.value.trim();
+            
+            if (!text) {
+                alert('Please enter some text to send');
+                return;
+            }
+            
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            if (typeof AndroidApp === 'undefined') {
+                alert('AndroidApp interface not available');
+                return;
+            }
+            
+            console.log('Sending raw text:', text);
+            
+            const callbackId = 'raw_send_' + Date.now();
+            
+            try {
+                AndroidApp.sendText(selectedDevice.ip, text, callbackId);
+                console.log('Raw text sent successfully');
+            } catch (error) {
+                console.error('Error sending raw text:', error);
+                alert('Error sending text: ' + error.message);
+            }
+        }
+        
+        function clearRawSend() {
+            const input = document.getElementById('rawSendInput');
+            input.value = '';
+            input.focus();
+        }
+        
+        function handleRawSendKeydown(event) {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                event.preventDefault();
+                sendRawText();
+            }
+        }
+        
+        async function sendFromClipboard() {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            if (typeof AndroidApp === 'undefined') {
+                alert('AndroidApp interface not available');
+                return;
+            }
+            
+            try {
+                console.log('Reading from clipboard using native Android method...');
+                const clipboardBtn = document.getElementById('clipboardSendBtn');
+                const originalText = clipboardBtn.textContent;
+                
+                // Show loading state
+                clipboardBtn.textContent = '📋 Reading clipboard...';
+                clipboardBtn.disabled = true;
+                
+                // Read from clipboard using native Android method
+                const clipboardText = AndroidApp.getClipboardText();
+                
+                // Restore button state
+                clipboardBtn.textContent = originalText;
+                clipboardBtn.disabled = false;
+                
+                if (!clipboardText || !clipboardText.trim()) {
+                    alert('Clipboard is empty or contains no text');
+                    return;
+                }
+                
+                console.log('Clipboard text:', clipboardText);
+                console.log('Sending clipboard text to device...');
+                
+                const callbackId = 'clipboard_send_' + Date.now();
+                
+                AndroidApp.sendText(selectedDevice.ip, clipboardText.trim(), callbackId);
+                console.log('Clipboard text sent successfully');
+                
+                // Show the clipboard content in the raw send input for reference
+                const rawInput = document.getElementById('rawSendInput');
+                rawInput.value = clipboardText.trim();
+                
+            } catch (error) {
+                // Restore button state on error
+                const clipboardBtn = document.getElementById('clipboardSendBtn');
+                clipboardBtn.textContent = '📋 Send From Clipboard';
+                clipboardBtn.disabled = false;
+                
+                console.error('Error accessing clipboard:', error);
+                alert('Error reading from clipboard: ' + error.message);
+            }
+        }
+        
+        function pasteFromClipboard() {
+            if (typeof AndroidApp === 'undefined') {
+                alert('AndroidApp interface not available');
+                return;
+            }
+            
+            try {
+                console.log('Pasting from clipboard using native Android method...');
+                const pasteBtn = document.getElementById('pasteBtn');
+                const originalText = pasteBtn.textContent;
+                
+                // Show loading state
+                pasteBtn.textContent = '📋 ...';
+                pasteBtn.disabled = true;
+                
+                // Read from clipboard using native Android method
+                const clipboardText = AndroidApp.getClipboardText();
+                
+                // Restore button state
+                pasteBtn.textContent = originalText;
+                pasteBtn.disabled = false;
+                
+                if (!clipboardText || !clipboardText.trim()) {
+                    alert('Clipboard is empty or contains no text');
+                    return;
+                }
+                
+                console.log('Pasting clipboard text to input field');
+                
+                // Paste the content into the text area
+                const rawInput = document.getElementById('rawSendInput');
+                rawInput.value = clipboardText.trim();
+                rawInput.focus();
+                
+            } catch (error) {
+                // Restore button state on error
+                const pasteBtn = document.getElementById('pasteBtn');
+                pasteBtn.textContent = '📋 Paste';
+                pasteBtn.disabled = false;
+                
+                console.error('Error accessing clipboard:', error);
+                alert('Error reading from clipboard: ' + error.message);
+            }
+        }
+        
+        // Register Management Functions
+        function addNewRegister() {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            // Add register with empty content like web app
+            const addData = {
+                action: 'add',
+                content: ''
+            };
+            
+            const callbackId = 'add_register_' + Date.now();
+            AndroidApp.saveRegisters(selectedDevice.ip, JSON.stringify(addData), callbackId);
+            
+            document.getElementById('registersResult').innerHTML = '<span class="warning">Adding new register...</span>';
+        }
+        
+        function renderRegisters() {
+            console.log('=== renderRegisters CALLED ===');
+            console.log('numRegisters:', numRegisters);
+            
+            const container = document.getElementById('registersList');
+            console.log('Container found:', container !== null);
+            
+            if (!container) {
+                console.error('CRITICAL: registersList container not found!');
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            if (numRegisters === 0) {
+                console.log('No registers, showing empty message');
+                container.innerHTML = '<p style="text-align: center; color: #6c757d; padding: 20px;">No registers created yet. Click "Add New Register" to get started.</p>';
+                updateRegisterSelector();
+                return;
+            }
+            
+            console.log('Creating register UI for', numRegisters, 'registers');
+            
+            let html = '';
+            for (let i = 0; i < numRegisters; i++) {
+                const regContent = textRegisters[i] || '';
+                const escapedContent = regContent.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                const isActive = i === currentActiveRegister;
+                
+                html += '<div class="register-grid ' + (isActive ? 'active' : '') + '">';
+                html += '  <div class="register-header">';
+                html += '    <div class="register-number" style="color: white; font-weight: bold; font-size: 1.1em;">Register ' + (i + 1) + '</div>';
+                html += '    <div class="register-active-indicator">' + (isActive ? '●' : '') + '</div>';
+                html += '  </div>';
+                html += '  <div class="register-input-container">';
+                html += '    <input type="text" class="register-input" value="' + escapedContent + '" data-register="' + i + '" placeholder="Enter text with tokens...">';
+                html += '  </div>';
+                html += '  <div class="register-controls">';
+                html += '    <button class="register-button set-active-button" onclick="setActiveRegister(' + i + ')"' + (isActive ? ' disabled' : '') + '>Set Active</button>';
+                html += '    <button class="register-button play-button" onclick="playRegister(' + i + ')">Play</button>';
+                html += '    <button class="register-button save-button" onclick="saveRegister(' + i + ')">Save</button>';
+                html += '    <button class="register-button" style="background: linear-gradient(45deg, #f44336, #d32f2f);" onclick="removeReg(' + i + ')">Delete</button>';
+                html += '  </div>';
+                html += '</div>';
+            }
+            
+            container.innerHTML = html;
+            updateRegisterSelector();
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function setActiveRegister(regNum) {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            const setActiveData = {
+                activeRegister: regNum
+            };
+            
+            const callbackId = 'set_active_' + Date.now();
+            AndroidApp.saveRegisters(selectedDevice.ip, JSON.stringify(setActiveData), callbackId);
+            
+            document.getElementById('registersResult').innerHTML = `<span class="warning">Setting register ${regNum + 1} as active...</span>`;
+        }
+        
+        function playRegister(regNum) {
+            console.log('playRegister called with regNum:', regNum);
+            
+            const regContent = textRegisters[regNum] || '';
+            console.log('Register content:', regContent);
+            
+            if (!regContent.trim()) {
+                console.warn('Register is empty');
+                alert(`Register ${regNum + 1} is empty`);
+                return;
+            }
+            
+            if (!selectedDevice) {
+                console.error('No device selected');
+                alert('Please select a device first');
+                return;
+            }
+            
+            if (typeof AndroidApp === 'undefined') {
+                console.error('AndroidApp is not available');
+                alert('AndroidApp interface not available');
+                return;
+            }
+            
+            console.log('Playing register', regNum + 1, 'with content:', regContent);
+            console.log('Sending to device:', selectedDevice.ip);
+            
+            const callbackId = 'play_register_' + Date.now();
+            console.log('Using callback ID:', callbackId);
+            
+            try {
+                AndroidApp.sendText(selectedDevice.ip, regContent, callbackId);
+                console.log('AndroidApp.sendText called successfully for register play');
+            } catch (error) {
+                console.error('Error calling AndroidApp.sendText for register:', error);
+                alert('Error playing register: ' + error.message);
+            }
+        }
+        
+        function saveRegister(regNum) {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            const input = document.querySelector(`input[data-register="${regNum}"]`);
+            if (!input) {
+                document.getElementById('registersResult').innerHTML = `<span class="error">Input not found for register ${regNum + 1}</span>`;
+                return;
+            }
+            
+            const content = input.value;
+            textRegisters[regNum] = content;
+            saveRegistersToStorage();
+            updateRegisterSelector();
+            
+            const payload = {
+                registers: []
+            };
+            
+            for (let i = 0; i < numRegisters; i++) {
+                const regInput = document.querySelector(`input[data-register="${i}"]`);
+                const regContent = regInput ? regInput.value : (textRegisters[i] || '');
+                payload.registers.push({
+                    number: i,
+                    content: regContent
+                });
+            }
+            
+            const callbackId = 'save_register_' + Date.now();
+            
+            try {
+                AndroidApp.saveRegisters(selectedDevice.ip, JSON.stringify(payload), callbackId);
+                document.getElementById('registersResult').innerHTML = `<span class="warning">Saving register ${regNum + 1}...</span>`;
+            } catch (error) {
+                document.getElementById('registersResult').innerHTML = `<span class="error">Error saving register: ${error.message}</span>`;
+            }
+        }
+        
+        function handleDeleteAll() {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            if (numRegisters === 0) {
+                alert('No registers to delete');
+                return;
+            }
+            
+            if (!confirm(`Delete ALL ${numRegisters} registers?\n\nThis cannot be undone.`)) {
+                return;
+            }
+            
+            document.getElementById('registersResult').innerHTML = '<span class="warning">Deleting all registers...</span>';
+            
+            const callbackId = 'delete_all_' + Date.now();
+            AndroidApp.deleteAllRegisters(selectedDevice.ip, callbackId);
+        }
+        
+        function deleteRegister(regNum) {
+            alert('deleteRegister called with: ' + regNum);
+        }
+        
+        function deleteAllRegisters() {
+            alert('deleteAllRegisters called');
+        }
+        
+        function realDeleteRegister(regNum) {
+            console.log('realDeleteRegister called with regNum:', regNum);
+            
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            if (!confirm('Delete register ' + (regNum + 1) + '?\n\nThis cannot be undone.')) {
+                return;
+            }
+            
+            console.log('Deleting register', regNum, 'from device:', selectedDevice.ip);
+            document.getElementById('registersResult').innerHTML = '<span class="warning">Deleting register ' + (regNum + 1) + '...</span>';
+            
+            const payload = {
+                action: 'delete',
+                register: regNum
+            };
+            
+            const callbackId = 'delete_reg_' + Date.now();
+            console.log('Using callback ID:', callbackId);
+            console.log('Payload:', JSON.stringify(payload));
+            
+            try {
+                AndroidApp.saveRegisters(selectedDevice.ip, JSON.stringify(payload), callbackId);
+                console.log('AndroidApp.saveRegisters (delete) called successfully');
+            } catch (error) {
+                console.error('Error calling AndroidApp.saveRegisters for delete:', error);
+                document.getElementById('registersResult').innerHTML = '<span class="error">Error: ' + error.message + '</span>';
+            }
+        }
+        
+        function realDeleteAllRegisters() {
+            console.log('realDeleteAllRegisters called');
+            
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            if (numRegisters === 0) {
+                alert('No registers to delete');
+                return;
+            }
+            
+            if (!confirm('Delete ALL ' + numRegisters + ' registers?\n\nThis cannot be undone.')) {
+                return;
+            }
+            
+            console.log('Deleting all registers from device:', selectedDevice.ip);
+            document.getElementById('registersResult').innerHTML = '<span class="warning">Deleting all registers...</span>';
+            
+            const callbackId = 'delete_all_' + Date.now();
+            console.log('Using callback ID:', callbackId);
+            
+            try {
+                AndroidApp.deleteAllRegisters(selectedDevice.ip, callbackId);
+                console.log('AndroidApp.deleteAllRegisters called successfully');
+            } catch (error) {
+                console.error('Error calling AndroidApp.deleteAllRegisters:', error);
+                document.getElementById('registersResult').innerHTML = '<span class="error">Error: ' + error.message + '</span>';
+            }
+        }
+        
+        function handleDeleteRegister(regNum) {
+            deleteRegister(regNum);
+        }
+        
+        function loadRegistersFromDevice() {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            document.getElementById('registersResult').innerHTML = '<span class="warning">Loading registers from device...</span>';
+            document.getElementById('loadRegistersBtn').disabled = true;
+            
+            const callbackId = 'load_registers_' + Date.now();
+            AndroidApp.loadRegisters(selectedDevice.ip, callbackId);
+        }
+        
+        function saveAllRegistersToDevice() {
+            if (!selectedDevice) {
+                alert('Please select a device first');
+                return;
+            }
+            
+            if (numRegisters === 0) {
+                alert('No registers to save');
+                return;
+            }
+            
+            document.getElementById('registersResult').innerHTML = '<span class="warning">Saving all registers to device...</span>';
+            document.getElementById('saveAllRegistersBtn').disabled = true;
+            
+            // Collect all register data from inputs
+            const registersData = {
+                registers: []
+            };
+            
+            for (let i = 0; i < numRegisters; i++) {
+                const input = document.querySelector(`input[data-register="${i}"]`);
+                const content = input ? input.value : (textRegisters[i] || '');
+                registersData.registers.push({
+                    number: i,
+                    content: content
+                });
+            }
+            
+            const callbackId = 'save_all_registers_' + Date.now();
+            AndroidApp.saveRegisters(selectedDevice.ip, JSON.stringify(registersData), callbackId);
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            editingButtonId = null;
+            editingTabId = null;
+        }
+        
+        function handleTextSendResult(callbackId, result) {
+            console.log('Text send callback received:', callbackId, 'Result:', result);
+            
+            if (result.startsWith('SUCCESS:')) {
+                console.log('Text sent successfully!');
+            } else {
+                const parts = result.split(':', 2);
+                const status = parts[0];
+                const data = parts[1] || '';
+                
+                let message = '';
+                switch (status) {
+                    case 'HTTP_ERROR':
+                        message = `HTTP error: ${data}`;
+                        break;
+                    default:
+                        message = `Send failed: ${data}`;
+                }
+                console.error('Text send failed:', message);
+                alert('Failed to send text: ' + message);
+            }
+        }
+        
+        function handleLoadRegistersResult(callbackId, result) {
+            console.log('Load registers callback received:', callbackId, 'Result:', result);
+            
+            document.getElementById('loadRegistersBtn').disabled = false;
+            
+            if (result.startsWith('SUCCESS:')) {
+                try {
+                    const jsonData = result.substring(8);
+                    const deviceData = JSON.parse(jsonData);
+                    
+                    console.log('Device register data:', deviceData);
+                    
+                    // Update state like web app
+                    currentActiveRegister = deviceData.activeRegister || -1;
+                    textRegisters = [];
+                    numRegisters = 0;
+                    
+                    if (deviceData.registers && Array.isArray(deviceData.registers)) {
+                        numRegisters = deviceData.registers.length;
+                        deviceData.registers.forEach((reg, index) => {
+                            textRegisters[index] = reg.content || '';
+                        });
+                    }
+                    
+                    saveRegistersToStorage(); // Save loaded registers to localStorage
+                    renderRegisters();
+                    updateRegisterSelector(); // Update register selector if modal is open
+                    
+                    document.getElementById('registersResult').innerHTML = 
+                        `<span class="success">Successfully loaded ${numRegisters} registers from device</span>`;
+                } catch (e) {
+                    console.error('Failed to parse device registers:', e);
+                    document.getElementById('registersResult').innerHTML = '<span class="error">Failed to parse device data</span>';
+                }
+            } else {
+                const parts = result.split(':', 2);
+                const status = parts[0];
+                const data = parts[1] || '';
+                
+                let message = '';
+                switch (status) {
+                    case 'HTTP_ERROR':
+                        if (data === '404') {
+                            message = 'Device does not support register management';
+                        } else {
+                            message = `HTTP error: ${data}`;
+                        }
+                        break;
+                    default:
+                        message = `Load failed: ${data}`;
+                }
+                
+                console.error('Load registers failed:', message);
+                document.getElementById('registersResult').innerHTML = `<span class="error">${message}</span>`;
+            }
+        }
+        
+        function handleSaveRegistersResult(callbackId, result) {
+            document.getElementById('saveAllRegistersBtn').disabled = false;
+            
+            if (result.startsWith('SUCCESS:')) {
+                if (callbackId.includes('save_register_')) {
+                    document.getElementById('registersResult').innerHTML = '<span class="success">Saved</span>';
+                } else if (callbackId.includes('delete_reg_') || callbackId.includes('add_register_') || callbackId.includes('set_active_')) {
+                    document.getElementById('registersResult').innerHTML = '<span class="success">Done</span>';
+                    loadRegistersFromDevice();
+                } else {
+                    document.getElementById('registersResult').innerHTML = '<span class="success">All saved</span>';
+                    loadRegistersFromDevice();
+                }
+            } else {
+                document.getElementById('registersResult').innerHTML = `<span class="error">Failed: ${result}</span>`;
+            }
+        }
+        
+        function handleDeleteAllRegistersResult(callbackId, result) {
+            if (result.startsWith('SUCCESS:')) {
+                document.getElementById('registersResult').innerHTML = '<span class="success">All deleted</span>';
+                loadRegistersFromDevice();
+            } else {
+                document.getElementById('registersResult').innerHTML = `<span class="error">Failed: ${result}</span>`;
+            }
+        }
+        
+        function updateNetworkInfo() {
+            if (typeof AndroidApp === 'undefined') {
+                document.getElementById('networkInfo').innerHTML = '<span class="error">Android interface not available</span>';
+                return;
+            }
+            
+            const localIP = AndroidApp.getLocalIP();
+            
+            if (localIP) {
+                const parts = localIP.split('.');
+                const range = `${parts[0]}.${parts[1]}.${parts[2]}`;
+                
+                let allInterfaces = '';
+                try {
+                    const interfaces = AndroidApp.getAllNetworkInterfaces();
+                    if (interfaces) {
+                        allInterfaces = `<br><strong>All 10.x interfaces:</strong> ${interfaces}`;
+                    }
+                } catch (e) {
+                    console.log('Could not get all interfaces:', e);
+                }
+                
+                document.getElementById('networkInfo').innerHTML = `
+                    <strong>Your IP:</strong> ${localIP}<br>
+                    <strong>Network:</strong> ${range}.x${allInterfaces}<br>
+                    <strong>Devices found:</strong> ${foundDevices.size}
+                `;
+            } else {
+                document.getElementById('networkInfo').innerHTML = '<span class="error">Could not detect network. Make sure WiFi is connected.</span>';
+            }
+        }
+        
+        function refreshNetworkInfo() {
+            updateNetworkInfo();
+        }
+        
+        function saveConfiguration() {
+            const config = {
+                tabs: tabs,
+                version: '1.0'
+            };
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            const filename = `kprox-config-${timestamp}.json`;
+            
+            if (typeof AndroidApp !== 'undefined') {
+                AndroidApp.saveTabsToFile(JSON.stringify(config, null, 2), filename);
+            } else {
+                alert('File save not available in this environment');
+            }
+        }
+        
+        function loadConfiguration() {
+            const filename = prompt('Enter filename to load (in Downloads folder):', 'kprox-config-2024-01-01T12-00-00.json');
+            if (!filename) return;
+            
+            if (typeof AndroidApp !== 'undefined') {
+                AndroidApp.loadTabsFromFile(filename);
+            } else {
+                alert('File load not available in this environment');
+            }
+        }
+        
+        function handleFileSaveResult(status, data) {
+            const resultDiv = document.getElementById('configResult');
+            if (status === 'success') {
+                resultDiv.innerHTML = `<span class="success">✅ Saved to: ${data}</span>`;
+            } else {
+                resultDiv.innerHTML = `<span class="error">❌ Save failed: ${data}</span>`;
+            }
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 5000);
+        }
+        
+        function handleFileLoadResult(status, error) {
+            const resultDiv = document.getElementById('configResult');
+            if (status === 'success') {
+                try {
+                    const config = window._tempLoadedData;
+                    delete window._tempLoadedData;
+                    
+                    if (config && config.tabs && Array.isArray(config.tabs)) {
+                        tabs = config.tabs;
+                        saveTabsToStorage();
+                        renderTabs();
+                        
+                        if (tabs.length > 0) {
+                            selectTab(tabs[0].id);
+                        }
+                        
+                        resultDiv.innerHTML = `<span class="success">✅ Loaded ${tabs.length} tabs successfully</span>`;
+                    } else {
+                        resultDiv.innerHTML = '<span class="error">❌ Invalid configuration file format</span>';
+                    }
+                } catch (e) {
+                    console.error('Error processing loaded config:', e);
+                    resultDiv.innerHTML = `<span class="error">❌ Error: ${e.message}</span>`;
+                }
+            } else {
+                resultDiv.innerHTML = `<span class="error">❌ Load failed: ${error}</span>`;
+            }
+            
+            setTimeout(() => {
+                resultDiv.innerHTML = '';
+            }, 5000);
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modals = document.getElementsByClassName('modal');
+            for (let modal of modals) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                    editingButtonId = null;
+                    editingTabId = null;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

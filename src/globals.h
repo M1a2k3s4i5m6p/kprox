@@ -1,0 +1,172 @@
+#pragma once
+
+#include <Arduino.h>
+#include <esp_chip_info.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <WiFiUdp.h>
+#include <Preferences.h>
+#include <FastLED.h>
+#include <vector>
+#include <map>
+#include <ArduinoJson.h>
+#include <ESPmDNS.h>
+#include <Update.h>
+#include <SPIFFS.h>
+#include <time.h>
+#include <esp_task_wdt.h>
+#include <mbedtls/x509_crt.h>
+#include <mbedtls/error.h>
+#include <mbedtls/aes.h>
+#include <mbedtls/sha256.h>
+#include <mbedtls/base64.h>
+// For Cardputer: M5Cardputer must be included before BLE Combo because both define
+// overlapping KEY_* names. M5Cardputer uses #define macros; BLE Combo uses const uint8_t.
+// Including M5Cardputer first then undefing the macros lets BLE Combo declare its consts
+// cleanly. All other translation units include globals.h first, so M5Cardputer.h's include
+// guard fires on re-inclusion and the macros are not re-instated.
+#ifdef BOARD_M5STACK_CARDPUTER
+#  include <M5Cardputer.h>
+#  undef KEY_LEFT_CTRL
+#  undef KEY_LEFT_SHIFT
+#  undef KEY_LEFT_ALT
+#  undef KEY_LEFT_GUI
+#  undef KEY_RIGHT_CTRL
+#  undef KEY_RIGHT_SHIFT
+#  undef KEY_RIGHT_ALT
+#  undef KEY_RIGHT_GUI
+#  undef KEY_BACKSPACE
+#  undef KEY_TAB
+#  undef KEY_RETURN
+#  undef KEY_ESC
+#  undef KEY_INSERT
+#  undef KEY_DELETE
+#  undef KEY_HOME
+#  undef KEY_END
+#  undef KEY_PAGE_UP
+#  undef KEY_PAGE_DOWN
+#  undef KEY_UP_ARROW
+#  undef KEY_DOWN_ARROW
+#  undef KEY_LEFT_ARROW
+#  undef KEY_RIGHT_ARROW
+#  undef KEY_CAPS_LOCK
+#  undef KEY_F1
+#  undef KEY_F2
+#  undef KEY_F3
+#  undef KEY_F4
+#  undef KEY_F5
+#  undef KEY_F6
+#  undef KEY_F7
+#  undef KEY_F8
+#  undef KEY_F9
+#  undef KEY_F10
+#  undef KEY_F11
+#  undef KEY_F12
+#endif
+
+#include "BleComboKeyboard.h"
+#include "BleComboMouse.h"
+
+#include "config.h"
+#include "constants.h"
+
+#ifdef BOARD_HAS_USB_HID
+#  include "USB.h"
+#  include "USBHIDKeyboard.h"
+#  include "USBHIDMouse.h"
+#endif
+
+struct MouseBatch {
+    int16_t accumulatedX = 0;
+    int16_t accumulatedY = 0;
+    unsigned long lastUpdate = 0;
+    bool hasMovement = false;
+};
+
+// ---- Hardware objects ----
+extern WebServer        server;     // HTTP on 80; TLS terminated externally when mTLS is configured
+extern WebServer        serverHTTP; // reserved for HTTP->HTTPS redirect when mTLS active
+extern WiFiUDP          udp;
+extern Preferences      preferences;
+extern BleComboKeyboard Keyboard;
+extern BleComboMouse    Mouse;
+extern CRGB             leds[];
+
+#ifdef BOARD_HAS_USB_HID
+extern USBHIDKeyboard USBKeyboard;
+extern USBHIDMouse    USBMouse;
+#endif
+
+// ---- Settings / identity ----
+extern String wifiSSID;
+extern String wifiPassword;
+extern String apiKey;
+extern String usbManufacturer;
+extern String usbProduct;
+extern const char* hostname;
+extern const char* deviceName;
+
+// ---- BLE / USB state ----
+extern bool bluetoothEnabled;
+extern bool bluetoothInitialized;
+
+#ifdef BOARD_HAS_USB_HID
+extern bool usbEnabled;
+extern bool usbInitialized;
+extern bool usbKeyboardReady;
+extern bool usbMouseReady;
+#endif
+
+// ---- Network state ----
+extern bool          mdnsEnabled;
+extern bool          udpEnabled;
+extern unsigned long lastUdpBroadcast;
+extern unsigned long lastWifiCheck;
+
+// ---- Execution state ----
+extern bool          isHalted;
+extern bool          requestInProgress;
+extern bool          isLooping;
+extern unsigned long loopDuration;
+extern unsigned long loopStartTime;
+extern int           loopingRegister;
+extern std::vector<String> pendingTokenStrings;
+
+// ---- Time ----
+extern long utcOffsetSeconds;
+
+// ---- Keymap ----
+extern String activeKeymap;
+
+// ---- Register state ----
+extern int                  activeRegister;
+extern std::vector<String>  registers;
+extern std::vector<String>  registerNames;
+extern bool                 registersLoaded;
+
+// ---- LED state ----
+extern bool    ledEnabled;
+extern uint8_t ledColorR;
+extern uint8_t ledColorG;
+extern uint8_t ledColorB;
+
+// ---- Mouse state ----
+extern MouseBatch mouseBatch;
+extern int        currentMouseX;
+extern int        currentMouseY;
+
+// ---- System utilities ----
+void feedWatchdog();
+void initWatchdog();
+
+// ---- Nonce state (defined in api.cpp) ----
+extern String currentNonce;
+
+// ---- mTLS state (defined in mtls.cpp) ----
+extern bool   mtlsEnabled;
+extern String serverCert;
+extern String serverKey;
+extern String caCert;
+
+// ---- Keymap (defined in keymap.cpp) ----
+extern String activeKeymap;
