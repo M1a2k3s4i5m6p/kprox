@@ -20,8 +20,6 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-// USB descriptor strings must reach TinyUSB before initArduino() calls USB.begin().
-// Bluetooth name is handled in setup() via pointer construction — no timing issue there.
 #ifdef BOARD_HAS_USB_HID
 static void usbPreInit() __attribute__((constructor(110)));
 static void usbPreInit() {
@@ -49,7 +47,7 @@ static void usbPreInit() {
 }
 #endif
 
-// ---- mDNS version compatibility (same as kprox.ino) ----
+// ---- mDNS version compatibility ----
 
 class MDNSHelper {
 public:
@@ -253,9 +251,8 @@ void setup() {
     disp.drawString("Connecting to SSID: " + wifiSSID, 4, 4);
     if (wifiPassword == DEFAULT_WIFI_PASSWORD) {
         disp.setTextColor(disp.color565(255, 180, 0), disp.color565(30, 30, 30));
-        disp.drawString("pw: " + wifiPassword, 4, 18);
         disp.drawString("Default Password: " + wifiPassword, 4, 18);
-        disp.drawString("update in SetWiFi app", 4, 30);
+        disp.drawString("  update SSID in settings app", 4, 30);
         disp.setTextColor(TFT_WHITE, disp.color565(30, 30, 30));
     }
     for (int attempts = 0; WiFi.status() != WL_CONNECTED && attempts < 30; attempts++) {
