@@ -139,7 +139,7 @@ void UIManager::update() {
     // Global BtnA: play current register from any app that doesn't handle it itself
     if (M5Cardputer.BtnA.wasPressed()) {
         AppBase* app = _apps[_currentApp];
-        if (!app->handlesGlobalBtnA() && !registers.empty() && !isHalted) {
+        if (!app->handlesGlobalBtnA() && !registers.empty()) {
             pendingTokenStrings.push_back(registers[activeRegister]);
             notifyInteraction();
         }

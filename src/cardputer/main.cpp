@@ -130,6 +130,9 @@ std::vector<String> registerNames;
 
 MouseBatch mouseBatch;
 
+bool g_parserAbort          = false;
+bool g_btnAHaltedPlayback   = false;
+
 // ---- Watchdog ----
 
 void initWatchdog() {
@@ -367,7 +370,7 @@ void loop() {
         }
     }
 
-    if (!isHalted && !pendingTokenStrings.empty()) {
+    if (!pendingTokenStrings.empty()) {
         for (int i = (int)pendingTokenStrings.size() - 1; i >= 0; i--) {
             if (!pendingTokenStrings[i].startsWith("SCHED|")) {
                 String tok = pendingTokenStrings[i];
@@ -377,7 +380,7 @@ void loop() {
         }
 
         time_t now = time(nullptr);
-        if (now > 100000) {
+        if (!isHalted && now > 100000) {
             struct tm* t = localtime(&now);
             for (int i = (int)pendingTokenStrings.size() - 1; i >= 0; i--) {
                 String& tok = pendingTokenStrings[i];

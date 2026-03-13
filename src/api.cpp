@@ -346,10 +346,6 @@ void handleSendText() {
     if (!checkApiKey()) return;
     if (!canProceed()) return;
 
-    if (isHalted) {
-        server.send(423, "application/json", "{\"error\":\"Operations halted\"}");
-        server.client().stop(); requestComplete(); return;
-    }
     if (server.method() != HTTP_POST) {
         server.send(405, "text/plain", "Use POST with JSON body");
         server.client().stop(); requestComplete(); return;
@@ -370,11 +366,6 @@ void handleSendMouse() {
     server.sendHeader("Connection", "close");
     if (!checkApiKey()) return;
     if (!canProceed()) return;
-
-    if (isHalted) {
-        server.send(423, "application/json", "{\"error\":\"Operations halted\"}");
-        server.client().stop(); requestComplete(); return;
-    }
 
     JsonDocument doc;
     if (!parseJsonBody(doc)) { requestComplete(); return; }

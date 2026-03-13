@@ -167,7 +167,13 @@ extern MouseBatch mouseBatch;
 extern int        currentMouseX;
 extern int        currentMouseY;
 
-// ---- System utilities ----
+// Set by haltAllOperations() to abort the current parser run immediately.
+// Cleared at the start of putTokenString() before each new run.
+extern bool g_parserAbort;
+
+// Set by checkParseInterrupt() when BtnA specifically triggered the abort.
+// KProx reads and clears this to skip the corresponding wasReleased event.
+extern bool g_btnAHaltedPlayback;
 void feedWatchdog();
 void initWatchdog();
 

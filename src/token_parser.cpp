@@ -4,7 +4,35 @@
 #include "keymap.h"
 #include "storage.h"
 
-// ---- Internal helpers ----
+#ifdef BOARD_M5STACK_CARDPUTER
+#include <M5Cardputer.h>
+#endif
+
+// ---- Interrupt check ----
+// Called at every delay/yield point inside the parser. Feeds the watchdog and
+// checks whether BtnA or ESC/backtick has been pressed; if so, halts execution.
+static void checkParseInterrupt() {
+    feedWatchdog();
+#ifdef BOARD_M5STACK_CARDPUTER
+    M5Cardputer.update();
+    if (M5Cardputer.BtnA.wasPressed()) {
+        g_parserAbort         = true;
+        g_btnAHaltedPlayback  = true;
+        haltAllOperations();
+        return;
+    }
+    if (M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) {
+        auto ks = M5Cardputer.Keyboard.keysState();
+        if (ks.tab) { g_parserAbort = true; haltAllOperations(); return; }
+        for (char c : ks.word) {
+            if (c == 0x1B || c == '`') { g_parserAbort = true; haltAllOperations(); return; }
+        }
+        for (uint8_t hk : ks.hid_keys) {
+            if (hk == 0x29) { g_parserAbort = true; haltAllOperations(); return; }
+        }
+    }
+#endif
+}
 
 static String processEscapeSequences(const String& input) {
     String result = input;
@@ -362,12 +390,12 @@ static bool isControlToken(const String& token) {
 // ---- Parser ----
 
 void parseAndSendText(const String& text, std::map<String, String>& vars) {
-    if (isHalted) return;
+    if (g_parserAbort) return;
 
     int pos = 0;
     String currentSegment;
 
-    while (pos < (int)text.length() && !isHalted) {
+    while (pos < (int)text.length() && !g_parserAbort) {
         if (text[pos] != '{') {
             currentSegment += text[pos++];
             continue;
@@ -422,9 +450,9 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
         else if (u.startsWith("SLEEP ")) {
             int sleepTime = evaluateAllTokens(token.substring(6), vars).toInt();
             unsigned long start = millis();
-            while ((millis() - start < (unsigned long)sleepTime) && !isHalted) {
+            while ((millis() - start < (unsigned long)sleepTime) && !g_parserAbort) {
                 server.handleClient();
-                delay(10); feedWatchdog();
+                delay(10); checkParseInterrupt();
             }
         }
         else if (u.startsWith("CHORD ")) {
@@ -510,20 +538,20 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
             String body = text.substring(endPos + 1, endLoopPos);
 
             if (parts.size() == 0) {
-                while (!isHalted) {
+                while (!g_parserAbort) {
                     parseAndSendText(body, vars);
                     if (vars.count("__break__")) { vars.erase("__break__"); break; }
                     server.handleClient();
-                    delay(TOKEN_DELAY); feedWatchdog();
+                    checkParseInterrupt();
                 }
             } else if (parts.size() == 1) {
                 unsigned long dur = evaluateAllTokens(parts[0], vars).toInt();
                 unsigned long t0  = millis();
-                while (!isHalted && (millis() - t0 < dur)) {
+                while (!g_parserAbort && (millis() - t0 < dur)) {
                     parseAndSendText(body, vars);
                     if (vars.count("__break__")) { vars.erase("__break__"); break; }
                     server.handleClient();
-                    delay(TOKEN_DELAY); feedWatchdog();
+                    checkParseInterrupt();
                 }
             } else if (parts.size() == 4) {
                 String varName  = parts[0];
@@ -532,14 +560,13 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
                 int stopVal     = evaluateAllTokens(parts[3], vars).toInt();
                 bool broken     = false;
                 if (increment != 0) {
-                    for (int i = startVal; !isHalted && !broken; i += increment) {
+                    for (int i = startVal; !g_parserAbort && !broken; i += increment) {
                         vars[varName] = String(i);
                         if ((increment > 0 && i > stopVal) || (increment < 0 && i < stopVal)) break;
                         parseAndSendText(body, vars);
                         if (vars.count("__break__")) { vars.erase("__break__"); broken = true; break; }
                         server.handleClient();
-                        delay(TOKEN_DELAY);
-                        feedWatchdog();
+                        checkParseInterrupt();
                     }
                     vars.erase(varName);
                 }
@@ -570,13 +597,12 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
             int stopVal     = evaluateAllTokens(parts[3], vars).toInt();
             bool broken     = false;
             if (increment != 0) {
-                for (int i = startVal; !isHalted && !broken; i += increment) {
+                for (int i = startVal; !g_parserAbort && !broken; i += increment) {
                     vars[varName] = String(i);
                     if ((increment > 0 && i > stopVal) || (increment < 0 && i < stopVal)) break;
                     parseAndSendText(body, vars);
                     if (vars.count("__break__")) { vars.erase("__break__"); broken = true; break; }
-                    delay(TOKEN_DELAY);
-                    feedWatchdog();
+                    checkParseInterrupt();
                 }
                 vars.erase(varName);
             }
@@ -594,11 +620,10 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
 
             String body = text.substring(endPos + 1, endWhilePos);
 
-            while (!isHalted && evaluateCondition(condition, vars)) {
+            while (!g_parserAbort && evaluateCondition(condition, vars)) {
                 parseAndSendText(body, vars);
                 if (vars.count("__break__")) { vars.erase("__break__"); break; }
-                delay(TOKEN_DELAY);
-                feedWatchdog();
+                checkParseInterrupt();
             }
 
             pos = endWhilePos + 10;
@@ -676,15 +701,15 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
         }
         else if (u == "ELSE" || u == "ENDIF") { /* skip bare occurrences */ }
 
-        delay(TOKEN_DELAY);
+        checkParseInterrupt();
         pos = endPos + 1;
     }
 
-    if (currentSegment.length() > 0 && !isHalted) {
+    if (currentSegment.length() > 0 && !g_parserAbort) {
         sendPlainText(evaluateAllTokens(currentSegment, vars));
     }
 
-    if (!isHalted) {
+    if (!g_parserAbort) {
         hidReleaseAll();
         delay(KEY_RELEASE_DELAY);
     }
@@ -696,6 +721,8 @@ void parseAndSendText(const String& text) {
 }
 
 void putTokenString(const String& text) {
+    g_parserAbort = false;
+    isHalted      = false;
     std::map<String, String> vars;
     parseAndSendText(text, vars);
 }

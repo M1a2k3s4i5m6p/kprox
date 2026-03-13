@@ -29,6 +29,7 @@ private:
     unsigned long _lastButtonPress    = 0;
     int           _buttonPressCount   = 0;
     bool          _haltTriggered      = false;
+    bool          _skipNextRelease    = false;
 
     static constexpr unsigned long DOUBLE_CLICK_MS = 350;
     static constexpr unsigned long DEBOUNCE_MS     = 50;

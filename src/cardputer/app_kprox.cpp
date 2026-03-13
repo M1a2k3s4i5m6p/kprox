@@ -137,9 +137,20 @@ void AppKProx::_checkHomeButton() {
         uiManager.notifyInteraction();
     }
 
+    // If BtnA triggered a parser halt, its wasReleased fires on the next frame
+    // inside this function — skip it so it doesn't count as a play intent.
+    if (g_btnAHaltedPlayback) {
+        _skipNextRelease     = true;
+        g_btnAHaltedPlayback = false;
+    }
+
     if (btn.wasReleased()) {
-        _lastButtonRelease = now;
-        if (!_haltTriggered) _buttonPressCount++;
+        if (_skipNextRelease) {
+            _skipNextRelease = false;
+        } else {
+            _lastButtonRelease = now;
+            if (!_haltTriggered) _buttonPressCount++;
+        }
     }
 
     // Long-press → halt / resume
@@ -153,7 +164,7 @@ void AppKProx::_checkHomeButton() {
     // Dispatch after double-click window expires
     if (_buttonPressCount > 0 && (now - _lastButtonRelease > DOUBLE_CLICK_MS)) {
         if (_buttonPressCount == 1) {
-            if (!registers.empty() && !isHalted && !registers[activeRegister].isEmpty()) {
+            if (!registers.empty() && !registers[activeRegister].isEmpty()) {
                 pendingTokenStrings.push_back(registers[activeRegister]);
             }
         } else {
@@ -236,7 +247,7 @@ void AppKProx::onUpdate() {
         return;
     }
     if (ki.enter && _numberBuf.length() == 0) {
-        if (!registers.empty() && !isHalted && !registers[activeRegister].isEmpty()) {
+        if (!registers.empty() && !registers[activeRegister].isEmpty()) {
             pendingTokenStrings.push_back(registers[activeRegister]);
         }
         return;

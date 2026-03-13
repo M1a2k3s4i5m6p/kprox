@@ -318,9 +318,11 @@ void accumulateMouseMovement(int16_t deltaX, int16_t deltaY) {
 // ---- Halt / resume ----
 
 void haltAllOperations() {
+    g_parserAbort    = true;
     isLooping        = false;
     loopingRegister  = -1;
     isHalted         = true;
+    pendingTokenStrings.clear();
     hidReleaseAll();
     requestInProgress        = false;
     mouseBatch.accumulatedX  = 0;
@@ -333,6 +335,7 @@ void haltAllOperations() {
 }
 
 void resumeOperations() {
-    isHalted = false;
+    isHalted      = false;
+    g_parserAbort = false;
     if (ledEnabled) setLED(LED_COLOR_RESUME, 200);
 }

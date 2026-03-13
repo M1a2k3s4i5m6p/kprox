@@ -149,8 +149,8 @@ flash and takes effect immediately.
 | Action (BtnG0) | Behavior |
 |--------|----------|
 | **1 click** | Play/output content of active register |
+| **1 click** | halt output                            |
 | **2 clicks** | Cycle to next register (LED blinks register number) |
-| **Hold 2 s** | Toggle halt/resume all operations |
 | **Hold 5 s** | Delete all registers (emergency reset) |
 
 ---
