@@ -2,7 +2,6 @@
 
 KProx is a 1-key programmable BLE + USB keyboard and mouse with API.
 
-
 KProx is a wireless HID proxy device built on the 
 [M5Stack AtomS3 Lite ESP32S3](https://shop.m5stack.com/products/atoms3-lite-esp32s3-dev-kit) 
 and the
