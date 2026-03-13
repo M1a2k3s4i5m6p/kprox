@@ -1,0 +1,60 @@
+{
+  "activeRegister": 1,
+  "registers": [
+    {
+      "number": 0,
+      "content": "{LOOP}{SLEEP 1000}{MOVEMOUSE 10 0}{SLEEP 1000}{MOVEMOUSE 0 10}{SLEEP 1000}{MOVEMOUSE -10 0}{SLEEP 1000}{MOVEMOUSE 0 -10}{ENDLOOP}",
+      "name": "Endless Mouse Square"
+    },
+    {
+      "number": 1,
+      "content": "{LOOP i 1 1 5}Hello {i}\\n{ENDLOOP}",
+      "name": ""
+    },
+    {
+      "number": 2,
+      "content": "Random Char: {RAW {RAND 32 126}}\\n",
+      "name": "Print Random Char"
+    },
+    {
+      "number": 3,
+      "content": "{CHORD GUI+1}{SLEEP 1000}{CHORD GUI+3}",
+      "name": ""
+    },
+    {
+      "number": 4,
+      "content": "ASCII Table:\\n{LOOP i 32 1 126}Dec: {i} Char: {RAW {i}}\\n{ENDLOOP}",
+      "name": ""
+    },
+    {
+      "number": 5,
+      "content": "{LOOP i 0 1 360}{SETMOUSE {MATH 200 + 300 * cos({MATH {i} * 3.14159 / 180})} {MATH 200 + 300 * sin({MATH {i} * 3.14159 / 180})}}{SLEEP 1}{ENDLOOP}",
+      "name": "Mouse Circle"
+    },
+    {
+      "number": 6,
+      "content": "{LOOP}{MOVEMOUSE {RAND -100 100} {RAND -100 100}}{SLEEP {RAND 1000 3000}}{ENDLOOP}",
+      "name": "Random Mouse Walk"
+    },
+    {
+      "number": 7,
+      "content": "{CHORD ALT+SYSRQ+R}{SLEEP 2000}{CHORD ALT+SYSRQ+E}{SLEEP 2000}{CHORD ALT+SYSRQ+I}{SLEEP 2000}{CHORD ALT+SYSRQ+S}{SLEEP 2000}{CHORD ALT+SYSRQ+U}{SLEEP 2000}{CHORD ALT+SYSRQ+B}",
+      "name": "REISUB Magic SysRQ"
+    },
+    {
+      "number": 8,
+      "content": "=== ASCII CHARACTER TEST SUITE ==={ENTER}{ENTER}  {1. Control Characters (using HID):}{ENTER} {TAB}{TAB}{TAB}{ENTER} {BACKSPACE}{BACKSPACE}{ENTER} {ESC test}{ENTER}{ENTER}  {2. Numbers:}{ENTER} {LOOP n 48 1 57}{ASCII n} {ENDLOOP}{ENTER}{ENTER}  {3. Uppercase:}{ENTER} {LOOP u 65 1 90}{ASCII u} {ENDLOOP}{ENTER}{ENTER}  {4. Lowercase:}{ENTER} {LOOP l 97 1 122}{ASCII l} {ENDLOOP}{ENTER}{ENTER}  {5. Special Characters:}{ENTER} {LOOP s 33 1 47}{ASCII s} {ENDLOOP}{ENTER} {LOOP s 58 1 64}{ASCII s} {ENDLOOP}{ENTER} {LOOP s 91 1 96}{ASCII s} {ENDLOOP}{ENTER} {LOOP s 123 1 126}{ASCII s} {ENDLOOP}{ENTER}{ENTER}  {6. Full ASCII Table:}{ENTER} {LOOP ascii 32 1 126} {ASCII ascii} {MATH ascii%16} {ENDLOOP} {ENTER}{ENTER}  {=== TEST COMPLETE ===}{ENTER}",
+      "name": "ASCII Table"
+    },
+    {
+      "number": 9,
+      "content": "5 + 3 = {MATH 5 + 3}",
+      "name": "Math Demo"
+    },
+    {
+      "number": 10,
+      "content": "{LOOP i 1 1 20}{SET fb {i}}{IF {MATH {i} % 15} == 0}{SET fb FizzBuzz}{ELSE}{IF {MATH {i} % 3} == 0}{SET fb Fizz}{ELSE}{IF {MATH {i} % 5} == 0}{SET fb Buzz}{ENDIF}{ENDIF}{ENDIF}{fb}{ENTER}{ENDLOOP}",
+      "name": "FizzBuzz"
+    }
+  ]
+}

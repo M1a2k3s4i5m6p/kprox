@@ -220,6 +220,11 @@ Types: `Sum 1-100 = 5050`
 {LOOP}{MOVEMOUSE {RAND -50 50} {RAND -50 50}}{SLEEP {RAND 1000 3000}}{ENDLOOP}
 ```
 
+### Unlock Android
+```
+{MOUSEMOVE 10 0}{ENTER}{SLEEP 100}<PASSWORD>{SLEEP 300}{ENTER}
+```
+
 ### Unlock Windows
 ```
 {LEFT}{SLEEP 1000}mysecurepassword{ENTER}

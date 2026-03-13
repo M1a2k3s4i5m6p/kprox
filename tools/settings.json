@@ -1,0 +1,25 @@
+{
+  "bluetooth": {
+    "enabled": true
+  },
+  "led": {
+    "enabled": true,
+    "color": {
+      "r": 0,
+      "g": 255,
+      "b": 0
+    }
+  },
+  "wifi": {
+    "ssid": "kprox",
+    "password": "1338prox"
+  },
+  "utcOffset": 0,
+  "device": {
+    "manufacturer": "KProx",
+    "product": "Robo Key-mouse"
+  },
+  "usb": {
+    "enabled": true
+  }
+}
