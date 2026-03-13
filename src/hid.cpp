@@ -317,6 +317,9 @@ void accumulateMouseMovement(int16_t deltaX, int16_t deltaY) {
 
 // ---- Halt / resume ----
 
+bool g_parserAbort        = false;
+bool g_btnAHaltedPlayback = false;
+
 void haltAllOperations() {
     g_parserAbort    = true;
     isLooping        = false;

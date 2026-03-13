@@ -130,9 +130,6 @@ std::vector<String> registerNames;
 
 MouseBatch mouseBatch;
 
-bool g_parserAbort          = false;
-bool g_btnAHaltedPlayback   = false;
-
 // ---- Watchdog ----
 
 void initWatchdog() {
