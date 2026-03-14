@@ -19,6 +19,7 @@
 #include "app_settings.h"
 #include "app_credstore.h"
 #include "app_gadgets.h"
+#include "app_regedit.h"
 #include <M5Cardputer.h>
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -248,21 +249,60 @@ void setup() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str());
 
-    // Non-blocking WiFi wait with display feedback
-    disp.fillScreen(disp.color565(30, 30, 30));
-    disp.setTextColor(TFT_WHITE, disp.color565(30, 30, 30));
+    // WiFi connection screen — styled to match the app theme
+    const uint16_t WS_BG     = disp.color565(18,  18,  28);
+    const uint16_t WS_BAR    = disp.color565(20,  60, 130);
+    const uint16_t WS_LABEL  = disp.color565(130, 130, 130);
+    const uint16_t WS_VALUE  = disp.color565(100, 200, 255);
+    const uint16_t WS_DOT    = disp.color565(80,  140, 220);
+    const uint16_t WS_WARN   = disp.color565(220, 160, 0);
+    const uint16_t WS_OK     = disp.color565(80,  220, 80);
+    const uint16_t WS_ERR    = disp.color565(220, 80,  80);
+
+    disp.fillScreen(WS_BG);
+
+    // Header bar
+    disp.fillRect(0, 0, disp.width(), 18, WS_BAR);
     disp.setTextSize(1);
-    disp.drawString("Connecting to SSID: " + wifiSSID, 4, 4);
+    disp.setTextColor(TFT_WHITE, WS_BAR);
+    disp.drawString("KProx", 4, 3);
+    disp.setTextColor(disp.color565(160, 200, 255), WS_BAR);
+    disp.drawString("Connecting...", disp.width() - disp.textWidth("Connecting...") - 4, 3);
+
+    // SSID row
+    int y = 24;
+    disp.setTextColor(WS_LABEL, WS_BG);
+    disp.drawString("SSID ", 4, y);
+    disp.setTextColor(WS_VALUE, WS_BG);
+    String ssidDisp = wifiSSID;
+    if ((int)ssidDisp.length() > 26) ssidDisp = ssidDisp.substring(0,23) + "...";
+    disp.drawString(ssidDisp, 4 + disp.textWidth("SSID "), y);
+    y += 14;
+
+    // Default password warning
     if (wifiPassword == DEFAULT_WIFI_PASSWORD) {
-        disp.setTextColor(disp.color565(255, 180, 0), disp.color565(30, 30, 30));
-        disp.drawString("Default Password: " + wifiPassword, 4, 18);
-        disp.drawString("  update SSID in settings app", 4, 30);
-        disp.setTextColor(TFT_WHITE, disp.color565(30, 30, 30));
+        disp.setTextColor(WS_WARN, WS_BG);
+        disp.drawString("", 4, y);
+        disp.drawString("Default password: " + wifiPassword, 4, y);
+        y += 14;
+        disp.drawString("  update in Settings", 4, y);
+        y += 14;
     }
+
+    // Progress dots row
+    y += 4;
+    disp.setTextColor(WS_LABEL, WS_BG);
+    disp.drawString("Connecting", 4, y);
+    int dotsX = 4 + disp.textWidth("Connecting") + 4;
+    int dotsY = y;
+
     for (int attempts = 0; WiFi.status() != WL_CONNECTED && attempts < 30; attempts++) {
         delay(500);
         feedWatchdog();
-        disp.drawString(".", 4 + attempts * 6, 46);
+        // Draw a dot for each attempt, wrapping if needed
+        int dx = dotsX + (attempts % 20) * 7;
+        int dy = dotsY + (attempts / 20) * 14;
+        disp.fillCircle(dx + 2, dy + 5, 2, WS_DOT);
         if (attempts == 15) {
             WiFi.disconnect();
             delay(500);
@@ -270,17 +310,26 @@ void setup() {
         }
     }
 
+    // Result row
+    y = dotsY + 20;
     if (WiFi.status() == WL_CONNECTED) {
         if (ledEnabled) { setLED(LED_COLOR_WIFI_CONNECTED, 500); blinkLED(10, LED_COLOR_WIFI_CONNECTED, LED_COLOR_WIFI_CONNECTED_DUTY_CYCLE); }
         initNTP();
         if (udpEnabled) udp.begin(UDP_DISCOVERY_PORT);
-        disp.setTextColor(TFT_GREEN, disp.color565(30, 30, 30));
-        disp.drawString("Connected: " + WiFi.localIP().toString(), 4, 64);
+        // IP row
+        disp.setTextColor(WS_LABEL, WS_BG);
+        disp.drawString("IP   ", 4, y);
+        disp.setTextColor(WS_OK, WS_BG);
+        disp.drawString(WiFi.localIP().toString(), 4 + disp.textWidth("IP   "), y);
+        y += 14;
+        disp.setTextColor(WS_OK, WS_BG);
+        disp.drawString("Connected", 4, y);
     } else {
         if (ledEnabled) setLED(LED_COLOR_WIFI_ERROR, 500);
-        disp.setTextColor(TFT_RED, disp.color565(30, 30, 30));
-        disp.drawString("WiFi failed", 4, 64);
+        disp.setTextColor(WS_ERR, WS_BG);
+        disp.drawString("Connection failed", 4, y);
     }
+
     delay(800);
     feedWatchdog();
     } else {
@@ -311,6 +360,7 @@ void setup() {
     // Register apps: Launcher first, then real apps in display order
     static Cardputer::AppLauncher    launcher;
     static Cardputer::AppKProx       appKProx;
+    static Cardputer::AppRegEdit     appRegEdit;
     static Cardputer::AppCredStore   appCredStore;
     static Cardputer::AppGadgets     appGadgets;
     static Cardputer::AppKeyboardHID appKeyboard;
@@ -319,6 +369,7 @@ void setup() {
 
     Cardputer::uiManager.addApp(&launcher);
     Cardputer::uiManager.addApp(&appKProx);
+    Cardputer::uiManager.addApp(&appRegEdit);
     Cardputer::uiManager.addApp(&appCredStore);
     Cardputer::uiManager.addApp(&appGadgets);
     Cardputer::uiManager.addApp(&appKeyboard);
