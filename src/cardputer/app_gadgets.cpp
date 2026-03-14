@@ -260,9 +260,14 @@ void AppGadgets::_drawGadget() {
 
 void AppGadgets::onEnter() {
     _needsRedraw = true;
-    _state       = ST_IDLE;
     _installMsg  = "";
-    _fetch();
+    _installOk   = false;
+    if (_gadgets.empty() && _state != ST_LOADING) {
+        _state = ST_IDLE;
+        _fetch();
+    } else if (!_gadgets.empty()) {
+        _state = ST_READY;
+    }
 }
 
 void AppGadgets::onUpdate() {
@@ -275,7 +280,7 @@ void AppGadgets::onUpdate() {
     uiManager.notifyInteraction();
 
     if (_state == ST_ERROR) {
-        if (ki.enter) { _fetch(); }
+        if (ki.enter) { _gadgets.clear(); _page = 0; _fetch(); }
         else if (ki.esc) { uiManager.returnToLauncher(); }
         return;
     }
@@ -284,15 +289,11 @@ void AppGadgets::onUpdate() {
 
     if (ki.esc) { uiManager.returnToLauncher(); return; }
 
+    int n = (int)_gadgets.size();
     if (ki.arrowLeft || ki.arrowUp) {
-        int n = (int)_gadgets.size();
-        _page = (_page - 1 + n) % n;
-        _installMsg  = "";
-        _needsRedraw = true;
+        if (_page > 0) { _page--; _installMsg=""; _needsRedraw=true; }
     } else if (ki.arrowRight || ki.arrowDown) {
-        _page = (_page + 1) % (int)_gadgets.size();
-        _installMsg  = "";
-        _needsRedraw = true;
+        if (_page < n - 1) { _page++; _installMsg=""; _needsRedraw=true; }
     } else if (ki.enter) {
         _install();
     }

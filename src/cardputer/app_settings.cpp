@@ -3,6 +3,7 @@
 #include "../globals.h"
 #include "app_settings.h"
 #include "../storage.h"
+#include "../connection.h"
 #include <WiFi.h>
 
 namespace Cardputer {
@@ -63,74 +64,131 @@ void AppSettings::_drawInputField(int x, int y, int w, const String& text, bool 
     disp.drawString(display, x + 2, y + 3);
 }
 
-// ---- Page 0: Connectivity toggles ----
+// ---- Page 0: Connectivity ----
+
+static void _getConnStatus(int row,
+                           const char** s1, uint16_t* c1,
+                           const char** s2, uint16_t* c2) {
+    auto& d = M5Cardputer.Display;
+    *s2 = "";  *c2 = 0;
+    switch (row) {
+        case 0: // Bluetooth
+            *s1 = bluetoothEnabled ? "ON" : "OFF";
+            *c1 = bluetoothEnabled ? d.color565(80,220,80) : d.color565(200,60,60);
+            if (bluetoothEnabled) {
+                bool conn = bluetoothInitialized && BLE_KEYBOARD_VALID && BLE_KEYBOARD.isConnected();
+                *s2 = conn ? "connected" : "no peer";
+                *c2 = conn ? d.color565(80,220,80) : d.color565(200,160,0);
+            }
+            break;
+        case 1: // USB HID
+            *s1 = usbEnabled ? "ON" : "OFF";
+            *c1 = usbEnabled ? d.color565(80,220,80) : d.color565(200,60,60);
+            break;
+        case 2: // WiFi
+            *s1 = wifiEnabled ? "ON" : "OFF";
+            *c1 = wifiEnabled ? d.color565(80,220,80) : d.color565(200,60,60);
+            if (wifiEnabled) {
+                bool conn = (WiFi.status() == WL_CONNECTED);
+                *s2 = conn ? "connected" : "disconnected";
+                *c2 = conn ? d.color565(80,220,80) : d.color565(200,60,60);
+            }
+            break;
+    }
+}
 
 void AppSettings::_drawPage0() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SETTINGS_BG);
     _drawTopBar(0);
 
-    static const char* labels[3] = { "Bluetooth", "USB HID", "WiFi" };
-    bool states[3] = { bluetoothEnabled, usbEnabled, wifiEnabled };
+    static const char* rowLabels[3] = { "Bluetooth", "USB HID", "WiFi" };
 
     for (int i = 0; i < 3; i++) {
-        int y = CONTENT_Y + i * 22;
+        int  y   = CONTENT_Y + i * 28;
         bool sel = (i == _toggleSel);
+        uint16_t rowBg = sel ? selBgColor() : (uint16_t)SETTINGS_BG;
+        if (sel) disp.fillRect(0, y - 2, disp.width(), 24, rowBg);
 
-        if (sel) {
-            disp.fillRect(0, y - 2, disp.width(), 18, selBgColor());
+        // Row label
+        disp.setTextSize(1);
+        disp.setTextColor(sel ? TFT_WHITE : labelColor(), rowBg);
+        char lbl[20];
+        snprintf(lbl, sizeof(lbl), "%s%s", sel ? "> " : "  ", rowLabels[i]);
+        disp.drawString(lbl, 4, y);
+
+        // Status badges right-aligned on top line
+        const char* s1; uint16_t c1;
+        const char* s2; uint16_t c2;
+        _getConnStatus(i, &s1, &c1, &s2, &c2);
+
+        int rx = disp.width() - 4;
+        if (s2 && *s2) {
+            int bw = disp.textWidth(s2) + 6;
+            rx -= bw;
+            disp.fillRoundRect(rx, y, bw, 11, 2, disp.color565(25,25,25));
+            disp.setTextColor(c2, disp.color565(25,25,25));
+            disp.drawString(s2, rx + 3, y + 1);
+            rx -= 4;
+        }
+        {
+            int bw = disp.textWidth(s1) + 8;
+            rx -= bw;
+            uint16_t bb = (strcmp(s1,"ON")==0) ? disp.color565(20,70,20) : disp.color565(70,20,20);
+            disp.fillRoundRect(rx, y - 1, bw, 12, 3, bb);
+            disp.setTextColor(c1, bb);
+            disp.drawString(s1, rx + 4, y);
         }
 
-        disp.setTextSize(1);
-        disp.setTextColor(sel ? TFT_WHITE : labelColor(), sel ? selBgColor() : SETTINGS_BG);
-        char row[32];
-        snprintf(row, sizeof(row), "%s%s", sel ? "> " : "  ", labels[i]);
-        disp.drawString(row, 4, y);
-
-        const char* stateStr = states[i] ? "ON " : "OFF";
-        uint16_t stateColor = states[i]
-            ? disp.color565(80, 220, 80)
-            : disp.color565(200, 60, 60);
-        uint16_t rowBg = sel ? selBgColor() : (uint16_t)SETTINGS_BG;
-
-        disp.fillRect(disp.width() - 36, y - 1, 34, 13, rowBg);
-        disp.fillRoundRect(disp.width() - 36, y - 1, 34, 12, 3,
-                           states[i] ? disp.color565(30, 80, 30) : disp.color565(80, 30, 30));
-        disp.setTextColor(stateColor, states[i] ? disp.color565(30, 80, 30) : disp.color565(80, 30, 30));
-        disp.drawString(stateStr, disp.width() - 34, y);
+        // Action hint on second line of selected row
+        if (sel) {
+            disp.setTextSize(1);
+            disp.setTextColor(disp.color565(120,180,120), rowBg);
+            const char* hint = "";
+            if (i == 0) {
+                bool conn = bluetoothInitialized && BLE_KEYBOARD_VALID && BLE_KEYBOARD.isConnected();
+                if (!bluetoothEnabled)  hint = "ENTER enable  C connect";
+                else if (conn)          hint = "ENTER disable  C disconnect";
+                else                    hint = "ENTER disable  C reconnect";
+            } else if (i == 1) {
+                hint = "ENTER toggle  (reboot to apply)";
+            } else {
+                bool conn = (WiFi.status() == WL_CONNECTED);
+                if (!wifiEnabled)  hint = "ENTER enable+connect";
+                else if (conn)     hint = "ENTER disable  C disconnect";
+                else               hint = "ENTER disable  C reconnect";
+            }
+            disp.drawString(hint, 6, y + 12);
+        }
     }
 
     if (_rebootNote) {
-        int y = CONTENT_Y + 3 * 22 + 4;
         disp.setTextSize(1);
-        disp.setTextColor(disp.color565(200, 160, 0), SETTINGS_BG);
-        disp.drawString("BT/USB: reboot to apply", 4, y);
+        disp.setTextColor(disp.color565(200,160,0), SETTINGS_BG);
+        disp.drawString("USB/BT: reboot to apply", 4, CONTENT_Y + 3*28 + 2);
     }
 
-    _drawBottomBar("up/dn item  </> page  ENT toggle  ESC back");
+    _drawBottomBar("up/dn  ENTER toggle  C connect/disc  </> page  ESC");
 }
 
 void AppSettings::_handlePage0(KeyInput ki) {
     if (ki.arrowLeft) {
-        // no previous page, wrap to last
-        _page = 2;
-        _idSel = 0; _editing = false; _idSaved = false;
-        _needsRedraw = true;
-    } else if (ki.arrowRight) {
+        _page = NUM_PAGES - 1; _idSel = 0; _editing = false; _idSaved = false;
+        _needsRedraw = true; return;
+    }
+    if (ki.arrowRight) {
         _page = 1;
         _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = "";
-        _needsRedraw = true;
-    } else if (ki.arrowUp) {
-        _toggleSel = (_toggleSel - 1 + 3) % 3;
-        _needsRedraw = true;
-    } else if (ki.arrowDown) {
-        _toggleSel = (_toggleSel + 1) % 3;
-        _needsRedraw = true;
-    } else if (ki.enter) {
+        _needsRedraw = true; return;
+    }
+    if (ki.arrowUp)   { _toggleSel = (_toggleSel - 1 + 3) % 3; _needsRedraw = true; return; }
+    if (ki.arrowDown) { _toggleSel = (_toggleSel + 1) % 3;      _needsRedraw = true; return; }
+
+    if (ki.enter) {
         switch (_toggleSel) {
             case 0:
-                bluetoothEnabled = !bluetoothEnabled;
-                saveBtSettings();
+                if (bluetoothEnabled) disableBluetooth();
+                else                  enableBluetooth();
                 _rebootNote = true;
                 break;
             case 1:
@@ -150,9 +208,40 @@ void AppSettings::_handlePage0(KeyInput ki) {
                 }
                 break;
         }
-        _needsRedraw = true;
+        _needsRedraw = true; return;
+    }
+
+    // C = connect / disconnect
+    if (ki.ch == 'c' || ki.ch == 'C') {
+        switch (_toggleSel) {
+            case 0: // Bluetooth
+                if (!bluetoothEnabled) {
+                    enableBluetooth();
+                } else if (bluetoothInitialized && BLE_KEYBOARD_VALID && BLE_KEYBOARD.isConnected()) {
+                    BLE_KEYBOARD.end();
+                    delay(300);
+                    BLE_KEYBOARD.begin();
+                } else if (bluetoothInitialized && BLE_KEYBOARD_VALID) {
+                    // re-advertise
+                    BLE_KEYBOARD.end();
+                    delay(300);
+                    BLE_KEYBOARD.begin();
+                }
+                break;
+            case 2: // WiFi
+                if (WiFi.status() == WL_CONNECTED) {
+                    WiFi.disconnect();
+                } else {
+                    if (!wifiEnabled) { wifiEnabled = true; saveWifiEnabledSettings(); }
+                    WiFi.mode(WIFI_STA);
+                    WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str());
+                }
+                break;
+        }
+        _needsRedraw = true; return;
     }
 }
+
 
 // ---- Page 1: Set WiFi ----
 

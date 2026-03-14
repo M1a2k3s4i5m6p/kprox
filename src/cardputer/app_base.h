@@ -26,6 +26,11 @@ public:
     // Icon tile background color when no icon image is provided
     virtual uint16_t iconColor() const { return 0x4A69; }
 
+    // Called when the screen wakes from timeout — re-render without reinitialising.
+    // Apps should set their internal _needsRedraw flag. Default is a no-op;
+    // the app will naturally redraw on its next onUpdate cycle.
+    virtual void requestRedraw() {}
+
     // Return true if the app handles BtnA itself; UIManager will not fire
     // the global "play current register" action for apps that return true.
     virtual bool handlesGlobalBtnA() const { return false; }

@@ -14,6 +14,7 @@ public:
     void onExit() override;
     const char* appName() const override { return "RegEdit"; }
     uint16_t iconColor() const override  { return 0xFFE0; }
+    void requestRedraw() override { _needsRedraw = true; }
     bool handlesGlobalBtnA() const override { return true; }
 
 private:

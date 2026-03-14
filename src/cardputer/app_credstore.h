@@ -25,6 +25,7 @@ public:
     void onExit() override;
     const char* appName() const override { return "CredStore"; }
     uint16_t iconColor() const override  { return 0xF800; }
+    void requestRedraw() override { _needsRedraw = true; }
     bool handlesGlobalBtnA() const override { return true; }
 
 private:

@@ -42,15 +42,12 @@ static REKey pollREKey() {
     k.any   = true;
     k.del   = ks.del;
     k.enter = ks.enter;
-    k.tab   = ks.tab;
     k.fn    = ks.fn;
 
+    // ESC = fn + backtick. fnEsc (exit edit mode) = fn + backtick.
+    // Tab is tab — not treated as ESC.
     for (uint8_t hk : ks.hid_keys) {
         switch (hk) {
-            case 0x29:
-                if (ks.fn) k.fnEsc = true;
-                else       k.esc   = true;
-                break;
             case 0x52: k.up    = true; break;
             case 0x51: k.down  = true; break;
             case 0x50: k.left  = true; break;
@@ -59,15 +56,9 @@ static REKey pollREKey() {
     }
 
     for (char c : ks.word) {
-        if (c == 0x1B) { k.esc = true; continue; }
-        if (c == '`') {
-            // backtick: only treat as ESC when fn is NOT held
-            // (fn+backtick is the fn+ESC combo on some Cardputer keyboards)
-            if (ks.fn) k.fnEsc = true;
-            else       k.esc   = true;
-            continue;
-        }
-        // fn+nav aliases
+        if (c == 0x1B) continue;  // ignore raw ESC byte — fn+` is the only ESC source
+        if (c == '`' && ks.fn)  { k.fnEsc = true; continue; }  // fn+` = exit edit mode
+        if (c == '`' && !ks.fn) { k.esc   = true; continue; }  // plain ` = ESC (back/menu)
         if (ks.fn) {
             switch (c) {
                 case ';': k.up    = true; continue;

@@ -31,6 +31,7 @@ static CSRawKey pollRaw() {
     rk.tab   = ks.tab;
     rk.fn    = ks.fn;
 
+    // ESC = fn + backtick only. Tab is tab.
     for (uint8_t hk : ks.hid_keys) {
         switch (hk) {
             case 0x29: rk.esc  = true; break;
@@ -40,8 +41,8 @@ static CSRawKey pollRaw() {
     }
 
     for (char c : ks.word) {
-        if (c == 0x1B) { rk.esc = true; continue; }
-        if (c == '`')  { rk.esc = true; continue; }
+        if (c == 0x1B)            { rk.esc = true; continue; }
+        if (c == '`')             { rk.esc = true; continue; }  // ` = ESC (fn+` or plain)
         if (ks.fn) {
             if (c == ';') { rk.up   = true; continue; }
             if (c == '.') { rk.down = true; continue; }
@@ -197,7 +198,14 @@ void AppCredStore::_handlePage0(CSRawKey rk) {
             _keyBuf=""; _needsRedraw=true; return;
         }
         if (rk.del && _keyBuf.length()>0) { _keyBuf.remove(_keyBuf.length()-1); _unlockFailed=false; _needsRedraw=true; return; }
-        if (rk.esc) { _keyBuf=""; _unlockFailed=false; _needsRedraw=true; return; }
+        if (rk.esc) {
+            if (_keyBuf.isEmpty()) {
+                uiManager.returnToLauncher();
+            } else {
+                _keyBuf=""; _unlockFailed=false; _needsRedraw=true;
+            }
+            return;
+        }
         if (rk.ch)  { _keyBuf+=rk.ch; _unlockFailed=false; _needsRedraw=true; }
     } else {
         if (rk.enter) { _confirmingLock=true; _needsRedraw=true; }

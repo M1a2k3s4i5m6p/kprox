@@ -279,13 +279,12 @@ void setup() {
     disp.drawString(ssidDisp, 4 + disp.textWidth("SSID "), y);
     y += 14;
 
-    // Default password warning
+    // Default password warning — show the actual password
     if (wifiPassword == DEFAULT_WIFI_PASSWORD) {
         disp.setTextColor(WS_WARN, WS_BG);
-        disp.drawString("", 4, y);
-        disp.drawString("Default password: " + wifiPassword, 4, y);
+        disp.drawString("! Default pw: " + wifiPassword, 4, y);
         y += 14;
-        disp.drawString("  update in Settings", 4, y);
+        disp.drawString("  Change in Settings app", 4, y);
         y += 14;
     }
 

@@ -29,13 +29,6 @@ KeyInput pollKeys() {
         return ki;
     }
 
-    // fn + tab or tab alone = ESC for UI navigation.
-    // On the Cardputer ADV keyboard, the physical ESC key may map to ks.tab.
-    if (ks.tab) {
-        ki.esc = true;
-        return ki;
-    }
-
     for (uint8_t hk : ks.hid_keys) {
         switch (hk) {
             case 0x29: ki.esc       = true; break; // HID ESC
@@ -55,7 +48,7 @@ KeyInput pollKeys() {
                 case '.': ki.arrowDown  = true; continue;
                 case ',': ki.arrowLeft  = true; continue;
                 case '/': ki.arrowRight = true; continue;
-                case '`': ki.esc        = true; continue;
+                case '`': ki.esc        = true; continue;  // fn+` = ESC
             }
         }
 
@@ -65,7 +58,7 @@ KeyInput pollKeys() {
             case '.': ki.arrowDown  = true; continue;
             case ';': ki.arrowUp    = true; continue;
             case '/': ki.arrowRight = true; continue;
-            case '`': ki.esc        = true; continue;
+            case '`': ki.esc        = true; continue;  // plain ` = ESC
         }
 
         if (c >= 0x20 && c < 0x7F) ki.ch = c;
@@ -133,7 +126,11 @@ void UIManager::update() {
 
     if (_needsFullRedraw) {
         _needsFullRedraw = false;
-        if (_currentApp < (int)_apps.size()) _apps[_currentApp]->onEnter();
+        // Re-render the current app without reinitialising it — calling onEnter()
+        // would wipe all in-progress input state (text buffers, cursor, etc.)
+        if (_currentApp < (int)_apps.size()) {
+            _apps[_currentApp]->requestRedraw();
+        }
     }
 
     // Global BtnA: play current register from any app that doesn't handle it itself
