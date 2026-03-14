@@ -1,6 +1,6 @@
-# KProx HID Automation & Proxy
+# KProx HID Automation
 
-KProx is a programmable BLE + USB keyboard and mouse with an encrypted REST API and an on-device credential store.
+KProx is a programmable BLE + USB keyboard and mouse with an encrypted REST API, an on-device credential store, and a community gadget library.
 
 KProx runs on the
 [M5Stack AtomS3 Lite ESP32S3](https://shop.m5stack.com/products/atoms3-lite-esp32s3-dev-kit)
@@ -15,7 +15,7 @@ Typical applications: unlocking unattended machines, mouse jiggling, canned text
 
 ![KProx](web/kprox.png)
 
-> ⚠️ **Ethical Use Warning**
+> ### ⚠️ Ethical Use Warning
 >
 > This software, firmware, source code, and all associated artifacts are
 > intended for personal use only, on systems and devices you own or have
@@ -31,6 +31,17 @@ Typical applications: unlocking unattended machines, mouse jiggling, canned text
 > includes but is not limited to: use on systems you do not own or have
 > permission to access, use in any form of surveillance, coercion, or
 > harassment, and use in violation of any applicable law or regulation.
+
+> ### ⚠️ Unverified Cryptographic Security
+>
+> **This project is a toy.** The cryptographic implementations and security protocols contained within this repository 
+> have **not been audited or verified** by security professionals. 
+>
+> It is intended for educational and hobbyist purposes only. Do not use this software to store, transmit, or protect 
+> sensitive data, or in any production environment.
+>
+> **USE AT YOUR OWN RISK.** The authors and contributors assume no liability for data loss, security breaches, or any 
+> other damages resulting from the use of this software.
 
 
 ## Hardware
@@ -111,11 +122,11 @@ All API endpoints require authentication. Requests are authenticated with an HMA
 
 ### Credential Store
 
-The credential store is a separate encrypted vault for secrets used in token strings (passwords, API keys, etc.). It uses AES-256-CTR + HMAC-SHA256 keyed from a user-supplied store key that is **never written to flash**. The store key lives only in volatile RAM and is cleared on lock or reboot.
+The credential store is a separate encrypted vault for secrets used in token strings (passwords, API keys, etc.). It uses AES-256-CTR + HMAC-SHA256 keyed from a user-supplied store key that is **never written to flash**. The store key lives only in volatile RAM and is cleared on lock or reboot. The store itself is persisted to NVS (survives firmware flashes).
 
 The store has two states: **locked** (default after boot) and **unlocked**. Unlock via the web interface **Credential Store** tab or the `/api/credstore` API endpoint. Once unlocked, `{CREDSTORE label}` tokens in registers are substituted with the decrypted value at playback time.
 
-> **Note:** Register contents themselves are stored in plaintext on flash. Do not store secrets directly in registers — use the credential store instead.
+> **Note:** Register contents are stored in plaintext on flash. Do not store secrets directly in registers — use the credential store instead.
 
 ---
 
@@ -131,15 +142,16 @@ The store has two states: **locked** (default after boot) and **unlocked**. Unlo
 
 ## Cardputer ADV Apps
 
-The Cardputer ADV has a display and keyboard. Use arrow keys to navigate the launcher; Enter to open an app; `fn+esc` or backtick to return to the launcher.
+The Cardputer ADV has a display and keyboard. Use arrow keys to navigate the launcher; Enter to open an app; backtick or `fn+esc` to return to the launcher.
 
 | App | Description |
 |-----|-------------|
-| **KProx** | Main register playback and status app |
-| **CredStore** | Credential store status — shows lock state, credential count, and labels. Press `L` to lock the store. |
+| **KProx** | Main register playback and status. Shows active register, content preview, IP, SSID, hostname, and credential store lock state. |
+| **CredStore** | 3-page credential store manager: Status/Unlock · Change Key · Wipe Store. Type your key directly to unlock. |
+| **Gadgets** | Browse and install community gadgets from GitHub. Requires WiFi. ENTER installs to a new register. |
 | **Keyboard HID** | Direct keyboard input forwarding |
 | **Clock** | Current time display (requires NTP) |
-| **Settings** | Per-page settings: Connectivity · WiFi · API Key · Device Identity |
+| **Settings** | Per-page settings: Connectivity · WiFi Settings · API Key · Device Identity |
 
 ![Splash](img/kprox_cardputer_adv_splash.png)
 ![WiFi connect](img/kprox_cardputer_adv_wifi_connect.png)
@@ -154,12 +166,53 @@ The web interface is served from SPIFFS and provides full device management.
 ![Web interface](img/web_interface_screenshot.png)
 
 **Tabs:**
+
 - **Registers** — create, edit, name, reorder, and play token string registers
 - **Mouse** — trackpad for direct mouse control
 - **Code Reference** — searchable table of all tokens, HID codes, and examples
-- **Credential Store** — manage the encrypted credential vault; lock/unlock, add/delete/update credentials, change the store key
+- **Credential Store** — manage the encrypted credential vault; lock/unlock, add/delete/update credentials, change the store key, wipe the store
+- **Gadgets** — browse and install community gadgets from GitHub directly into registers
 
-The sidebar provides API key management, WiFi status, Bluetooth toggle, LED control, keymap selection, mTLS configuration, and OTA firmware/SPIFFS update.
+---
+
+## Gadgets
+
+Gadgets are pre-built token string scripts stored as JSON files in the [`gadgets/`](gadgets/) directory of this repository. They can be browsed and installed:
+
+- **Web interface** — open the **Gadgets** tab, click **Load Gadgets from GitHub**, then click **Install** on any gadget to add it as a new register on the connected device.
+- **Cardputer ADV** — open the **Gadgets** app. It fetches the gadget list over WiFi, then lets you page through them with the arrow keys. Press ENTER to install the current gadget as a new register.
+
+### Gadget Format
+
+Each gadget is a single JSON file in `gadgets/`:
+
+```json
+{
+  "gadget": {
+    "name": "Random Mouse Walk",
+    "description": "Randomly moves the mouse around the screen forever.",
+    "content": "{LOOP}{MOVEMOUSE {RAND -100 100} {RAND -100 100}}{SLEEP {RAND 1000 3000}}{ENDLOOP}"
+  }
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | yes | Short display name shown in the app and web interface |
+| `description` | yes | One or two sentences describing what the gadget does |
+| `content` | yes | The token string that will be loaded into the register |
+
+### Contributing a Gadget
+
+If you've written a useful token string, contributing it as a gadget makes it available to all KProx users directly from the device — no copy-pasting required.
+
+1. **Fork** this repository.
+2. Create a new file in `gadgets/` named descriptively in snake_case, e.g. `my_gadget.json`.
+3. Use the format above. Keep `name` under 30 characters (display width on the Cardputer). Keep `description` to 1–2 sentences.
+4. Test your gadget on a real device or verify the token string logic against the [TOKEN_REFERENCE.md](TOKEN_REFERENCE.md).
+5. Open a **Pull Request** with a brief description of what the gadget does and what device/OS it targets (if applicable).
+
+Good gadgets to contribute: OS-specific shortcuts, useful automation sequences, fun demos, diagnostic tools, or anything that would have been handy to have pre-loaded.
 
 ---
 
@@ -201,19 +254,14 @@ The token string DSL supports:
 ```
 Types: `Sum 1-100 = 5050`
 
-### Mouse jiggler (infinite, random movement)
+### Mouse jiggler (infinite, random)
 ```
 {LOOP}{MOVEMOUSE {RAND -50 50} {RAND -50 50}}{SLEEP {RAND 1000 3000}}{ENDLOOP}
 ```
 
-### Unlock Android
+### Lock Windows
 ```
-{MOUSEMOVE 10 0}{ENTER}{SLEEP 100}mysecurepassword{SLEEP 300}{ENTER}
-```
-
-### Unlock Windows
-```
-{LEFT}{SLEEP 1000}mysecurepassword{ENTER}
+{CHORD GUI+L}
 ```
 
 ### Linux Magic SysRq REISUB (safe emergency reboot)
@@ -235,7 +283,7 @@ All endpoints require `X-Auth: <hmac-sha256(apiKey, nonce)>` obtained from `GET 
 | `/api/registers` | GET POST DELETE | Register management |
 | `/api/registers/export` | GET | Export all registers as JSON |
 | `/api/registers/import` | POST | Import registers from JSON |
-| `/api/credstore` | GET POST | Credential store — lock/unlock/get/set/delete |
+| `/api/credstore` | GET POST | Credential store — lock/unlock/get/set/delete/wipe |
 | `/api/credstore/rekey` | POST | Re-encrypt all credentials with a new key |
 | `/api/wifi` | GET POST | WiFi status and connect |
 | `/api/bluetooth` | GET POST | Bluetooth enable/disable |
@@ -249,28 +297,6 @@ All endpoints require `X-Auth: <hmac-sha256(apiKey, nonce)>` obtained from `GET 
 | `/api/ota/spiffs` | POST | OTA SPIFFS image upload |
 | `/send/text` | POST | Send a token string immediately |
 | `/send/mouse` | POST | Send a mouse action immediately |
-
-### Credential Store API
-
-```
-# Get status (locked state + count; labels if unlocked)
-GET /api/credstore
-
-# Unlock
-POST /api/credstore  {"action":"unlock","key":"<store_key>"}
-
-# Lock
-POST /api/credstore  {"action":"lock"}
-
-# Add or update a credential (store must be unlocked)
-POST /api/credstore  {"action":"set","label":"wifi_pass","value":"s3cr3t"}
-
-# Delete a credential
-POST /api/credstore  {"action":"delete","label":"wifi_pass"}
-
-# Change the store key (re-encrypts all entries)
-POST /api/credstore/rekey  {"old_key":"old","new_key":"newkey123"}
-```
 
 ---
 
@@ -289,3 +315,4 @@ echo "{SLEEP 1000}hello world{ENTER}" | bash kpipe.sh
 - **Firmware** — `src/` Arduino on ESP32S3, WebServer on port 80
 - **Web assets** — `web/` HTML/CSS/JS minified by `build.js` and stored in SPIFFS
 - **Android companion app** — `android/` discovery, register management, and credential store control
+- **Gadgets** — `gadgets/` community token string scripts in JSON format

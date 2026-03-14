@@ -1,7 +1,7 @@
 {
   "gadget": {
     "name": "Lock Windows",
-    "description": "Locks a Windows machine using the Win+L keyboard shortcut.",
+    "description": "Locks Windows and Linux machines using the Win+L keyboard shortcut.",
     "content": "{CHORD GUI+L}"
   }
 }
