@@ -3,6 +3,7 @@
 #include "connection.h"
 #include "keymap.h"
 #include "storage.h"
+#include "credential_store.h"
 
 #ifdef BOARD_M5STACK_CARDPUTER
 #include <M5Cardputer.h>
@@ -352,6 +353,11 @@ static String evaluateAllTokens(String input, std::map<String, String>& vars) {
                 replacement = String((char)value);
                 resolved    = true;
             }
+        } else if (upperToken.startsWith("CREDSTORE ")) {
+            String label = token.substring(10);
+            label.trim();
+            replacement = credStoreLocked ? "" : credStoreGet(label);
+            resolved    = true;
         }
 
         if (resolved) {

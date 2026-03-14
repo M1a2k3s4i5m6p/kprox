@@ -69,6 +69,7 @@
 
 #include "config.h"
 #include "constants.h"
+#include "credential_store.h"
 
 #ifdef BOARD_HAS_USB_HID
 #  include "USB.h"

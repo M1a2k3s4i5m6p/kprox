@@ -1,55 +1,42 @@
 # KProx HID Automation
 
-KProx is a 1-key programmable BLE + USB keyboard and mouse with API.
+KProx is a programmable BLE + USB keyboard and mouse with an encrypted REST API and an on-device credential store.
 
-KProx is a wireless HID proxy device built on the 
-[M5Stack AtomS3 Lite ESP32S3](https://shop.m5stack.com/products/atoms3-lite-esp32s3-dev-kit) 
+KProx runs on the
+[M5Stack AtomS3 Lite ESP32S3](https://shop.m5stack.com/products/atoms3-lite-esp32s3-dev-kit)
 and the
-[M5Stack Cardputer Adv ESP32S3](https://shop.m5stack.com/products/m5stack-cardputer-adv-version-esp32-s3). 
+[M5Stack Cardputer Adv ESP32S3](https://shop.m5stack.com/products/m5stack-cardputer-adv-version-esp32-s3).
 
-It presents itself to a paired host as a Bluetooth or USB keyboard and mouse, 
-then accepts input from a web interface, REST API; letting you 
-type into, click on, and control any HID-capable device without installing 
-software on it.
+It presents itself to a paired host as a Bluetooth or USB keyboard and mouse, then accepts input from a web interface or REST API, letting you type into, click on, and control any HID-capable device without installing software on it.
 
-The primary use case is scripted automation via a DSL. KProx stores sequences 
-called *token strings* in numbered registers on-device. A single button press replays 
-the active register. Token strings are written in a small built-in scripting 
-language that supports keyboard chords, mouse control, loops, conditionals, 
-variables, math, random numbers, timed scheduling and more.
+The primary use case is scripted automation via a small built-in DSL. Token strings are stored in numbered registers on-device. A single button press replays the active register. The language supports keyboard chords, mouse control, loops, conditionals, variables, math, random numbers, timed scheduling, and direct credential injection from the encrypted credential store.
 
-Typical applications include unlocking unattended machines, mouse jiggling, 
-sending canned text sequences, scripted UI testing, and automated form entry 
-on devices where you cannot install software; embedded terminals, locked-down 
-kiosks, Android devices, or any machine that accepts a standard keyboard and 
-mouse.
+Typical applications: unlocking unattended machines, mouse jiggling, canned text sequences, scripted UI testing, automated form entry on devices where you cannot install software — embedded terminals, locked-down kiosks, Android devices, or any machine that accepts a standard keyboard and mouse.
 
-Another use case is for sending credentials from keepass to a host device. 
-
-![Alt text](web/kprox.png)
+![KProx](web/kprox.png)
 
 > ⚠️ **Ethical Use Warning**
 >
-> This software, firmware, source code, and all associated artifacts are 
-> intended for personal use only, on systems and devices you own or have 
-> explicit authorization to operate. By using this project you accept full 
+> This software, firmware, source code, and all associated artifacts are
+> intended for personal use only, on systems and devices you own or have
+> explicit authorization to operate. By using this project you accept full
 > responsibility for how it is used.
 >
 > This software is provided **as-is** with no warranty of any kind. The creator
-> assumes no liability for damages, data loss, legal consequences, or any other 
+> assumes no liability for damages, data loss, legal consequences, or any other
 > harm arising from its use or misuse.
 >
-> **The license granted by this project is automatically and irrevocably 
-> revoked for any use that is illegal, unethical, or unauthorized.** This 
-> includes but is not limited to: use on systems you do not own or have 
-> permission to access, use in any form of surveillance, coercion, or 
+> **The license granted by this project is automatically and irrevocably
+> revoked for any use that is illegal, unethical, or unauthorized.** This
+> includes but is not limited to: use on systems you do not own or have
+> permission to access, use in any form of surveillance, coercion, or
 > harassment, and use in violation of any applicable law or regulation.
 
 
 ## Hardware
 
 - [M5Stack AtomS3 Lite ESP32S3 Dev Kit](https://shop.m5stack.com/products/atoms3-lite-esp32s3-dev-kit)
-- [M5Stack Cardputer Adv ESP32S3](https://shop.m5stack.com/products/m5stack-cardputer-adv-version-esp32-s3). 
+- [M5Stack Cardputer Adv ESP32S3](https://shop.m5stack.com/products/m5stack-cardputer-adv-version-esp32-s3)
 
 ---
 
@@ -60,11 +47,14 @@ Another use case is for sending credentials from keepass to a host device.
 - [PlatformIO](https://platformio.org/) (CLI or IDE extension)
 - [Node.js](https://nodejs.org/) (for the build step that minifies web assets)
 
-### First Flash (USB Cable): Device must be in DFU mode to flash!
+### First Flash (USB Cable)
 
-1. Connect the AtomS3 or Cardputer ADV via USB-C.
-2. Hold the side button for 3–5 seconds until the LED turns green(Atom S3) or 
-   hold down BtnG0 and then press BtnRst(Cardputer ADV); this enters programming/DFU mode.
+The device must be in DFU mode to flash.
+
+1. Connect via USB-C.
+2. Enter DFU mode:
+   - **AtomS3:** Hold the side button for 3–5 seconds until the LED turns green.
+   - **Cardputer ADV:** Hold BtnG0, then press BtnRst.
 3. Run:
    ```bash
    make build
@@ -73,13 +63,13 @@ Another use case is for sending credentials from keepass to a host device.
 
 ### OTA (Over-the-Air) Update
 
-Once the device is connected to your PRIVATE and personal AP:
+Once the device is on your network:
 
 ```bash
 make ota
 ```
 
-Or specify a different hostname/IP:
+Or specify a hostname/IP:
 
 ```bash
 make ota HOST=192.168.1.42
@@ -91,7 +81,7 @@ The OTA binary can also be uploaded via the web interface under **Settings → O
 
 ## Initial WiFi Setup
 
-KProx does not host its own access point. On first boot it tries to connect using stored credentials. The factory defaults are:
+KProx does not host its own access point. On first boot it connects using stored credentials. Factory defaults:
 
 | Setting  | Default     |
 |----------|-------------|
@@ -100,113 +90,109 @@ KProx does not host its own access point. On first boot it tries to connect usin
 
 **Recommended first-boot flow:**
 
-1. On your Android phone open **Settings → Network → Hotspot** and create a personal hotspot with:
-   - **Name:** `kprox`
-   - **Password:** `1337prox`
-   - **Band:** 2.4 GHz (ESP32 does not support 5 GHz)
+1. On your Android phone create a personal hotspot:
+   - **Name:** `kprox`  **Password:** `1337prox`  **Band:** 2.4 GHz
+2. Power on KProx. The LED blinks orange while connecting, flashes green on success.
+3. Find the IP in your hotspot client list, or use mDNS: `http://kprox.local`
+4. Open the web interface → **WiFi Settings**, enter your real network credentials, click **Connect**.
+5. Disable the hotspot. Update the **API Endpoint** field to the new IP or mDNS hostname.
 
-2. Power on the KProx device. The LED blinks orange while connecting and flashes green on success.
-
-3. Find the device's IP in your Android hotspot client list, or use mDNS:
-   ```
-   http://kproxk.local
-   ```
-
-4. Open the web interface. Go to **Settings → WiFi**, enter your real network 
-SSID and password, and click **Connect**. The new credentials are saved to 
-flash and the device reconnects.
-
-5. Disable the Android hotspot. Update the **API Endpoint** field in the 
-sidebar to the new IP or mDNS hostname.
-
-
-> ⚠️ **WARNING: ** KProx is designed it connect to a personal AP. It is NOT 
-> recommended NOT to connect the device to a shared network!
+> ⚠️ KProx is designed to connect to a personal AP. Do **not** connect it to a shared network.
 
 ---
 
-## Security
+## Security Model
 
-All API endpoints are encrypted using AES256 + nonce (keystrokes, mouse, 
-registers, settings) require an API key sent as the `X-API-Key` HTTP header.
-The API key can be changed via the web interface and it is recommended
-you change it on first boot.
+### API Encryption
 
-**Default key:** `kprox1337`
+All API endpoints require authentication. Requests are authenticated with an HMAC-SHA256 over a single-use nonce, and both request and response bodies are encrypted with AES-256-CTR + HMAC-SHA256 keyed from the API key. The nonce rotates on every request.
 
-Change it in the web interface sidebar under **API Key** — enter a new key 
-(minimum 8 characters) and click **Save API Key**. The key is persisted to 
-flash and takes effect immediately.
+**Default API key:** `kprox1337` — change this immediately via the web interface sidebar.
 
+### Credential Store
 
-> ⚠️ **WARNING: ** Register contents is not encrypted on the device. It is 
-> recommended NOT to store secrets on the device!
+The credential store is a separate encrypted vault for secrets used in token strings (passwords, API keys, etc.). It uses AES-256-CTR + HMAC-SHA256 keyed from a user-supplied store key that is **never written to flash**. The store key lives only in volatile RAM and is cleared on lock or reboot.
+
+The store has two states: **locked** (default after boot) and **unlocked**. Unlock via the web interface **Credential Store** tab or the `/api/credstore` API endpoint. Once unlocked, `{CREDSTORE label}` tokens in registers are substituted with the decrypted value at playback time.
+
+> **Note:** Register contents themselves are stored in plaintext on flash. Do not store secrets directly in registers — use the credential store instead.
 
 ---
 
 ## Basic Operation
 
 | Action (BtnG0) | Behavior |
-|--------|----------|
-| **1 click** | Play/output content of active register |
-| **1 click** | halt output                            |
+|----------------|----------|
+| **1 click** | Play active register / halt if running |
 | **2 clicks** | Cycle to next register (LED blinks register number) |
 | **Hold 5 s** | Delete all registers (emergency reset) |
 
 ---
 
-### Cardputer ADV
-KProx provides a simple user interface that takes advantage of the Cardputer ADV
-display. 
+## Cardputer ADV Apps
 
-- use the arrow keys to navigate
-- When in the KProx "app" all of the previous operaitons defined above still apply
-- To exit to the menu use "fn + esc", enter/return to accept
+The Cardputer ADV has a display and keyboard. Use arrow keys to navigate the launcher; Enter to open an app; `fn+esc` or backtick to return to the launcher.
 
+| App | Description |
+|-----|-------------|
+| **KProx** | Main register playback and status app |
+| **CredStore** | Credential store status — shows lock state, credential count, and labels. Press `L` to lock the store. |
+| **Keyboard HID** | Direct keyboard input forwarding |
+| **Clock** | Current time display (requires NTP) |
+| **Settings** | Per-page settings: Connectivity · WiFi · API Key · Device Identity |
 
-![Alt text](img/kprox_cardputer_adv_splash.png)
-![Alt text](img/kprox_cardputer_adv_wifi_connect.png)
-![Alt text](img/kprox_cardputer_adv_kprox_app.png)
+![Splash](img/kprox_cardputer_adv_splash.png)
+![WiFi connect](img/kprox_cardputer_adv_wifi_connect.png)
+![KProx app](img/kprox_cardputer_adv_kprox_app.png)
+
+---
 
 ## Web Interface
 
-The KProx web interface prides settings configuration and register management
-features.
+The web interface is served from SPIFFS and provides full device management.
 
-![Alt text](img/web_interface_screenshot.png)
+![Web interface](img/web_interface_screenshot.png)
+
+**Tabs:**
+- **Registers** — create, edit, name, reorder, and play token string registers
+- **Mouse** — trackpad for direct mouse control
+- **Code Reference** — searchable table of all tokens, HID codes, and examples
+- **Credential Store** — manage the encrypted credential vault; lock/unlock, add/delete/update credentials, change the store key
+
+The sidebar provides API key management, WiFi status, Bluetooth toggle, LED control, keymap selection, mTLS configuration, and OTA firmware/SPIFFS update.
 
 ---
 
 ## DSL Overview
-The KProx firmware has a simple DSL similar to DuckScript referred to as "token
-strings"
+
+See [TOKEN_REFERENCE.md](TOKEN_REFERENCE.md) for complete documentation.
 
 The token string DSL supports:
 
 - **Keyboard output** — plain text, special keys, key chords, raw HID
-- **Mouse control** — absolute/relative movement, clicks, press/release, drag
-- **Loops** — if, while, infinite, timed, and counter loops with `{LOOP}..{ENDLOOP}`
-- **Variables** — `{SET varname expr}` assigns any evaluated expression to a named variable; `{varname}` outputs it anywhere
-- **Conditionals** — `{IF left op right}..{ELSE}..{ENDIF}` with operators `==`, `!=`, `<`, `>`, `<=`, `>=`
-- **Math** — `{MATH expr}` with arithmetic, trig, floor/ceil/round, modulo, PI, E
+- **Mouse control** — absolute/relative movement, clicks, press/release
+- **Credential injection** — `{CREDSTORE label}` substitutes secrets from the encrypted store
+- **Loops** — infinite, timed, counter (`LOOP`/`FOR`/`WHILE`) with `BREAK`
+- **Variables** — `{SET varname expr}` with full expression evaluation
+- **Conditionals** — `{IF left op right}..{ELSE}..{ENDIF}`
+- **Math** — `{MATH expr}` with arithmetic, trig, floor/ceil/round, constants PI and E
 - **Random** — `{RAND min max}`
 - **Timing** — `{SLEEP ms}`, `{SCHEDULE HH:MM}`
+- **Keymap** — `{KEYMAP id}` to switch keyboard layouts mid-string
 - **System** — Bluetooth/USB toggle, halt/resume, WiFi connect
-
-See [TOKEN_REFERENCE.md](TOKEN_REFERENCE.md) for a complete documentation and examples.
 
 ---
 
 ## Token String Examples
 
+### Credential-based login
+```
+{CREDSTORE corp_username}{TAB}{CREDSTORE corp_password}{ENTER}
+```
+
 ### FizzBuzz
 ```
 {LOOP i 1 1 20}{SET fb {i}}{IF {MATH {i} % 15} == 0}{SET fb FizzBuzz}{ELSE}{IF {MATH {i} % 3} == 0}{SET fb Fizz}{ELSE}{IF {MATH {i} % 5} == 0}{SET fb Buzz}{ENDIF}{ENDIF}{ENDIF}{fb}{ENTER}{ENDLOOP}
-```
-
-### Aligned 0–9 multiplication table
-```
- x |{LOOP j 0 1 9}  {j}{ENDLOOP}{ENTER}---+{LOOP j 0 1 9}---{ENDLOOP}{ENTER}{LOOP i 0 1 9} {i} |{LOOP j 0 1 9}{SET p {MATH {i} * {j}}}{IF {p} < 10}  {p}{ELSE} {p}{ENDIF}{ENDLOOP}{ENTER}{ENDLOOP}
 ```
 
 ### Accumulate a running sum
@@ -237,6 +223,57 @@ Types: `Sum 1-100 = 5050`
 
 ---
 
+## API
+
+All endpoints require `X-Auth: <hmac-sha256(apiKey, nonce)>` obtained from `GET /api/nonce`. Request and response bodies are encrypted (AES-256-CTR + HMAC) when `X-Encrypted: 1` is set.
+
+| Endpoint | Methods | Description |
+|----------|---------|-------------|
+| `/api/nonce` | GET | Fetch a fresh single-use nonce |
+| `/api/status` | GET | Device status, connection state, credstore lock state |
+| `/api/settings` | GET POST DELETE | Aggregate settings |
+| `/api/registers` | GET POST DELETE | Register management |
+| `/api/registers/export` | GET | Export all registers as JSON |
+| `/api/registers/import` | POST | Import registers from JSON |
+| `/api/credstore` | GET POST | Credential store — lock/unlock/get/set/delete |
+| `/api/credstore/rekey` | POST | Re-encrypt all credentials with a new key |
+| `/api/wifi` | GET POST | WiFi status and connect |
+| `/api/bluetooth` | GET POST | Bluetooth enable/disable |
+| `/api/usb` | GET POST | USB HID enable/disable |
+| `/api/led` | GET POST | LED colour and enable/disable |
+| `/api/keymap` | GET POST PUT DELETE | Keyboard layout management |
+| `/api/mtls` | GET POST | mTLS settings |
+| `/api/mtls/certs` | POST DELETE | Certificate upload/clear |
+| `/api/device` | GET POST | Device identity (USB manufacturer/product) |
+| `/api/ota` | POST | OTA firmware upload |
+| `/api/ota/spiffs` | POST | OTA SPIFFS image upload |
+| `/send/text` | POST | Send a token string immediately |
+| `/send/mouse` | POST | Send a mouse action immediately |
+
+### Credential Store API
+
+```
+# Get status (locked state + count; labels if unlocked)
+GET /api/credstore
+
+# Unlock
+POST /api/credstore  {"action":"unlock","key":"<store_key>"}
+
+# Lock
+POST /api/credstore  {"action":"lock"}
+
+# Add or update a credential (store must be unlocked)
+POST /api/credstore  {"action":"set","label":"wifi_pass","value":"s3cr3t"}
+
+# Delete a credential
+POST /api/credstore  {"action":"delete","label":"wifi_pass"}
+
+# Change the store key (re-encrypts all entries)
+POST /api/credstore/rekey  {"old_key":"old","new_key":"newkey123"}
+```
+
+---
+
 ## External Data Input
 
 Pipe token strings from a shell script:
@@ -249,6 +286,6 @@ echo "{SLEEP 1000}hello world{ENTER}" | bash kpipe.sh
 
 ## Architecture
 
-- **Firmware** — `src` Arduino on ESP32S3, WebServer on port 80
-- **Web assets** — `web` Minified by build.js HTML/CSS/JS stored in SPIFFS
-- **Android companion app** — `android` Android companion application for KProx
+- **Firmware** — `src/` Arduino on ESP32S3, WebServer on port 80
+- **Web assets** — `web/` HTML/CSS/JS minified by `build.js` and stored in SPIFFS
+- **Android companion app** — `android/` discovery, register management, and credential store control

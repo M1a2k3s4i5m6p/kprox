@@ -10,12 +10,14 @@
 #include "../api.h"
 #include "../mtls.h"
 #include "../keymap.h"
+#include "../credential_store.h"
 #include "ui_manager.h"
 #include "app_launcher.h"
 #include "app_kprox.h"
 #include "app_keyboard_hid.h"
 #include "app_clock.h"
 #include "app_settings.h"
+#include "app_credstore.h"
 #include <M5Cardputer.h>
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -207,6 +209,7 @@ void setup() {
     if (!SPIFFS.begin(true)) { /* SPIFFS mount failed */ }
     feedWatchdog();
     keymapInit();
+    credStoreInit();
 
     // Construct BLE objects here — after settings are loaded — so the device
     // name and manufacturer are the persisted values, not compile-time defaults.
@@ -304,15 +307,17 @@ void setup() {
 
     feedWatchdog();
 
-    // Register apps: Launcher first, then real apps
+    // Register apps: Launcher first, then real apps in display order
     static Cardputer::AppLauncher    launcher;
     static Cardputer::AppKProx       appKProx;
+    static Cardputer::AppCredStore   appCredStore;
     static Cardputer::AppKeyboardHID appKeyboard;
     static Cardputer::AppClock       appClock;
     static Cardputer::AppSettings    appSettings;
 
     Cardputer::uiManager.addApp(&launcher);
     Cardputer::uiManager.addApp(&appKProx);
+    Cardputer::uiManager.addApp(&appCredStore);
     Cardputer::uiManager.addApp(&appKeyboard);
     Cardputer::uiManager.addApp(&appClock);
     Cardputer::uiManager.addApp(&appSettings);

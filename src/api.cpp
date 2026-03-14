@@ -8,6 +8,7 @@
 #include "mtls.h"
 #include "crypto_utils.h"
 #include "keymap.h"
+#include "credential_store.h"
 
 String currentNonce = "";
 
@@ -190,6 +191,8 @@ void handleApiStatus() {
     doc["mtlsEnabled"]         = mtlsEnabled;
     doc["activeKeymap"]        = keymapActive();
     doc["ledEnabled"]          = ledEnabled;
+    doc["credStoreLocked"]     = credStoreLocked;
+    doc["credStoreCount"]      = credStoreCount();
     doc["ledColor"]["r"]       = ledColorR;
     doc["ledColor"]["g"]       = ledColorG;
     doc["ledColor"]["b"]       = ledColorB;
@@ -1099,6 +1102,133 @@ void handleKeymap() {
     server.client().stop();
 }
 
+// ---- Credential Store ----
+
+void handleCredStore() {
+    addCorsHeaders();
+    server.sendHeader("Connection", "close");
+    if (!checkApiKey()) return;
+
+    if (server.method() == HTTP_GET) {
+        JsonDocument doc;
+        doc["locked"] = credStoreLocked;
+        doc["count"]  = credStoreCount();
+        if (!credStoreLocked) {
+            JsonArray arr = doc["labels"].to<JsonArray>();
+            for (auto& lbl : credStoreListLabels()) arr.add(lbl);
+        }
+        String resp; serializeJson(doc, resp);
+        sendEncrypted(200, resp);
+
+    } else if (server.method() == HTTP_POST) {
+        if (!canProceed()) return;
+        JsonDocument doc;
+        if (!parseJsonBody(doc)) { requestComplete(); return; }
+
+        String action = doc["action"] | "";
+
+        if (action == "unlock") {
+            String key = doc["key"] | "";
+            if (key.isEmpty()) {
+                server.send(400, "application/json", "{\"error\":\"Missing key\"}");
+                server.client().stop(); requestComplete(); return;
+            }
+            if (credStoreUnlock(key)) {
+                sendEncrypted(200, "{\"status\":\"ok\",\"locked\":false}");
+            } else {
+                sendEncrypted(401, "{\"error\":\"Invalid key\"}");
+            }
+
+        } else if (action == "lock") {
+            credStoreLock();
+            sendEncrypted(200, "{\"status\":\"ok\",\"locked\":true}");
+
+        } else if (action == "get") {
+            if (credStoreLocked) {
+                sendEncrypted(403, "{\"error\":\"Store is locked\"}");
+            } else {
+                String label = doc["label"] | "";
+                String value = credStoreGet(label);
+                JsonDocument r;
+                r["label"] = label;
+                r["found"] = credStoreLabelExists(label);
+                r["value"] = value;
+                String resp; serializeJson(r, resp);
+                sendEncrypted(200, resp);
+            }
+
+        } else if (action == "set") {
+            if (credStoreLocked) {
+                sendEncrypted(403, "{\"error\":\"Store is locked\"}");
+            } else {
+                String label = doc["label"] | "";
+                String value = doc["value"] | "";
+                if (label.isEmpty()) {
+                    server.send(400, "application/json", "{\"error\":\"Missing label\"}");
+                    server.client().stop(); requestComplete(); return;
+                }
+                credStoreSet(label, value);
+                sendEncrypted(200, "{\"status\":\"ok\"}");
+            }
+
+        } else if (action == "delete") {
+            if (credStoreLocked) {
+                sendEncrypted(403, "{\"error\":\"Store is locked\"}");
+            } else {
+                String label = doc["label"] | "";
+                credStoreDelete(label);
+                sendEncrypted(200, "{\"status\":\"ok\"}");
+            }
+
+        } else if (action == "wipe") {
+            credStoreWipe();
+            sendEncrypted(200, "{\"status\":\"ok\"}");
+
+        } else {
+            server.send(400, "application/json", "{\"error\":\"Unknown action\"}");
+        }
+
+        requestComplete();
+
+    } else {
+        server.send(405, "text/plain", "Method not allowed");
+    }
+
+    server.client().stop();
+}
+
+void handleCredStoreKey() {
+    addCorsHeaders();
+    server.sendHeader("Connection", "close");
+    if (!checkApiKey()) return;
+    if (!canProceed()) return;
+
+    JsonDocument doc;
+    if (!parseJsonBody(doc)) { requestComplete(); return; }
+
+    String oldKey = doc["old_key"] | "";
+    String newKey = doc["new_key"] | "";
+
+    if (oldKey.isEmpty() || newKey.isEmpty()) {
+        server.send(400, "application/json", "{\"error\":\"Missing old_key or new_key\"}");
+        server.client().stop(); requestComplete(); return;
+    }
+
+    if (newKey.length() < 8) {
+        server.send(400, "application/json", "{\"error\":\"new_key must be at least 8 characters\"}");
+        server.client().stop(); requestComplete(); return;
+    }
+
+    if (credStoreRekey(oldKey, newKey)) {
+        sendEncrypted(200, "{\"status\":\"ok\"}");
+    } else {
+        sendEncrypted(401, "{\"error\":\"Invalid current key\"}");
+    }
+
+    requestComplete();
+    server.client().stop();
+}
+
 // ---- Route setup ----
 
 void setupRoutes() {
@@ -1146,6 +1276,9 @@ void setupRoutes() {
     server.on("/api/keymap",             HTTP_POST,    handleKeymap);
     server.on("/api/keymap",             HTTP_PUT,     handleKeymap);
     server.on("/api/keymap",             HTTP_DELETE,  handleKeymap);
+    server.on("/api/credstore",          HTTP_GET,     handleCredStore);
+    server.on("/api/credstore",          HTTP_POST,    handleCredStore);
+    server.on("/api/credstore/rekey",    HTTP_POST,    handleCredStoreKey);
     server.on("/send/text",              HTTP_POST,    handleSendText);
     server.on("/send/mouse",             HTTP_POST,    handleSendMouse);
 
@@ -1156,12 +1289,13 @@ void setupRoutes() {
         "/api/discovery", "/api/network", "/api/registers/export",
         "/api/registers/import", "/api/ota", "/api/ota/spiffs",
         "/api/mtls", "/api/mtls/certs",
-        "/api/nonce", "/api/keymap"
+        "/api/nonce", "/api/keymap",
+        "/api/credstore", "/api/credstore/rekey"
     };
     for (const char* path : opts) server.on(path, HTTP_OPTIONS, handleOptions);
 
     server.onNotFound(handleNotFound);
 
     const char* headerKeys[] = {"X-Auth", "X-Encrypted", "Content-Length"};
-    server.collectHeaders(headerKeys, 2);
+    server.collectHeaders(headerKeys, 3);
 }

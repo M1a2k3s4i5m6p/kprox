@@ -705,6 +705,35 @@
             <div id="settingsResult" style="margin-top:8px;"></div>
         </div>
 
+        <!-- Credential Store Card -->
+        <div class="card" id="credStoreCard">
+            <h3>🔐 Credential Store</h3>
+            <div id="csAndroidStatus" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+                <span id="csAndroidBadge" style="display:inline-block;padding:3px 10px;border-radius:12px;font-weight:bold;font-size:0.85em;background:rgba(244,67,54,0.7);">LOCKED</span>
+                <span id="csAndroidCount" style="font-size:0.85em;opacity:0.8;">— credentials</span>
+            </div>
+
+            <div style="margin-bottom:14px;">
+                <label style="display:block;margin-bottom:6px;font-weight:bold;font-size:0.9em;">Store Key</label>
+                <input type="password" id="csAndroidKey" placeholder="Credential store key" style="width:100%;margin:0 0 8px 0;">
+                <div style="display:flex;gap:8px;">
+                    <button onclick="androidCsUnlock()" style="flex:1;background:linear-gradient(45deg,#4CAF50,#388E3C);">Unlock</button>
+                    <button onclick="androidCsLock()" style="flex:1;background:linear-gradient(45deg,#607D8B,#455A64);">Lock</button>
+                    <button onclick="androidCsRefresh()" style="flex:1;background:linear-gradient(45deg,#2196F3,#1976D2);">Refresh</button>
+                </div>
+                <div id="csAndroidLockMsg" style="font-size:0.8em;margin-top:6px;min-height:14px;"></div>
+            </div>
+
+            <div style="margin-bottom:14px;padding:10px;background:rgba(255,255,255,0.05);border-radius:8px;">
+                <label style="display:block;margin-bottom:6px;font-weight:bold;font-size:0.9em;">Change Store Key</label>
+                <input type="password" id="csAndroidOldKey" placeholder="Current key" style="width:100%;margin:0 0 6px 0;">
+                <input type="password" id="csAndroidNewKey" placeholder="New key (min 8 chars)" style="width:100%;margin:0 0 6px 0;">
+                <input type="password" id="csAndroidNewKeyConfirm" placeholder="Confirm new key" style="width:100%;margin:0 0 8px 0;">
+                <button onclick="androidCsRekey()" style="width:100%;background:linear-gradient(45deg,#FF9800,#F57C00);">Change Key</button>
+                <div id="csAndroidRekeyMsg" style="font-size:0.8em;margin-top:6px;min-height:14px;"></div>
+            </div>
+        </div>
+
         <div class="card">
             <h3>Configuration</h3>
             <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -1272,10 +1301,11 @@
             
             console.log('Device selected:', deviceData);
             
-            // Auto-load registers from the newly connected device
+            // Auto-load registers and credstore status from the newly connected device
             setTimeout(() => {
                 loadRegistersFromDevice();
-            }, 500); // Small delay to ensure UI is ready
+                androidCsRefresh();
+            }, 500);
         }
         
         // Tab Management Functions
@@ -2554,6 +2584,109 @@
                     editingTabId = null;
                 }
             }
+        }
+
+        // ---- Credential Store (Android) ----
+
+        function _csAndroidMsg(elId, msg, ok) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            el.textContent = msg;
+            el.style.color = ok ? '#4CAF50' : '#ff6b6b';
+            if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 5000);
+        }
+
+        function _csAndroidUpdateBadge(locked, count) {
+            const badge = document.getElementById('csAndroidBadge');
+            const cnt   = document.getElementById('csAndroidCount');
+            if (badge) {
+                badge.textContent = locked ? 'LOCKED' : 'UNLOCKED';
+                badge.style.background = locked ? 'rgba(244,67,54,0.7)' : 'rgba(76,175,80,0.7)';
+            }
+            if (cnt && count !== undefined) {
+                cnt.textContent = `${count} credential${count !== 1 ? 's' : ''}`;
+            }
+        }
+
+        function handleCredStoreResult(callbackId, result) {
+            if (!result.startsWith('SUCCESS:')) {
+                if (callbackId.startsWith('cs_status')) {
+                    // silent
+                } else if (callbackId.startsWith('cs_unlock')) {
+                    _csAndroidMsg('csAndroidLockMsg', 'Failed: ' + result, false);
+                } else if (callbackId.startsWith('cs_lock')) {
+                    _csAndroidMsg('csAndroidLockMsg', 'Lock failed.', false);
+                } else if (callbackId.startsWith('cs_rekey')) {
+                    _csAndroidMsg('csAndroidRekeyMsg', 'Failed: ' + result, false);
+                }
+                return;
+            }
+            try {
+                const data = JSON.parse(result.substring(8));
+                if (data.hasOwnProperty('locked')) {
+                    _csAndroidUpdateBadge(data.locked, data.count);
+                }
+                if (callbackId.startsWith('cs_unlock')) {
+                    if (data.locked === false) {
+                        _csAndroidMsg('csAndroidLockMsg', 'Unlocked.', true);
+                        document.getElementById('csAndroidKey').value = '';
+                    } else {
+                        _csAndroidMsg('csAndroidLockMsg', data.error || 'Invalid key.', false);
+                    }
+                } else if (callbackId.startsWith('cs_lock')) {
+                    _csAndroidMsg('csAndroidLockMsg', 'Locked.', true);
+                } else if (callbackId.startsWith('cs_rekey')) {
+                    if (data.status === 'ok') {
+                        _csAndroidMsg('csAndroidRekeyMsg', 'Key changed.', true);
+                        document.getElementById('csAndroidOldKey').value        = '';
+                        document.getElementById('csAndroidNewKey').value        = '';
+                        document.getElementById('csAndroidNewKeyConfirm').value = '';
+                    } else {
+                        _csAndroidMsg('csAndroidRekeyMsg', data.error || 'Failed.', false);
+                    }
+                }
+            } catch(e) {
+                console.error('handleCredStoreResult parse error:', e);
+            }
+        }
+
+        function androidCsRefresh() {
+            if (!selectedDevice || typeof AndroidApp === 'undefined') return;
+            const callbackId = 'cs_status_' + Date.now();
+            AndroidApp.credStoreStatus(selectedDevice.ip, callbackId);
+        }
+
+        function androidCsUnlock() {
+            if (!selectedDevice || typeof AndroidApp === 'undefined') {
+                alert('Select a device first'); return;
+            }
+            const key = document.getElementById('csAndroidKey').value;
+            if (!key) { _csAndroidMsg('csAndroidLockMsg', 'Enter a key.', false); return; }
+            const callbackId = 'cs_unlock_' + Date.now();
+            AndroidApp.credStoreUnlock(selectedDevice.ip, key, callbackId);
+        }
+
+        function androidCsLock() {
+            if (!selectedDevice || typeof AndroidApp === 'undefined') {
+                alert('Select a device first'); return;
+            }
+            const callbackId = 'cs_lock_' + Date.now();
+            AndroidApp.credStoreLock(selectedDevice.ip, callbackId);
+        }
+
+        function androidCsRekey() {
+            if (!selectedDevice || typeof AndroidApp === 'undefined') {
+                alert('Select a device first'); return;
+            }
+            const oldKey   = document.getElementById('csAndroidOldKey').value;
+            const newKey   = document.getElementById('csAndroidNewKey').value;
+            const confirm2 = document.getElementById('csAndroidNewKeyConfirm').value;
+            if (!oldKey || !newKey) { _csAndroidMsg('csAndroidRekeyMsg', 'Fill in all fields.', false); return; }
+            if (newKey.length < 8)  { _csAndroidMsg('csAndroidRekeyMsg', 'Min 8 characters.', false); return; }
+            if (newKey !== confirm2) { _csAndroidMsg('csAndroidRekeyMsg', 'Keys do not match.', false); return; }
+            if (!confirm('Re-encrypt all credentials with new key?')) return;
+            const callbackId = 'cs_rekey_' + Date.now();
+            AndroidApp.credStoreRekey(selectedDevice.ip, oldKey, newKey, callbackId);
         }
     </script>
 </body>

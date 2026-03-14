@@ -604,5 +604,71 @@ public class MainActivity extends AppCompatActivity {
                 mainHandler.post(() -> webView.evaluateJavascript("handleFileLoadResult('error', '" + err + "')", null));
             }
         }
+
+        @JavascriptInterface
+        public void credStoreStatus(String deviceIp, String callbackId) {
+            executor.execute(() -> {
+                String result = authenticatedGet(deviceIp, "/api/credstore", 5000);
+                final String escaped = result.replace("'", "\\'");
+                mainHandler.post(() -> webView.evaluateJavascript(
+                    "handleCredStoreResult('" + callbackId + "', '" + escaped + "')", null));
+            });
+        }
+
+        @JavascriptInterface
+        public void credStoreUnlock(String deviceIp, String key, String callbackId) {
+            executor.execute(() -> {
+                try {
+                    org.json.JSONObject payload = new org.json.JSONObject();
+                    payload.put("action", "unlock");
+                    payload.put("key", key);
+                    String result = authenticatedPost(deviceIp, "/api/credstore", payload.toString(), 5000);
+                    final String escaped = result.replace("'", "\\'");
+                    mainHandler.post(() -> webView.evaluateJavascript(
+                        "handleCredStoreResult('" + callbackId + "', '" + escaped + "')", null));
+                } catch (Exception e) {
+                    final String err = ("ERROR:" + e.getMessage()).replace("'", "\\'");
+                    mainHandler.post(() -> webView.evaluateJavascript(
+                        "handleCredStoreResult('" + callbackId + "', '" + err + "')", null));
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void credStoreLock(String deviceIp, String callbackId) {
+            executor.execute(() -> {
+                try {
+                    org.json.JSONObject payload = new org.json.JSONObject();
+                    payload.put("action", "lock");
+                    String result = authenticatedPost(deviceIp, "/api/credstore", payload.toString(), 5000);
+                    final String escaped = result.replace("'", "\\'");
+                    mainHandler.post(() -> webView.evaluateJavascript(
+                        "handleCredStoreResult('" + callbackId + "', '" + escaped + "')", null));
+                } catch (Exception e) {
+                    final String err = ("ERROR:" + e.getMessage()).replace("'", "\\'");
+                    mainHandler.post(() -> webView.evaluateJavascript(
+                        "handleCredStoreResult('" + callbackId + "', '" + err + "')", null));
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void credStoreRekey(String deviceIp, String oldKey, String newKey, String callbackId) {
+            executor.execute(() -> {
+                try {
+                    org.json.JSONObject payload = new org.json.JSONObject();
+                    payload.put("old_key", oldKey);
+                    payload.put("new_key", newKey);
+                    String result = authenticatedPost(deviceIp, "/api/credstore/rekey", payload.toString(), 8000);
+                    final String escaped = result.replace("'", "\\'");
+                    mainHandler.post(() -> webView.evaluateJavascript(
+                        "handleCredStoreResult('" + callbackId + "', '" + escaped + "')", null));
+                } catch (Exception e) {
+                    final String err = ("ERROR:" + e.getMessage()).replace("'", "\\'");
+                    mainHandler.post(() -> webView.evaluateJavascript(
+                        "handleCredStoreResult('" + callbackId + "', '" + err + "')", null));
+                }
+            });
+        }
     }
 }

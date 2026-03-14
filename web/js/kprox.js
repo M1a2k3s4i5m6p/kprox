@@ -296,6 +296,12 @@ const keyReference = [
     
     // ==== NETWORK CONTROL TOKENS ====
     {char: '', desc: 'WiFi Connection - Connect to wireless network. Ex: {WIFI MyNetwork MyPassword}', ascii: 0, hid: 0, shift: false, token: '{WIFI ssid password}'},
+
+    // ==== KEYMAP TOKENS ====
+    {char: '', desc: 'Switch Keymap - Load a named keyboard layout. Ex: {KEYMAP de} for German', ascii: 0, hid: 0, shift: false, token: '{KEYMAP id}'},
+
+    // ==== CREDENTIAL STORE TOKENS ====
+    {char: '', desc: 'Credential Lookup - Substitutes the decrypted value for the named credential. Store must be unlocked; outputs empty string when locked. Ex: {CREDSTORE wifi_pass}', ascii: 0, hid: 0, shift: false, token: '{CREDSTORE label}'},
     
     // ==== COMPLEX EXAMPLE TOKENS ====
     {char: '', desc: 'Circle Drawing - Draw circle with mouse. Complex example using math and loops', ascii: 0, hid: 0, shift: false, token: '{SETMOUSE 400 300}{LOOP i 0 1 360}{SETMOUSE {MATH 400 + 100 * cos({MATH {i} * 3.14159 / 180})} {MATH 300 + 100 * sin({MATH {i} * 3.14159 / 180})}}{SLEEP 10}{ENDLOOP}'},
@@ -1918,6 +1924,190 @@ async function showTab(tabName) {
     if (tabName === 'registers' && isConnected) {
         await loadRegisters();
     }
+    if (tabName === 'credstore' && isConnected) {
+        await csRefresh();
+    }
+}
+
+// ---- Credential Store ----
+
+function _csStatus(elId, msg, ok) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = ok ? '#28a745' : '#dc3545';
+    if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 5000);
+}
+
+async function csRefresh() {
+    if (!isConnected) return;
+    const endpoint = getApiEndpoint();
+    try {
+        const resp = await apiFetch(`${endpoint}/api/credstore`, { method: 'GET' });
+        const data = await resp.json();
+        const badge = document.getElementById('credStoreLockBadge');
+        const count = document.getElementById('credStoreCountLabel');
+        const list  = document.getElementById('csCredentialList');
+        if (badge) {
+            badge.textContent = data.locked ? 'LOCKED' : 'UNLOCKED';
+            badge.style.background = data.locked ? '#dc3545' : '#28a745';
+        }
+        if (count) count.textContent = `${data.count} credential${data.count !== 1 ? 's' : ''}`;
+        if (list) {
+            if (data.locked) {
+                list.innerHTML = '<em style="color:#6c757d;">Unlock the store to view credentials.</em>';
+            } else if (!data.labels || data.labels.length === 0) {
+                list.innerHTML = '<em style="color:#6c757d;">No credentials stored yet.</em>';
+            } else {
+                list.innerHTML = data.labels.map(lbl => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid #dee2e6;">
+                        <span style="font-family:monospace;font-weight:bold;">${escapeHtml(lbl)}</span>
+                        <div style="display:flex;gap:6px;">
+                            <button onclick="csPrefillEdit('${escapeHtml(lbl).replace(/'/g,"\\'")}\')" style="padding:3px 10px;font-size:11px;background:#0d6efd;">Edit</button>
+                            <button onclick="csDeleteCredential('${escapeHtml(lbl).replace(/'/g,"\\'")}\')" style="padding:3px 10px;font-size:11px;background:#dc3545;">Delete</button>
+                        </div>
+                    </div>`).join('');
+            }
+        }
+    } catch(e) {
+        console.error('csRefresh error:', e);
+    }
+}
+
+async function csUnlock(e) {
+    if (e) e.preventDefault();
+    const key = document.getElementById('csKeyInput').value;
+    if (!key) { _csStatus('csLockStatus', 'Enter a key.', false); return; }
+    const endpoint = getApiEndpoint();
+    try {
+        const resp = await apiFetch(`${endpoint}/api/credstore`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'unlock', key })
+        });
+        const data = await resp.json();
+        if (resp.ok && data.locked === false) {
+            _csStatus('csLockStatus', 'Unlocked.', true);
+            document.getElementById('csKeyInput').value = '';
+            await csRefresh();
+        } else {
+            _csStatus('csLockStatus', data.error || 'Invalid key.', false);
+        }
+    } catch(e) {
+        _csStatus('csLockStatus', 'Error: ' + e.message, false);
+    }
+}
+
+async function csLock() {
+    const endpoint = getApiEndpoint();
+    try {
+        await apiFetch(`${endpoint}/api/credstore`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'lock' })
+        });
+        _csStatus('csLockStatus', 'Locked.', true);
+        await csRefresh();
+    } catch(e) {
+        _csStatus('csLockStatus', 'Error: ' + e.message, false);
+    }
+}
+
+async function csSetCredential() {
+    const label = document.getElementById('csNewLabel').value.trim();
+    const value = document.getElementById('csNewValue').value;
+    if (!label) { _csStatus('csSetStatus', 'Label is required.', false); return; }
+    if (!value)  { _csStatus('csSetStatus', 'Value is required.', false); return; }
+    const endpoint = getApiEndpoint();
+    try {
+        const resp = await apiFetch(`${endpoint}/api/credstore`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'set', label, value })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            _csStatus('csSetStatus', 'Saved.', true);
+            document.getElementById('csNewLabel').value = '';
+            document.getElementById('csNewValue').value = '';
+            await csRefresh();
+        } else {
+            _csStatus('csSetStatus', data.error || 'Save failed.', false);
+        }
+    } catch(e) {
+        _csStatus('csSetStatus', 'Error: ' + e.message, false);
+    }
+}
+
+function csPrefillEdit(label) {
+    document.getElementById('csNewLabel').value = label;
+    document.getElementById('csNewValue').value = '';
+    document.getElementById('csNewValue').focus();
+}
+
+async function csWipe() {
+    if (!confirm('Wipe ALL credentials and reset the store key?\n\nThis cannot be undone.')) return;
+    const endpoint = getApiEndpoint();
+    try {
+        const resp = await apiFetch(`${endpoint}/api/credstore`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'wipe' })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            _csStatus('csWipeStatus', 'Credential store wiped.', true);
+            await csRefresh();
+        } else {
+            _csStatus('csWipeStatus', data.error || 'Wipe failed.', false);
+        }
+    } catch(e) {
+        _csStatus('csWipeStatus', 'Error: ' + e.message, false);
+    }
+}
+
+async function csDeleteCredential(label) {
+    if (!confirm(`Delete credential "${label}"?`)) return;
+    const endpoint = getApiEndpoint();
+    try {
+        await apiFetch(`${endpoint}/api/credstore`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'delete', label })
+        });
+        await csRefresh();
+    } catch(e) {
+        alert('Delete failed: ' + e.message);
+    }
+}
+
+async function csRekey(e) {
+    if (e) e.preventDefault();
+    const oldKey   = document.getElementById('csOldKey').value;
+    const newKey   = document.getElementById('csNewKey').value;
+    const confirm2 = document.getElementById('csNewKeyConfirm').value;
+    if (!oldKey || !newKey) { _csStatus('csRekeyStatus', 'Fill in all fields.', false); return; }
+    if (newKey.length < 8)  { _csStatus('csRekeyStatus', 'New key must be at least 8 characters.', false); return; }
+    if (newKey !== confirm2) { _csStatus('csRekeyStatus', 'New keys do not match.', false); return; }
+    if (!confirm('This will re-encrypt all credentials with the new key. Continue?')) return;
+    const endpoint = getApiEndpoint();
+    try {
+        const resp = await apiFetch(`${endpoint}/api/credstore/rekey`, {
+            method: 'POST',
+            body: JSON.stringify({ old_key: oldKey, new_key: newKey })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            _csStatus('csRekeyStatus', 'Key changed successfully.', true);
+            document.getElementById('csOldKey').value        = '';
+            document.getElementById('csNewKey').value        = '';
+            document.getElementById('csNewKeyConfirm').value = '';
+            await csRefresh();
+        } else {
+            _csStatus('csRekeyStatus', data.error || 'Failed.', false);
+        }
+    } catch(e) {
+        _csStatus('csRekeyStatus', 'Error: ' + e.message, false);
+    }
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function populateReferenceTable() {
@@ -2968,6 +3158,17 @@ async function connect() {
         const registersTab = document.getElementById('registers-tab');
         if (registersTab && registersTab.classList.contains('active')) {
             await loadRegisters();
+        }
+
+        // Update credstore lock badge
+        if (data.hasOwnProperty('credStoreLocked')) {
+            const badge = document.getElementById('credStoreLockBadge');
+            const count = document.getElementById('credStoreCountLabel');
+            if (badge) {
+                badge.textContent = data.credStoreLocked ? 'LOCKED' : 'UNLOCKED';
+                badge.style.background = data.credStoreLocked ? '#dc3545' : '#28a745';
+            }
+            if (count) count.textContent = `${data.credStoreCount || 0} credential${data.credStoreCount !== 1 ? 's' : ''}`;
         }
 
         logDebug('Connection successful', 'success');

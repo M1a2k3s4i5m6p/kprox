@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Random Mouse Walk",
+    "description": "Randomally moves mouse around the screen forever.",
+    "content": "{LOOP}{MOVEMOUSE {RAND -100 100} {RAND -100 100}}{SLEEP {RAND 1000 3000}}{ENDLOOP}"
+  }
+}

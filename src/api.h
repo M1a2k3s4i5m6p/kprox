@@ -29,3 +29,5 @@ void handleApiNetwork();
 void handleMTLS();
 void handleMTLSCerts();
 void handleKeymap();
+void handleCredStore();
+void handleCredStoreKey();

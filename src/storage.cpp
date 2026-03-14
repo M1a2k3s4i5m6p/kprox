@@ -3,6 +3,7 @@
 #include "mtls.h"
 #include "keymap.h"
 #include "keymap.h"
+#include "credential_store.h"
 
 void saveWiFiSettings() {
     preferences.begin("kprox", false);
@@ -143,4 +144,5 @@ void wipeAllSettings() {
     serverKey    = "";
     caCert       = "";
     activeKeymap = "en";
+    credStoreWipe();
 }

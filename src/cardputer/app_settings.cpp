@@ -23,10 +23,14 @@ void AppSettings::_drawTopBar(int pageNum) {
     disp.fillRect(0, 0, disp.width(), BAR_TOP_H, bc);
     disp.setTextSize(1);
     disp.setTextColor(TFT_WHITE, bc);
-    disp.drawString("Settings", 4, 3);
+
+    static const char* pageLabels[NUM_PAGES] = {
+        "Connectivity", "WiFi Settings", "API Key", "Device Identity"
+    };
+    disp.drawString(pageLabels[pageNum], 4, 3);
 
     char pageStr[8];
-    snprintf(pageStr, sizeof(pageStr), "%d/4", pageNum + 1);
+    snprintf(pageStr, sizeof(pageStr), "%d/%d", pageNum + 1, NUM_PAGES);
     int pw = disp.textWidth(pageStr);
     disp.drawString(pageStr, disp.width() - pw - 4, 3);
 }

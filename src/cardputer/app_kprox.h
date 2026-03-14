@@ -23,7 +23,8 @@ private:
     String _lastRegContent;
     String _lastRegLine;
     String _lastNumberBuf;
-    bool   _lastHalted  = false;
+    bool   _lastHalted     = false;
+    bool   _lastCredLocked = true;
 
     unsigned long _lastButtonRelease  = 0;
     unsigned long _lastButtonPress    = 0;

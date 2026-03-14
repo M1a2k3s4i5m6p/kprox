@@ -5,6 +5,7 @@
 #include "../registers.h"
 #include "../hid.h"
 #include "../config.h"
+#include "../credential_store.h"
 #include <WiFi.h>
 
 namespace Cardputer {
@@ -54,9 +55,18 @@ void AppKProx::_drawScreen() {
         disp.drawString("KProx", 4, 3);
     }
 
-    // Right: BTNG0 hints
-    disp.setTextColor(disp.color565(200, 230, 255), HDR_BG);
-    disp.drawString("BtnG0: 1x play  2x next", W - 144, 3);
+    // Right: credential store lock badge
+    {
+        bool csLocked = credStoreLocked;
+        const char* csStr = csLocked ? "CS:LOCKED" : "CS:UNLOCKED";
+        uint16_t csBg = csLocked
+            ? disp.color565(140, 30, 30)
+            : disp.color565(20, 100, 20);
+        int csW = disp.textWidth(csStr) + 8;
+        disp.fillRoundRect(W - csW - 2, 2, csW, 14, 3, csBg);
+        disp.setTextColor(TFT_WHITE, csBg);
+        disp.drawString(csStr, W - csW + 2, 4);
+    }
 
     // ---- Body ----
     int y = BODY_TOP;
@@ -97,20 +107,34 @@ void AppKProx::_drawScreen() {
         }
     }
 
-    // IP + SSID
-    String netLine;
+    // IP address
+    uint16_t labelCol = disp.color565(130, 130, 130);
+    uint16_t valueCol = disp.color565(100, 255, 100);
     if (WiFi.status() == WL_CONNECTED) {
-        netLine = WiFi.localIP().toString() + "  " + WiFi.SSID();
+        disp.setTextColor(labelCol, BG);
+        disp.drawString("IP  ", 4, y);
+        disp.setTextColor(valueCol, BG);
+        disp.drawString(WiFi.localIP().toString(), 4 + disp.textWidth("IP  "), y);
     } else {
-        netLine = "WiFi not connected";
+        disp.setTextColor(disp.color565(220, 100, 60), BG);
+        disp.drawString("IP   WiFi not connected", 4, y);
     }
-    disp.setTextColor(disp.color565(100, 255, 100), BG);
-    disp.drawString(truncate(netLine, 34), 4, y);
     y += LH;
 
-    // mDNS
+    // SSID
+    if (WiFi.status() == WL_CONNECTED) {
+        disp.setTextColor(labelCol, BG);
+        disp.drawString("SSID ", 4, y);
+        disp.setTextColor(valueCol, BG);
+        disp.drawString(truncate(WiFi.SSID(), 22), 4 + disp.textWidth("SSID "), y);
+        y += LH;
+    }
+
+    // Hostname
+    disp.setTextColor(labelCol, BG);
+    disp.drawString("HOST ", 4, y);
     disp.setTextColor(disp.color565(100, 200, 255), BG);
-    disp.drawString(String(hostname) + ".local", 4, y);
+    disp.drawString(String(hostname) + ".local", 4 + disp.textWidth("HOST "), y);
     y += LH;
 
     // Number input buffer
@@ -182,12 +206,9 @@ void AppKProx::onUpdate() {
     _checkHomeButton();
 
     // Rebuild state snapshot; only redraw if something actually changed
-    String newNetLine;
-    if (WiFi.status() == WL_CONNECTED) {
-        newNetLine = WiFi.localIP().toString() + "  " + WiFi.SSID();
-    } else {
-        newNetLine = "WiFi not connected";
-    }
+    String newIP      = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "not connected";
+    String newSSID    = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : "";
+    String newNetLine = newIP + newSSID;
     String newRegContent  = registers.empty() ? "" : registers[activeRegister];
     String newRegLine     = "Reg " + String(activeRegister);
     if (!registers.empty()) newRegLine += "/" + String((int)registers.size() - 1);
@@ -195,18 +216,21 @@ void AppKProx::onUpdate() {
         && registerNames[activeRegister].length() > 0) {
         newRegLine += "  " + registerNames[activeRegister];
     }
-    bool haltedNow = isHalted;
+    bool haltedNow    = isHalted;
+    bool credLocked   = credStoreLocked;
 
     if (_needsRedraw
         || newNetLine    != _lastNetLine
         || newRegContent != _lastRegContent
         || newRegLine    != _lastRegLine
         || haltedNow     != _lastHalted
+        || credLocked    != _lastCredLocked
         || _numberBuf    != _lastNumberBuf) {
         _lastNetLine    = newNetLine;
         _lastRegContent = newRegContent;
         _lastRegLine    = newRegLine;
         _lastHalted     = haltedNow;
+        _lastCredLocked = credLocked;
         _lastNumberBuf  = _numberBuf;
         _drawScreen();
     }

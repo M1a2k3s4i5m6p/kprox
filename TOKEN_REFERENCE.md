@@ -6,7 +6,7 @@ A token string is plain text where special commands are enclosed in curly braces
 
 ```
 Hello {ENTER}
-Username: admin{TAB}Password: secret{ENTER}
+Username: admin{TAB}Password: {CREDSTORE admin_pass}{ENTER}
 ```
 
 ---
@@ -112,6 +112,11 @@ Media keys: `{HID 0xE9}` Vol Up · `{HID 0xEA}` Vol Down · `{HID 0xB5}` Next Tr
 | `{LOOP ms}` | Timed loop |
 | `{LOOP var start inc end}` | Counter loop |
 | `{ENDLOOP}` | End loop block |
+| `{FOR var start inc end}` | Counted loop with named variable |
+| `{ENDFOR}` | End FOR block |
+| `{WHILE left op right}` | Loop while condition is true |
+| `{ENDWHILE}` | End WHILE block |
+| `{BREAK}` | Unconditionally exit the current loop |
 | `{BREAK var value}` | Exit loop when `var == value` |
 
 ```
@@ -124,11 +129,9 @@ Media keys: `{HID 0xE9}` Vol Up · `{HID 0xEA}` Vol Down · `{HID 0xB5}` Next Tr
 
 ## Variables
 
-Variables store string or numeric values. They are referenced anywhere in a token string using `{varname}`. Loop counter variables are automatically scoped to their loop and erased when the loop exits. Variables set with `{SET}` persist for the remainder of the current token string execution.
+Variables store string or numeric values and are referenced anywhere using `{varname}`. Loop counter variables are scoped to their loop and erased on exit. `{SET}` variables persist for the remainder of the current execution.
 
 ### `{SET varname expr}`
-
-Evaluates `expr` (which may contain other tokens, math, rand, etc.) and stores the result.
 
 ```
 {SET total 0}
@@ -138,23 +141,14 @@ Evaluates `expr` (which may contain other tokens, math, rand, etc.) and stores t
 {SET result {MATH {a} * {b} + {c}}}
 ```
 
-The stored value is output anywhere you write `{varname}`:
-
 ```
 {SET name Alice}Hello, {name}!{ENTER}
 ```
 Types: `Hello, Alice!`
 
-```
-{SET x 7}{SET y 3}Result: {MATH {x} * {y}}{ENTER}
-```
-Types: `Result: 21`
-
 ---
 
 ## Conditionals
-
-Conditionals branch execution based on a comparison. Bodies may contain any token string content including nested loops and other conditionals.
 
 ### Syntax
 
@@ -183,43 +177,7 @@ Conditionals branch execution based on a comparison. Bodies may contain any toke
 | `<=` | Less than or equal |
 | `>=` | Greater than or equal |
 
-Both sides of the condition are fully evaluated (vars, MATH, RAND, etc.) before comparison. If both sides look numeric, numeric comparison is used; otherwise string comparison.
-
-### Simple examples
-
-```
-{SET x 7}{IF {x} == 7}Lucky seven!{ENDIF}{ENTER}
-```
-
-```
-{SET n {RAND 1 10}}{IF {n} > 5}High{ELSE}Low{ENDIF}{ENTER}
-```
-
-```
-{LOOP i 1 1 10}{IF {i} == 5}FIVE{ELSE}{i}{ENDIF}{ENTER}{ENDLOOP}
-```
-Output:
-```
-1
-2
-3
-4
-FIVE
-6
-7
-8
-9
-10
-```
-
-### Nested conditionals
-
-```
-{LOOP i 1 1 5}
-{IF {i} == 1}one{ELSE}{IF {i} == 2}two{ELSE}{IF {i} == 3}three{ELSE}many{ENDIF}{ENDIF}{ENDIF}{ENTER}
-{ENDLOOP}
-```
-Output: `one` `two` `three` `many` `many`
+Both sides are fully evaluated before comparison. Numeric comparison is used when both sides parse as numbers; otherwise string comparison.
 
 ---
 
@@ -267,6 +225,32 @@ Output: `one` `two` `three` `many` `many`
 
 ---
 
+## Keymap
+
+`{KEYMAP id}` — switch to a named keyboard layout for the remainder of the token string execution. The layout must exist on the device (built-in `en` is always available; custom layouts are uploaded via the web interface or API).
+
+```
+{KEYMAP de}Hallo Welt{ENTER}
+{KEYMAP en}
+```
+
+---
+
+## Credential Store
+
+`{CREDSTORE label}` — looks up a named credential in the on-device encrypted store and substitutes its decrypted plaintext value inline. If the store is locked the token resolves to an empty string, producing no output.
+
+```
+admin{TAB}{CREDSTORE admin_password}{ENTER}
+{CREDSTORE wifi_pass}
+```
+
+Credentials are managed via the web interface **Credential Store** tab or the `/api/credstore` API endpoint. The store must be unlocked before playback starts; the token does not trigger an unlock prompt.
+
+> **Security note:** Once substituted, the credential value travels through the normal HID output path as plaintext keystrokes. The credential is never written to flash in plaintext; it is decrypted in RAM only at the moment of substitution. Locking the store clears the key from RAM immediately.
+
+---
+
 ## System Control
 
 | Token | Description |
@@ -283,40 +267,47 @@ Output: `one` `two` `three` `many` `many`
 
 ## Complex Examples
 
-### Aligned multiplication table for a single factor
-Uses IF to pad single vs double-digit results to 3 chars each:
-
+### Credential-based login
 ```
- x |{LOOP j 0 1 9}  {j}{ENDLOOP}{ENTER}---+{LOOP j 0 1 9}---{ENDLOOP}{ENTER}{LOOP i 0 1 9} {i} |{LOOP j 0 1 9}{SET p {MATH {i} * {j}}}{IF {p} < 10}  {p}{ELSE} {p}{ENDIF}{ENDLOOP}{ENTER}{ENDLOOP}
+{CREDSTORE corp_username}{TAB}{CREDSTORE corp_password}{ENTER}
 ```
-
-Output:
-```
- x |  0  1  2  3  4  5  6  7  8  9
----+-------------------------------
- 0 |  0  0  0  0  0  0  0  0  0  0
- 1 |  0  1  2  3  4  5  6  7  8  9
- 2 |  0  2  4  6  8 10 12 14 16 18
- 3 |  0  3  6  9 12 15 18 21 24 27
- 4 |  0  4  8 12 16 20 24 28 32 36
- 5 |  0  5 10 15 20 25 30 35 40 45
- 6 |  0  6 12 18 24 30 36 42 48 54
- 7 |  0  7 14 21 28 35 42 49 56 63
- 8 |  0  8 16 24 32 40 48 56 64 72
- 9 |  0  9 18 27 36 45 54 63 72 81
-```
-
-### Accumulate a running sum with SET
-```
-{SET total 0}{LOOP i 1 1 10}{SET total {MATH {total} + {i}}}{ENDLOOP}Sum 1-10 = {total}{ENTER}
-```
-Types: `Sum 1-10 = 55`
+Requires the store to be unlocked before playback.
 
 ### FizzBuzz (1–20)
 ```
 {LOOP i 1 1 20}{SET fb {i}}{IF {MATH {i} % 15} == 0}{SET fb FizzBuzz}{ELSE}{IF {MATH {i} % 3} == 0}{SET fb Fizz}{ELSE}{IF {MATH {i} % 5} == 0}{SET fb Buzz}{ENDIF}{ENDIF}{ENDIF}{fb}{ENTER}{ENDLOOP}
 ```
-Output: `1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz 16 17 Fizz 19 Buzz`
+
+### Accumulate a running sum
+```
+{SET total 0}{LOOP i 1 1 100}{SET total {MATH {total} + {i}}}{ENDLOOP}Sum 1-100 = {total}{ENTER}
+```
+Types: `Sum 1-100 = 5050`
+
+### Mouse jiggler (infinite, random)
+```
+{LOOP}{MOVEMOUSE {RAND -50 50} {RAND -50 50}}{SLEEP {RAND 1000 3000}}{ENDLOOP}
+```
+
+### Unlock Android
+```
+{MOUSEMOVE 10 0}{ENTER}{SLEEP 100}mysecurepassword{SLEEP 300}{ENTER}
+```
+
+### Unlock Windows
+```
+{LEFT}{SLEEP 1000}mysecurepassword{ENTER}
+```
+
+### Linux Magic SysRq REISUB (safe emergency reboot)
+```
+{CHORD ALT+SYSRQ+R}{SLEEP 2000}{CHORD ALT+SYSRQ+E}{SLEEP 2000}{CHORD ALT+SYSRQ+I}{SLEEP 2000}{CHORD ALT+SYSRQ+S}{SLEEP 2000}{CHORD ALT+SYSRQ+U}{SLEEP 2000}{CHORD ALT+SYSRQ+B}
+```
+
+### Aligned multiplication table
+```
+ x |{LOOP j 0 1 9}  {j}{ENDLOOP}{ENTER}---+{LOOP j 0 1 9}---{ENDLOOP}{ENTER}{LOOP i 0 1 9} {i} |{LOOP j 0 1 9}{SET p {MATH {i} * {j}}}{IF {p} < 10}  {p}{ELSE} {p}{ENDIF}{ENDLOOP}{ENTER}{ENDLOOP}
+```
 
 ### Countdown with conditional message
 ```
@@ -328,61 +319,14 @@ Output: `1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz 16 17 Fizz 19
 {LOOP i 0 2 720}{SETMOUSE {MATH 960 + {i}/5 * cos({MATH {i} * PI / 180})} {MATH 540 + {i}/5 * sin({MATH {i} * PI / 180})}}{SLEEP 3}{ENDLOOP}
 ```
 
-### Random walk with boundary check
-```
-{SET x 500}{SET y 400}{LOOP}{SET x {MATH {x} + {RAND -20 20}}}{SET y {MATH {y} + {RAND -20 20}}}{IF {x} < 100}{SET x 100}{ENDIF}{IF {x} > 1820}{SET x 1820}{ENDIF}{IF {y} < 100}{SET y 100}{ENDIF}{IF {y} > 980}{SET y 980}{ENDIF}{SETMOUSE {x} {y}}{SLEEP 50}{ENDLOOP}
-```
-Moves the mouse in a bounded random walk within a safe screen region.
-
-### Type a padded number table (right-aligned 3-digit numbers)
-```
-{LOOP i 1 1 20}{IF {i} < 10}  {i}{ELSE}{IF {i} < 100} {i}{ELSE}{i}{ENDIF}{ENDIF}{ENTER}{ENDLOOP}
-```
-Output:
-```
-  1
-  2
-...
-  9
- 10
- 11
-...
- 20
-```
-
-### Conditional mouse click based on loop position
-```
-{LOOP i 1 1 5}{SETMOUSE {MATH 200 + {i} * 100} 400}{IF {i} == 3}{MOUSEDOUBLECLICK}{ELSE}{MOUSECLICK}{ENDIF}{SLEEP 300}{ENDLOOP}
-```
-Clicks 5 positions along a row, double-clicking the middle one.
-
-### Accumulate max value
-```
-{SET max 0}{LOOP i 1 1 10}{SET n {RAND 1 100}}{n} {IF {n} > {max}}{SET max {n}}(new max!){ENDIF}{ENTER}{ENDLOOP}Max was: {max}{ENTER}
-```
-
-### Magic SysRq REISUB (Linux safe reboot)
-```
-{CHORD ALT+SYSRQ+R}{SLEEP 2000}{CHORD ALT+SYSRQ+E}{SLEEP 2000}{CHORD ALT+SYSRQ+I}{SLEEP 2000}{CHORD ALT+SYSRQ+S}{SLEEP 2000}{CHORD ALT+SYSRQ+U}{SLEEP 2000}{CHORD ALT+SYSRQ+B}
-```
-
 ---
 
 ## Scoping Rules
 
 - **Loop counter variables** (`{LOOP var ...}`) are inserted into scope for the loop body and **erased** when the loop exits.
-- **SET variables** persist for the lifetime of the current token string execution. They are visible inside loop and IF bodies.
-- Variables SET inside a loop body are visible in subsequent iterations and after the loop exits (by reference semantics).
+- **SET variables** persist for the lifetime of the current token string execution and are visible inside loop and IF bodies.
+- Variables SET inside a loop body are visible in subsequent iterations and after the loop exits.
 - Nested loops each manage their own counter variable independently.
-
-```
-{SET total 0}
-{LOOP i 1 1 5}
-    {SET total {MATH {total} + {i}}}
-{ENDLOOP}
-Total: {total}{ENTER}
-```
-`total` is set before the loop, updated inside it, and readable after it. `i` is gone after the loop.
 
 ---
 
@@ -392,5 +336,5 @@ Total: {total}{ENTER}
 - Nested tokens are supported: `{IF {MATH {i} % 2} == 0}even{ELSE}odd{ENDIF}`
 - Text outside `{...}` is typed verbatim including spaces, punctuation, and newlines.
 - `{IF}` and `{LOOP}` blocks can be nested to arbitrary depth.
-- Conditions support any expression on either side: `{IF {MATH {i} % 2} == 0}`, `{IF {RAND 1 10} > 5}`.
 - The DSL interpreter is single-threaded; long scripts block the web server during execution.
+- `{CREDSTORE label}` resolves silently to empty string when the store is locked — it never errors or prompts.
