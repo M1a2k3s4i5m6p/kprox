@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Open Run Dialog",
+    "description": "Opens the Windows Run dialog (Win+R), types notepad, and presses Enter to launch it.",
+    "content": "{CHORD GUI+R}{SLEEP 500}notepad{ENTER}"
+  }
+}

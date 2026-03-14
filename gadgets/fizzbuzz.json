@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "FizzBuzz",
+    "description": "Classic FizzBuzz from 1 to 20. Types Fizz for multiples of 3, Buzz for 5, FizzBuzz for 15.",
+    "content": "{LOOP i 1 1 20}{SET fb {i}}{IF {MATH {i} % 15} == 0}{SET fb FizzBuzz}{ELSE}{IF {MATH {i} % 3} == 0}{SET fb Fizz}{ELSE}{IF {MATH {i} % 5} == 0}{SET fb Buzz}{ENDIF}{ENDIF}{ENDIF}{fb}{ENTER}{ENDLOOP}"
+  }
+}

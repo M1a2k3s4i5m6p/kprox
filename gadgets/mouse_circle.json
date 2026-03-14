@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Mouse Circle",
+    "description": "Moves the mouse in a smooth 360-degree circle using trigonometry. Runs once then stops.",
+    "content": "{LOOP i 0 1 360}{SETMOUSE {MATH 200 + 300 * cos({MATH {i} * 3.14159 / 180})} {MATH 200 + 300 * sin({MATH {i} * 3.14159 / 180})}}{SLEEP 1}{ENDLOOP}"
+  }
+}

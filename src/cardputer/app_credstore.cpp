@@ -233,7 +233,8 @@ void AppCredStore::_drawPage1() {
             );
             disp.drawString(labels[i], 4, y);
             y += 11;
-            _drawInputField(4, y, fw, *bufs[i], _rkField == (RekeyField)i, true);
+            // Show plaintext while typing; only mask after successful rekey
+            _drawInputField(4, y, fw, *bufs[i], _rkField == (RekeyField)i, false);
             y += 18;
         }
 

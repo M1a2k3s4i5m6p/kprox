@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Endless Mouse Square",
+    "description": "Moves the mouse in a continuous square pattern forever. Useful as a mouse jiggler with a defined path.",
+    "content": "{LOOP}{SLEEP 1000}{MOVEMOUSE 10 0}{SLEEP 1000}{MOVEMOUSE 0 10}{SLEEP 1000}{MOVEMOUSE -10 0}{SLEEP 1000}{MOVEMOUSE 0 -10}{ENDLOOP}"
+  }
+}

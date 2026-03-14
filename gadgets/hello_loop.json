@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Hello Loop",
+    "description": "Types Hello 1 through Hello 5, each on its own line. Simple demonstration of the LOOP counter variable.",
+    "content": "{LOOP i 1 1 5}Hello {i}{ENTER}{ENDLOOP}"
+  }
+}

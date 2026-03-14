@@ -18,6 +18,7 @@
 #include "app_clock.h"
 #include "app_settings.h"
 #include "app_credstore.h"
+#include "app_gadgets.h"
 #include <M5Cardputer.h>
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -311,6 +312,7 @@ void setup() {
     static Cardputer::AppLauncher    launcher;
     static Cardputer::AppKProx       appKProx;
     static Cardputer::AppCredStore   appCredStore;
+    static Cardputer::AppGadgets     appGadgets;
     static Cardputer::AppKeyboardHID appKeyboard;
     static Cardputer::AppClock       appClock;
     static Cardputer::AppSettings    appSettings;
@@ -318,6 +320,7 @@ void setup() {
     Cardputer::uiManager.addApp(&launcher);
     Cardputer::uiManager.addApp(&appKProx);
     Cardputer::uiManager.addApp(&appCredStore);
+    Cardputer::uiManager.addApp(&appGadgets);
     Cardputer::uiManager.addApp(&appKeyboard);
     Cardputer::uiManager.addApp(&appClock);
     Cardputer::uiManager.addApp(&appSettings);

@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "ASCII Table",
+    "description": "Types a full ASCII reference table for printable characters (32-126) with decimal values and characters.",
+    "content": "ASCII Table:{ENTER}{LOOP i 32 1 126}Dec: {i} Char: {ASCII {i}}{ENTER}{ENDLOOP}"
+  }
+}

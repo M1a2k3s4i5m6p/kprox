@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Math Demo",
+    "description": "Demonstrates the MATH token with a simple arithmetic expression. Types the result inline.",
+    "content": "5 + 3 = {MATH 5 + 3}{ENTER}PI = {MATH PI}{ENTER}sqrt(144) = {MATH sqrt(144)}{ENTER}"
+  }
+}

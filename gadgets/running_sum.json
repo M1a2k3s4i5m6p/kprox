@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Running Sum",
+    "description": "Accumulates and types the sum of integers from 1 to 100 using SET and MATH. Result: 5050.",
+    "content": "{SET total 0}{LOOP i 1 1 100}{SET total {MATH {total} + {i}}}{ENDLOOP}Sum 1-100 = {total}{ENTER}"
+  }
+}

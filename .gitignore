@@ -3,7 +3,7 @@
 .json
 node_modules
 tools/**.json
-**.json
+*.json
 data
 package-lock.json
 **.bin

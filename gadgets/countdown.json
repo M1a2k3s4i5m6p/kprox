@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Countdown",
+    "description": "Counts down from 10 to 1 with 1 second between each number, then types Liftoff!",
+    "content": "{LOOP i 10 -1 1}{i}...{ENTER}{SLEEP 1000}{ENDLOOP}Liftoff!{ENTER}"
+  }
+}

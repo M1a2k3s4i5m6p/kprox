@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Screenshot Windows",
+    "description": "Takes a full screenshot on Windows using Win+PrintScreen (saves to Pictures/Screenshots).",
+    "content": "{CHORD GUI+PRINTSCREEN}"
+  }
+}

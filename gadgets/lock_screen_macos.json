@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Lock Screen macOS",
+    "description": "Locks a macOS machine using the Ctrl+Command+Q keyboard shortcut.",
+    "content": "{CHORD CTRL+GUI+Q}"
+  }
+}

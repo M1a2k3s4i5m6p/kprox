@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Open Windows Task Manager",
+    "description": "Opens Windows Task Manager directly using Ctrl+Shift+Esc.",
+    "content": "{CHORD CTRL+SHIFT+ESC}"
+  }
+}

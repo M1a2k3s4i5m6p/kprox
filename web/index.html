@@ -338,6 +338,7 @@
                     <div class="tab" onclick="showTab('controls')">Mouse</div>
                     <div class="tab" onclick="showTab('reference')">Code Reference</div>
                     <div class="tab" onclick="showTab('credstore')">Credential Store</div>
+                    <div class="tab" onclick="showTab('gadgets')">Gadgets</div>
                 </div>
 
                 <div id="registers-tab" class="tab-content active">
@@ -737,6 +738,27 @@
                             <button onclick="csWipe()" style="width:100%;background:#dc3545;color:#fff;">Wipe Credential Store</button>
                             <div style="font-size:11px;color:#6c757d;margin-top:5px;">Deletes all credentials and the key check. The store key is also cleared from device memory. This cannot be undone.</div>
                             <div id="csWipeStatus" style="font-size:12px;margin-top:6px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gadgets Tab -->
+                <div id="gadgets-tab" class="tab-content">
+                    <div class="section">
+                        <h3>Gadgets</h3>
+                        <p style="font-size:13px;color:#6c757d;margin-bottom:14px;">
+                            Gadgets are pre-built token string scripts from the
+                            <a href="https://github.com/akoerner/kprox/tree/master/gadgets" target="_blank" style="color:#0d6efd;">kprox GitHub repository</a>.
+                            Install any gadget directly into a new register on the connected device.
+                        </p>
+
+                        <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+                            <button onclick="gadgetsFetch()" id="gadgetsFetchBtn" style="flex:1;">🔄 Load Gadgets from GitHub</button>
+                            <span id="gadgetsLoadStatus" style="font-size:12px;color:#6c757d;"></span>
+                        </div>
+
+                        <div id="gadgetsList" style="font-size:13px;color:#6c757d;font-style:italic;">
+                            Click "Load Gadgets from GitHub" to fetch available gadgets.
                         </div>
                     </div>
                 </div>

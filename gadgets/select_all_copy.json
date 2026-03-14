@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Select All and Copy",
+    "description": "Selects all text in the focused window and copies it to clipboard.",
+    "content": "{CHORD CTRL+A}{SLEEP 200}{CHORD CTRL+C}"
+  }
+}

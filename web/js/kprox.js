@@ -1927,6 +1927,12 @@ async function showTab(tabName) {
     if (tabName === 'credstore' && isConnected) {
         await csRefresh();
     }
+    if (tabName === 'gadgets') {
+        const list = document.getElementById('gadgetsList');
+        if (list && list.querySelector('em')) {
+            // auto-load on first visit
+        }
+    }
 }
 
 // ---- Credential Store ----
@@ -2103,6 +2109,125 @@ async function csRekey(e) {
         }
     } catch(e) {
         _csStatus('csRekeyStatus', 'Error: ' + e.message, false);
+    }
+}
+
+// ---- Gadgets ----
+
+const GADGETS_DIR_URL = 'https://api.github.com/repos/akoerner/kprox/contents/gadgets';
+const GADGETS_RAW_BASE = 'https://raw.githubusercontent.com/akoerner/kprox/master/gadgets/';
+
+let _gadgetsCache = null;
+
+async function gadgetsFetch() {
+    const btn    = document.getElementById('gadgetsFetchBtn');
+    const status = document.getElementById('gadgetsLoadStatus');
+    const list   = document.getElementById('gadgetsList');
+    if (!list) return;
+
+    btn.disabled = true;
+    if (status) status.textContent = 'Fetching…';
+    list.innerHTML = '<em style="color:#6c757d;">Loading gadgets from GitHub…</em>';
+
+    try {
+        const dirResp = await fetch(GADGETS_DIR_URL, {
+            headers: { 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (!dirResp.ok) throw new Error(`GitHub API ${dirResp.status}`);
+        const files = await dirResp.json();
+
+        const jsonFiles = files.filter(f => f.name.endsWith('.json'));
+        if (jsonFiles.length === 0) {
+            list.innerHTML = '<em style="color:#6c757d;">No gadgets found in repository.</em>';
+            if (status) status.textContent = '';
+            btn.disabled = false;
+            return;
+        }
+
+        const gadgets = [];
+        for (const file of jsonFiles) {
+            try {
+                const rawResp = await fetch(GADGETS_RAW_BASE + file.name);
+                if (!rawResp.ok) continue;
+                const data = await rawResp.json();
+                if (data.gadget && data.gadget.content) {
+                    gadgets.push({
+                        filename: file.name,
+                        name:        data.gadget.name        || file.name,
+                        description: data.gadget.description || '',
+                        content:     data.gadget.content
+                    });
+                }
+            } catch(_) { /* skip malformed */ }
+        }
+
+        _gadgetsCache = gadgets;
+        gadgetsRender(gadgets);
+        if (status) status.textContent = `${gadgets.length} gadget${gadgets.length !== 1 ? 's' : ''} loaded`;
+    } catch(e) {
+        list.innerHTML = `<span style="color:#dc3545;">Error: ${escapeHtml(e.message)}</span>`;
+        if (status) status.textContent = '';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function gadgetsRender(gadgets) {
+    const list = document.getElementById('gadgetsList');
+    if (!list) return;
+    if (gadgets.length === 0) {
+        list.innerHTML = '<em style="color:#6c757d;">No gadgets available.</em>';
+        return;
+    }
+
+    list.innerHTML = gadgets.map((g, i) => `
+        <div style="border:1px solid #dee2e6;border-radius:6px;padding:12px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+                <strong style="font-size:14px;">${escapeHtml(g.name)}</strong>
+                <button onclick="gadgetInstall(${i})" id="gadgetInstallBtn_${i}"
+                        style="padding:4px 12px;font-size:12px;background:#198754;color:#fff;border:none;border-radius:4px;cursor:pointer;white-space:nowrap;margin-left:8px;">
+                    Install
+                </button>
+            </div>
+            ${g.description ? `<div style="font-size:12px;color:#6c757d;margin-bottom:6px;">${escapeHtml(g.description)}</div>` : ''}
+            <div style="font-family:monospace;font-size:11px;background:#f8f9fa;border:1px solid #e9ecef;border-radius:4px;padding:6px;word-break:break-all;max-height:56px;overflow:hidden;color:#495057;">
+                ${escapeHtml(g.content)}
+            </div>
+            <div id="gadgetStatus_${i}" style="font-size:12px;margin-top:4px;min-height:14px;"></div>
+        </div>
+    `).join('');
+}
+
+async function gadgetInstall(index) {
+    if (!_gadgetsCache || index >= _gadgetsCache.length) return;
+    if (!isConnected) {
+        alert('Connect to a device first');
+        return;
+    }
+    const g   = _gadgetsCache[index];
+    const btn = document.getElementById(`gadgetInstallBtn_${index}`);
+    const st  = document.getElementById(`gadgetStatus_${index}`);
+    if (btn) btn.disabled = true;
+    if (st)  st.textContent = 'Installing…';
+    if (st)  st.style.color = '#6c757d';
+
+    const endpoint = getApiEndpoint();
+    try {
+        const resp = await apiFetch(`${endpoint}/api/registers`, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'add', content: g.content, name: g.name })
+        });
+        if (resp.ok) {
+            if (st) { st.textContent = '✓ Installed as new register'; st.style.color = '#198754'; }
+            await loadRegisters();
+        } else {
+            const data = await resp.json();
+            if (st) { st.textContent = data.error || 'Install failed'; st.style.color = '#dc3545'; }
+        }
+    } catch(e) {
+        if (st) { st.textContent = 'Error: ' + e.message; st.style.color = '#dc3545'; }
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 
