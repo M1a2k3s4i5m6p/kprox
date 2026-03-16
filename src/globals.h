@@ -117,7 +117,7 @@ extern String wifiPassword;
 extern String apiKey;
 extern String usbManufacturer;
 extern String usbProduct;
-extern const char* hostname;
+extern const char* hostname;   // points to hostnameStr.c_str()
 extern const char* deviceName;
 
 // ---- BLE / USB state ----
@@ -177,6 +177,21 @@ extern int        currentMouseY;
 
 // ---- Sink ----
 extern int maxSinkSize; // 0 = unlimited
+
+// ---- Runtime-configurable HID timing (ms) ----
+extern int g_keyPressDelay;
+extern int g_keyReleaseDelay;
+extern int g_betweenKeysDelay;
+extern int g_betweenSendTextDelay;
+extern int g_specialKeyDelay;
+extern int g_tokenDelay;
+
+// ---- Runtime-configurable identity ----
+extern String hostnameStr;
+extern String usbSerialNumber;
+
+// ---- Default startup app (Cardputer launcher index) ----
+extern int defaultAppIndex;
 // Cleared at the start of putTokenString() before each new run.
 extern bool g_parserAbort;
 

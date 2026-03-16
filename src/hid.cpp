@@ -145,9 +145,9 @@ void sendPlainText(const String& text) {
             KeyEntry ke;
             if (keymapLookup(cp, ke)) {
                 hidPressRaw(ke.hidUsage, ke.modifiers);
-                delay(KEY_PRESS_DELAY);
+                delay(g_keyPressDelay);
                 hidReleaseRaw();
-                delay(KEY_RELEASE_DELAY);
+                delay(g_keyReleaseDelay);
             } else if (cp < 0x80) {
                 char buf[2] = { (char)cp, 0 };
                 hidPrint(String(buf));
@@ -157,25 +157,25 @@ void sendPlainText(const String& text) {
     }
 
     flashTxIndicator();
-    delay(BETWEEN_SEND_TEXT_DELAY);
+    delay(g_betweenSendTextDelay);
 }
 
 void sendSpecialKey(uint8_t keycode) {
     if (isHalted || !anyHIDConnected()) return;
     hidReleaseAll();
-    delay(KEY_RELEASE_DELAY);
+    delay(g_keyReleaseDelay);
     hidPress(keycode);
-    delay(KEY_PRESS_DELAY);
+    delay(g_keyPressDelay);
     hidRelease(keycode);
-    delay(KEY_RELEASE_DELAY);
+    delay(g_keyReleaseDelay);
     flashTxIndicator();
-    delay(SPECIAL_KEY_DELAY);
+    delay(g_specialKeyDelay);
 }
 
 void sendSpecialKeyTimed(uint8_t keycode, int holdMs) {
     if (isHalted || !anyHIDConnected()) return;
     hidReleaseAll();
-    delay(KEY_RELEASE_DELAY);
+    delay(g_keyReleaseDelay);
     hidPress(keycode);
     unsigned long t0 = millis();
     while ((int)(millis() - t0) < holdMs) {
@@ -183,9 +183,9 @@ void sendSpecialKeyTimed(uint8_t keycode, int holdMs) {
         delay(10);
     }
     hidRelease(keycode);
-    delay(KEY_RELEASE_DELAY);
+    delay(g_keyReleaseDelay);
     flashTxIndicator();
-    delay(SPECIAL_KEY_DELAY);
+    delay(g_specialKeyDelay);
 }
 
 void pressKey(uint8_t keycode) {
@@ -203,52 +203,52 @@ void sendConsumerKey(const MediaKeyReport key) {
     if (isHalted || !anyHIDConnected()) return;
     if (bleKbActive()) {
         BLE_KEYBOARD.write(key);
-        delay(KEY_PRESS_DELAY + KEY_RELEASE_DELAY);
+        delay(g_keyPressDelay + g_keyReleaseDelay);
     }
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected() && KProxConsumer.isReady()) {
         KProxConsumer.sendConsumer(key[0], key[1]);
-        delay(KEY_PRESS_DELAY);
+        delay(g_keyPressDelay);
         KProxConsumer.sendConsumer(0, 0);
-        delay(KEY_RELEASE_DELAY);
+        delay(g_keyReleaseDelay);
     }
 #endif
     flashTxIndicator();
-    delay(SPECIAL_KEY_DELAY);
+    delay(g_specialKeyDelay);
 }
 
 void sendSystemKey(SystemKeyReport key) {
     if (isHalted || !anyHIDConnected()) return;
     if (bleKbActive()) {
         BLE_KEYBOARD.writeSystemKey(key);
-        delay(KEY_PRESS_DELAY + KEY_RELEASE_DELAY);
+        delay(g_keyPressDelay + g_keyReleaseDelay);
     }
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected() && KProxConsumer.isReady()) {
         KProxConsumer.sendSystem(key);
-        delay(KEY_PRESS_DELAY);
+        delay(g_keyPressDelay);
         KProxConsumer.sendSystem(0);
-        delay(KEY_RELEASE_DELAY);
+        delay(g_keyReleaseDelay);
     }
 #endif
     flashTxIndicator();
-    delay(SPECIAL_KEY_DELAY);
+    delay(g_specialKeyDelay);
 }
 
 void sendKeyChord(const std::vector<uint8_t>& keycodes, uint8_t modifiers) {
     if (isHalted || !anyHIDConnected()) return;
     hidReleaseAll();
-    delay(KEY_RELEASE_DELAY);
-    if (modifiers) { hidPress(modifiers); delay(KEY_PRESS_DELAY); }
+    delay(g_keyReleaseDelay);
+    if (modifiers) { hidPress(modifiers); delay(g_keyPressDelay); }
     for (uint8_t key : keycodes) { if (key) { hidPress(key); delay(5); } }
-    delay(KEY_PRESS_DELAY);
+    delay(g_keyPressDelay);
     for (auto it = keycodes.rbegin(); it != keycodes.rend(); ++it) {
         if (*it) { hidRelease(*it); delay(5); }
     }
-    if (modifiers) { hidRelease(modifiers); delay(KEY_RELEASE_DELAY); }
+    if (modifiers) { hidRelease(modifiers); delay(g_keyReleaseDelay); }
     hidReleaseAll();
     flashTxIndicator();
-    delay(SPECIAL_KEY_DELAY);
+    delay(g_specialKeyDelay);
 }
 
 static uint8_t resolveChordKey(const String& s) {

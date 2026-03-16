@@ -4,6 +4,7 @@
 #include "app_settings.h"
 #include "../storage.h"
 #include "../connection.h"
+#include "../hid.h"
 #include <WiFi.h>
 
 namespace Cardputer {
@@ -26,7 +27,9 @@ void AppSettings::_drawTopBar(int pageNum) {
     disp.setTextColor(TFT_WHITE, bc);
 
     static const char* pageLabels[NUM_PAGES] = {
-        "WiFi Settings", "Bluetooth", "USB HID", "API Key", "Device Identity", "Sink Config"
+        "WiFi Settings", "Bluetooth", "USB HID", "API Key",
+        "Device Identity", "Sink Config", "HID Timing 1/2", "HID Timing 2/2",
+        "Startup App"
     };
     disp.drawString(pageLabels[pageNum], 4, 3);
 
@@ -409,56 +412,70 @@ void AppSettings::_drawPage4() {
     disp.fillScreen(SETTINGS_BG);
     _drawTopBar(4);
 
-    static const char* labels[2] = { "USB Manufacturer", "USB/BT Product Name" };
-    String* vals[2] = { &usbManufacturer, &usbProduct };
+    const char* labels[4] = { "USB Manufacturer", "USB/BT Product", "Hostname", "USB Serial" };
+    const char* descs[4]  = { "USB mfr descriptor", "BT name + USB product", "mDNS name (reboot)", "USB serial (reboot)" };
+    String* vals[4] = { &usbManufacturer, &usbProduct, &hostnameStr, &usbSerialNumber };
     int fieldW = disp.width() - 8;
 
-    for (int i = 0; i < 2; i++) {
-        int y    = CONTENT_Y + i * 36;
+    for (int i = 0; i < 4; i++) {
+        int y    = CONTENT_Y + i * 26;
         bool sel  = (i == _idSel);
         bool edit = (sel && _editing);
-        if (sel && !edit) disp.fillRect(0, y-1, disp.width(), 12, selBgColor());
+        if (sel && !edit) disp.fillRect(0, y - 1, disp.width(), 14, selBgColor());
         disp.setTextSize(1);
-        disp.setTextColor(sel ? TFT_WHITE : labelColor(), sel && !edit ? selBgColor() : (uint16_t)SETTINGS_BG);
+        uint16_t rowBg = (sel && !edit) ? selBgColor() : (uint16_t)SETTINGS_BG;
+        disp.setTextColor(sel ? TFT_WHITE : labelColor(), rowBg);
         char row[36]; snprintf(row, sizeof(row), "%s%s:", sel ? "> " : "  ", labels[i]);
         disp.drawString(row, 4, y);
-        int fieldY = y + 13;
-        if (edit) _drawInputField(4, fieldY, fieldW, _editBuf, true);
-        else      _drawInputField(4, fieldY, fieldW, *vals[i], false);
+
+        if (edit) {
+            _drawInputField(4, y + 13, fieldW, _editBuf, true);
+        } else {
+            // value preview on right of label
+            int lw = disp.textWidth(row) + 6;
+            int avail = disp.width() - lw - 8;
+            String preview = *vals[i];
+            if (preview.isEmpty()) preview = descs[i];
+            while (preview.length() > 0 && disp.textWidth(preview) > avail)
+                preview = preview.substring(0, preview.length() - 1);
+            disp.setTextColor(sel ? TFT_YELLOW : disp.color565(130, 180, 130), rowBg);
+            disp.drawString(preview, lw, y);
+        }
     }
 
-    int noteY = CONTENT_Y + 2*36 + 2;
-    disp.setTextSize(1);
-    disp.setTextColor(disp.color565(160,130,40), SETTINGS_BG);
-    disp.drawString("* BT name = USB Product; reboot", 4, noteY);
-    if (_idSaved) { disp.setTextColor(TFT_GREEN, SETTINGS_BG); disp.drawString("Saved! Reboot.", 4, noteY+12); }
+    if (_idSaved) {
+        disp.setTextColor(TFT_GREEN, SETTINGS_BG);
+        disp.drawString("Saved! Reboot for USB/host.", 4, CONTENT_Y + 4 * 26 + 2);
+    }
 
     if (_editing) _drawBottomBar("type  ENTER save  ESC cancel");
-    else          _drawBottomBar("up/dn item  </> page  ENT edit  ESC back");
+    else          _drawBottomBar("up/dn item  ENTER edit  </> page");
 }
 
 void AppSettings::_handlePage4(KeyInput ki) {
+    static constexpr int N = 4;
+    String* vals[N] = { &usbManufacturer, &usbProduct, &hostnameStr, &usbSerialNumber };
     if (_editing) {
         if (ki.esc) { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
         if (ki.enter) {
             if (_editBuf.length() > 0) {
-                if (_idSel == 0) usbManufacturer = _editBuf; else usbProduct = _editBuf;
-                saveUSBIdentitySettings(); _idSaved = true;
+                *vals[_idSel] = _editBuf;
+                if (_idSel <= 1) saveUSBIdentitySettings();
+                else             saveHostnameSettings();
+                if (_idSel == 2) hostname = hostnameStr.c_str();
+                _idSaved = true;
             }
             _editing = false; _editBuf = ""; _needsRedraw = true; return;
         }
-        if (ki.del && _editBuf.length()>0) { _editBuf.remove(_editBuf.length()-1); _needsRedraw = true; return; }
+        if (ki.del && _editBuf.length() > 0) { _editBuf.remove(_editBuf.length() - 1); _needsRedraw = true; return; }
         if (ki.ch) { _editBuf += ki.ch; _idSaved = false; _needsRedraw = true; }
         return;
     }
     if (ki.arrowLeft)  { _page = 3; _editing = false; _idSaved = false; _needsRedraw = true; }
-    else if (ki.arrowRight) { _page = 5; _needsRedraw = true; }  // right of Identity = Sink Config
-    else if (ki.arrowUp)   { _idSel = (_idSel-1+2)%2; _idSaved = false; _needsRedraw = true; }
-    else if (ki.arrowDown) { _idSel = (_idSel+1)%2;    _idSaved = false; _needsRedraw = true; }
-    else if (ki.enter) {
-        String* vals[2] = { &usbManufacturer, &usbProduct };
-        _editBuf = *vals[_idSel]; _editing = true; _idSaved = false; _needsRedraw = true;
-    }
+    else if (ki.arrowRight) { _page = 5; _needsRedraw = true; }
+    else if (ki.arrowUp)   { _idSel = (_idSel - 1 + N) % N; _idSaved = false; _needsRedraw = true; }
+    else if (ki.arrowDown) { _idSel = (_idSel + 1) % N;      _idSaved = false; _needsRedraw = true; }
+    else if (ki.enter) { _editBuf = *vals[_idSel]; _editing = true; _idSaved = false; _needsRedraw = true; }
 }
 
 // ---- Page 5: Sink Config ----
@@ -514,8 +531,224 @@ void AppSettings::_handlePage5(KeyInput ki) {
         return;
     }
     if (ki.arrowLeft)  { _page = 4; _editing = false; _idSaved = false; _needsRedraw = true; }
-    else if (ki.arrowRight) { _page = 0; _needsRedraw = true; }  // wrap back to WiFi
+    else if (ki.arrowRight) { _page = 6; _timingSel = 0; _idSaved = false; _needsRedraw = true; }
     else if (ki.enter) { _editBuf = String(maxSinkSize); _editing = true; _idSaved = false; _needsRedraw = true; }
+}
+
+// ---- Shared timing page renderer ----
+
+static void drawTimingRows(int offset, int count, int sel, bool editing,
+                            const char* labels[], const char* descs[], int* vals[],
+                            const String& editBuf, bool idSaved) {
+    auto& disp = M5Cardputer.Display;
+    static constexpr int  SETTINGS_BG  = 0x1863;
+    auto selBg  = disp.color565(20, 60, 20);
+    auto lc     = disp.color565(170, 170, 170);
+
+    int y = CONTENT_Y;
+    for (int i = 0; i < count; i++) {
+        bool sel_  = (i == sel);
+        bool edit_ = (sel_ && editing);
+        uint16_t rowBg = sel_ ? selBg : (uint16_t)SETTINGS_BG;
+        if (sel_) disp.fillRect(0, y - 1, disp.width(), 22, rowBg);
+
+        disp.setTextSize(1);
+        disp.setTextColor(sel_ ? TFT_WHITE : lc, rowBg);
+        char lbl[28]; snprintf(lbl, sizeof(lbl), "%s%s:", sel_ ? "> " : "  ", labels[offset + i]);
+        disp.drawString(lbl, 4, y);
+
+        disp.setTextColor(disp.color565(120, 160, 120), rowBg);
+        disp.drawString(descs[offset + i], 8, y + 10);
+
+        String valStr = edit_ ? (editBuf + "_") : String(*vals[offset + i]);
+        int vw = disp.textWidth(valStr) + 4;
+        disp.setTextColor(sel_ ? TFT_YELLOW : TFT_WHITE, rowBg);
+        disp.drawString(valStr, disp.width() - vw - 2, y);
+        y += 20;
+    }
+
+    if (idSaved) {
+        disp.setTextColor(TFT_GREEN, (uint16_t)SETTINGS_BG);
+        disp.drawString("Saved!", 4, y + 2);
+    }
+}
+
+// ---- Page 6: HID Timing 1/2 (press, release, between keys) ----
+
+void AppSettings::_drawPage6() {
+    auto& disp = M5Cardputer.Display;
+    disp.fillScreen(SETTINGS_BG);
+    _drawTopBar(6);
+
+    static const char* labels[6] = {
+        "Press Delay",   "Release Delay", "Between Keys",
+        "Send Text",     "Special Key",   "Token Delay"
+    };
+    static const char* descs[6] = {
+        "ms key held after press",    "ms pause after release",
+        "ms gap between keystrokes",  "ms after full text send",
+        "ms after special/media key", "ms between token execution"
+    };
+    int* vals[6] = {
+        &g_keyPressDelay, &g_keyReleaseDelay, &g_betweenKeysDelay,
+        &g_betweenSendTextDelay, &g_specialKeyDelay, &g_tokenDelay
+    };
+
+    drawTimingRows(0, 3, _timingSel, _editing, labels, descs, vals, _editBuf, _idSaved);
+
+    if (_editing) _drawBottomBar("digits  ENTER save  ESC cancel");
+    else          _drawBottomBar("up/dn  ENTER edit  BtnA=test  </>");
+}
+
+void AppSettings::_handlePage6(KeyInput ki) {
+    static constexpr int N = 3;
+    int* vals[N] = { &g_keyPressDelay, &g_keyReleaseDelay, &g_betweenKeysDelay };
+
+    if (!_editing && M5Cardputer.BtnA.wasPressed()) {
+        sendPlainText("abcdefghijklmnopqrstuvwxyz");
+        _needsRedraw = true; return;
+    }
+
+    if (_editing) {
+        if (ki.esc)   { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
+        if (ki.enter) {
+            int v = _editBuf.toInt();
+            if (v >= 0) { *vals[_timingSel] = v; saveTimingSettings(); _idSaved = true; }
+            _editing = false; _editBuf = ""; _needsRedraw = true; return;
+        }
+        if (ki.del && _editBuf.length() > 0) { _editBuf.remove(_editBuf.length() - 1); _needsRedraw = true; return; }
+        if (ki.ch >= '0' && ki.ch <= '9') { _editBuf += ki.ch; _idSaved = false; _needsRedraw = true; }
+        return;
+    }
+    if (ki.arrowLeft)  { _page = 5; _timingSel = 0; _editing = false; _idSaved = false; _needsRedraw = true; }
+    else if (ki.arrowRight) { _page = 7; _timingSel = 0; _editing = false; _idSaved = false; _needsRedraw = true; }
+    else if (ki.arrowUp)   { _timingSel = (_timingSel - 1 + N) % N; _idSaved = false; _needsRedraw = true; }
+    else if (ki.arrowDown) { _timingSel = (_timingSel + 1) % N;     _idSaved = false; _needsRedraw = true; }
+    else if (ki.enter) { _editBuf = String(*vals[_timingSel]); _editing = true; _idSaved = false; _needsRedraw = true; }
+}
+
+// ---- Page 7: HID Timing 2/2 (send text, special key, token) ----
+
+void AppSettings::_drawPage7() {
+    auto& disp = M5Cardputer.Display;
+    disp.fillScreen(SETTINGS_BG);
+    _drawTopBar(7);
+
+    static const char* labels[6] = {
+        "Press Delay",   "Release Delay", "Between Keys",
+        "Send Text",     "Special Key",   "Token Delay"
+    };
+    static const char* descs[6] = {
+        "ms key held after press",    "ms pause after release",
+        "ms gap between keystrokes",  "ms after full text send",
+        "ms after special/media key", "ms between token execution"
+    };
+    int* vals[6] = {
+        &g_keyPressDelay, &g_keyReleaseDelay, &g_betweenKeysDelay,
+        &g_betweenSendTextDelay, &g_specialKeyDelay, &g_tokenDelay
+    };
+
+    drawTimingRows(3, 3, _timingSel, _editing, labels, descs, vals, _editBuf, _idSaved);
+
+    if (_editing) _drawBottomBar("digits  ENTER save  ESC cancel");
+    else          _drawBottomBar("up/dn  ENTER edit  BtnA=test  </>");
+}
+
+void AppSettings::_handlePage7(KeyInput ki) {
+    static constexpr int N = 3;
+    int* vals[N] = { &g_betweenSendTextDelay, &g_specialKeyDelay, &g_tokenDelay };
+
+    if (!_editing && M5Cardputer.BtnA.wasPressed()) {
+        sendPlainText("abcdefghijklmnopqrstuvwxyz");
+        _needsRedraw = true; return;
+    }
+
+    if (_editing) {
+        if (ki.esc)   { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
+        if (ki.enter) {
+            int v = _editBuf.toInt();
+            if (v >= 0) { *vals[_timingSel] = v; saveTimingSettings(); _idSaved = true; }
+            _editing = false; _editBuf = ""; _needsRedraw = true; return;
+        }
+        if (ki.del && _editBuf.length() > 0) { _editBuf.remove(_editBuf.length() - 1); _needsRedraw = true; return; }
+        if (ki.ch >= '0' && ki.ch <= '9') { _editBuf += ki.ch; _idSaved = false; _needsRedraw = true; }
+        return;
+    }
+    if (ki.arrowLeft)  { _page = 6; _timingSel = 0; _editing = false; _idSaved = false; _needsRedraw = true; }
+    else if (ki.arrowRight) { _page = 8; _idSel = 0; _needsRedraw = true; }  // -> Startup App
+    else if (ki.arrowUp)   { _timingSel = (_timingSel - 1 + N) % N; _idSaved = false; _needsRedraw = true; }
+    else if (ki.arrowDown) { _timingSel = (_timingSel + 1) % N;     _idSaved = false; _needsRedraw = true; }
+    else if (ki.enter) { _editBuf = String(*vals[_timingSel]); _editing = true; _idSaved = false; _needsRedraw = true; }
+}
+
+// ---- Page 8: Startup App ----
+
+void AppSettings::_drawPage8() {
+    auto& disp = M5Cardputer.Display;
+    disp.fillScreen(SETTINGS_BG);
+    _drawTopBar(8);
+
+    // App name list — must match registration order in main.cpp
+    static const char* APP_NAMES[] = {
+        "KProx", "FuzzyProx", "RegEdit", "CredStore",
+        "Gadgets", "SinkProx", "Keyboard", "Clock",
+        "QRProx", "SchedProx", "Settings"
+    };
+    static constexpr int N_APPS = 11; // indices 1..11 in uiManager
+
+    int y = CONTENT_Y;
+    disp.setTextSize(1);
+    disp.setTextColor(labelColor(), SETTINGS_BG);
+    disp.drawString("Default app on boot:", 4, y); y += 16;
+
+    int visible = (disp.height() - y - BAR_BOT_H - 4) / 15;
+    int scroll  = max(0, _idSel - visible + 1);
+    if (_idSel - (defaultAppIndex - 1) < 0) scroll = 0;
+
+    for (int i = 0; i < N_APPS && i < visible + scroll; i++) {
+        if (i < scroll) continue;
+        int appIdx = i + 1; // launcher is 0, user apps start at 1
+        bool sel = (_idSel == i);
+        bool cur = (defaultAppIndex == appIdx);
+        uint16_t rowBg = sel ? selBgColor() : (uint16_t)SETTINGS_BG;
+        if (sel) disp.fillRect(0, y - 1, disp.width(), 14, rowBg);
+
+        disp.setTextColor(sel ? TFT_WHITE : labelColor(), rowBg);
+        char row[36];
+        snprintf(row, sizeof(row), "%s%s", sel ? "> " : "  ", APP_NAMES[i]);
+        disp.drawString(row, 4, y);
+
+        if (cur) {
+            const char* badge = "DEFAULT";
+            int bw = disp.textWidth(badge) + 6;
+            int bx = disp.width() - bw - 2;
+            disp.fillRoundRect(bx, y - 1, bw, 12, 3, disp.color565(20, 80, 20));
+            disp.setTextColor(disp.color565(80, 220, 80), disp.color565(20, 80, 20));
+            disp.drawString(badge, bx + 3, y);
+        }
+        y += 15;
+    }
+
+    if (_idSaved) {
+        disp.setTextColor(TFT_GREEN, SETTINGS_BG);
+        disp.drawString("Saved! Takes effect on reboot.", 4, disp.height() - BAR_BOT_H - 14);
+    }
+
+    _drawBottomBar("up/dn select  ENTER set default  </> page");
+}
+
+void AppSettings::_handlePage8(KeyInput ki) {
+    static constexpr int N = 11;
+    if (ki.arrowLeft)  { _page = 7; _timingSel = 0; _editing = false; _idSaved = false; _needsRedraw = true; }
+    else if (ki.arrowRight) { _page = 0; _needsRedraw = true; } // wrap
+    else if (ki.arrowUp)   { _idSel = (_idSel - 1 + N) % N; _idSaved = false; _needsRedraw = true; }
+    else if (ki.arrowDown) { _idSel = (_idSel + 1) % N;      _idSaved = false; _needsRedraw = true; }
+    else if (ki.enter) {
+        defaultAppIndex = _idSel + 1; // user apps start at index 1
+        saveDefaultAppSettings();
+        _idSaved = true;
+        _needsRedraw = true;
+    }
 }
 
 // ---- AppBase overrides ----
@@ -523,6 +756,7 @@ void AppSettings::_handlePage5(KeyInput ki) {
 void AppSettings::onEnter() {
     _page = 0; _toggleSel = 0; _rebootNote = false;
     _idSel = 0; _editing = false; _idSaved = false; _editBuf = "";
+    _timingSel = 0;
     _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = "";
     _needsRedraw = true;
 }
@@ -532,10 +766,12 @@ void AppSettings::onExit() {
 }
 
 void AppSettings::onUpdate() {
-    if (M5Cardputer.BtnA.wasPressed()) {
+    // BtnA cycles pages, but timing pages use it for alphabet test — they consume it themselves
+    if (M5Cardputer.BtnA.wasPressed() && _page != 6 && _page != 7) {
         uiManager.notifyInteraction();
         _page = (_page + 1) % NUM_PAGES;
         _editing = false; _editBuf = ""; _idSaved = false; _toggleSel = 0;
+        _timingSel = 0;
         if (_page == 0) { _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; }
         _needsRedraw = true;
         return;
@@ -549,6 +785,9 @@ void AppSettings::onUpdate() {
             case 3: _drawPage3(); break;  // API Key
             case 4: _drawPage4(); break;  // Device Identity
             case 5: _drawPage5(); break;  // Sink Config
+            case 6: _drawPage6(); break;  // HID Timing 1/2
+            case 7: _drawPage7(); break;  // HID Timing 2/2
+            case 8: _drawPage8(); break;  // Startup App
         }
         _needsRedraw = false;
     }
@@ -571,6 +810,9 @@ void AppSettings::onUpdate() {
         case 3: _handlePage3(ki); break;  // API Key
         case 4: _handlePage4(ki); break;  // Device Identity
         case 5: _handlePage5(ki); break;  // Sink Config
+        case 6: _handlePage6(ki); break;  // HID Timing 1/2
+        case 7: _handlePage7(ki); break;  // HID Timing 2/2
+        case 8: _handlePage8(ki); break;  // Startup App
     }
 }
 

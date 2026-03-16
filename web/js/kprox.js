@@ -2046,6 +2046,12 @@ async function showTab(tabName) {
     if (tabName === 'reference') {
         await refLoad();
     }
+    if (tabName === 'settings' && isConnected) {
+        await loadSettingsTab();
+    }
+    if (tabName === 'schedtasks' && isConnected) {
+        await loadSchedTasks();
+    }
 }
 
 // ---- Credential Store ----
@@ -2067,11 +2073,15 @@ async function csRefresh() {
         const badge = document.getElementById('credStoreLockBadge');
         const count = document.getElementById('credStoreCountLabel');
         const list  = document.getElementById('csCredentialList');
-        if (badge) {
-            badge.textContent = data.locked ? 'LOCKED' : 'UNLOCKED';
-            badge.style.background = data.locked ? '#dc3545' : '#28a745';
-        }
-        if (count) count.textContent = `${data.count} credential${data.count !== 1 ? 's' : ''}`;
+        const globBadge = document.getElementById('globalCsLockBadge');
+        const globCount = document.getElementById('globalCsCountLabel');
+        const bg    = data.locked ? '#dc3545' : '#28a745';
+        const label = data.locked ? 'LOCKED' : 'UNLOCKED';
+        const countTxt = `${data.count} credential${data.count !== 1 ? 's' : ''}`;
+        if (badge) { badge.textContent = label; badge.style.background = bg; }
+        if (globBadge) { globBadge.textContent = label; globBadge.style.background = bg; }
+        if (count) count.textContent = countTxt;
+        if (globCount) globCount.textContent = countTxt;
         if (list) {
             if (data.locked) {
                 list.innerHTML = '<em style="color:#6c757d;">Unlock the store to view credentials.</em>';
@@ -2721,9 +2731,12 @@ function _renderRef(filter) {
             el.innerHTML = '<p style="color:#6c757d;font-size:13px;">No results for "' + _esc(filter) + '"</p>';
         } else {
             el.innerHTML = matched.map(s => {
-                // highlight matching text
-                const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\$&') + ')', 'gi');
-                return s.html.replace(re, '<mark style="background:#fff3cd;">$1</mark>');
+                const reEsc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const re = new RegExp('(' + reEsc + ')', 'gi');
+                // Only highlight inside text nodes, not inside HTML tag markup
+                return s.html.replace(/<[^>]*>|[^<]+/g, chunk =>
+                    chunk.startsWith('<') ? chunk : chunk.replace(re, '<mark style="background:#fff3cd;">$1</mark>')
+                );
             }).join('');
         }
     }
@@ -2744,6 +2757,209 @@ function refSearch() {
 
 // Legacy alias kept for any remaining onclick="filterTable()" references
 function filterTable() { refSearch(); }
+
+// ---- Scheduled Tasks ----
+
+async function loadSchedTasks() {
+    if (!isConnected) return;
+    const el = document.getElementById('schedTaskList');
+    if (!el) return;
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/schedtasks`, { method: 'GET' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if (!data.tasks || data.tasks.length === 0) {
+            el.innerHTML = '<em style="color:#6c757d;">No scheduled tasks.</em>';
+            return;
+        }
+        el.innerHTML = data.tasks.map(t => {
+            const when = _schedWhen(t);
+            const label = t.label || `Task ${t.id}`;
+            return `<div class="sched-task-row" style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:6px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:4px;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:600;font-size:13px;">${_esc(label)}</div>
+                    <div style="font-size:11px;color:#6c757d;margin-top:2px;">${_esc(when)}${t.repeat ? ' · repeat' : ' · once'}</div>
+                    <div style="font-size:11px;color:#495057;font-family:monospace;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(t.payload)}</div>
+                </div>
+                <div style="display:flex;gap:4px;flex-shrink:0;">
+                    <button onclick="toggleSchedTask(${t.id},${!t.enabled})" style="padding:3px 8px;font-size:11px;background:${t.enabled ? '#198754' : '#6c757d'};color:#fff;border:none;border-radius:3px;cursor:pointer;">${t.enabled ? 'ON' : 'OFF'}</button>
+                    <button onclick="deleteSchedTask(${t.id})" style="padding:3px 8px;font-size:11px;background:#dc3545;color:#fff;border:none;border-radius:3px;cursor:pointer;">Delete</button>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        if (el) el.innerHTML = `<span style="color:#dc3545;">Error: ${_esc(e.message)}</span>`;
+    }
+}
+
+function _schedWhen(t) {
+    const yr  = t.year   > 0 ? String(t.year).padStart(4,'0')  : '*';
+    const mo  = t.month  > 0 ? String(t.month).padStart(2,'0') : '*';
+    const dy  = t.day    > 0 ? String(t.day).padStart(2,'0')   : '*';
+    const hr  = String(t.hour).padStart(2,'0');
+    const mn  = String(t.minute).padStart(2,'0');
+    const sc  = String(t.second).padStart(2,'0');
+    return `${yr}-${mo}-${dy}  ${hr}:${mn}:${sc}`;
+}
+
+async function addSchedTask() {
+    if (!isConnected) { logDebug('Not connected', 'warning'); return; }
+    const payload = document.getElementById('schedPayload')?.value.trim();
+    if (!payload) { _statusMsg('schedAddStatus', '✗ Payload is required', false); return; }
+    const task = {
+        label:   document.getElementById('schedLabel')?.value.trim() || '',
+        year:    parseInt(document.getElementById('schedYear')?.value)   || 0,
+        month:   parseInt(document.getElementById('schedMonth')?.value)  || 0,
+        day:     parseInt(document.getElementById('schedDay')?.value)    || 0,
+        hour:    parseInt(document.getElementById('schedHour')?.value)   || 0,
+        minute:  parseInt(document.getElementById('schedMinute')?.value) || 0,
+        second:  parseInt(document.getElementById('schedSecond')?.value) || 0,
+        payload,
+        enabled: true,
+        repeat:  document.getElementById('schedRepeat')?.checked || false,
+    };
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/schedtasks`, {
+            method: 'POST', body: JSON.stringify(task)
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        _statusMsg('schedAddStatus', '✓ Task added', true);
+        // clear form
+        ['schedLabel','schedPayload'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+        ['schedYear','schedMonth','schedDay','schedHour','schedMinute','schedSecond'].forEach(id => { const e=document.getElementById(id); if(e) e.value='0'; });
+        const rep = document.getElementById('schedRepeat'); if(rep) rep.checked=false;
+        await loadSchedTasks();
+    } catch(e) {
+        _statusMsg('schedAddStatus', '✗ ' + e.message, false);
+    }
+}
+
+async function deleteSchedTask(id) {
+    if (!isConnected) return;
+    if (!confirm(`Delete task #${id}?`)) return;
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/schedtasks`, {
+            method: 'DELETE', body: JSON.stringify({ id })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        await loadSchedTasks();
+    } catch(e) {
+        logDebug('deleteSchedTask: ' + e.message, 'error');
+    }
+}
+
+async function toggleSchedTask(id, enabled) {
+    if (!isConnected) return;
+    try {
+        await apiFetch(`${getApiEndpoint()}/api/schedtasks`, {
+            method: 'POST', body: JSON.stringify({ id, enabled })
+        });
+        await loadSchedTasks();
+    } catch(e) {
+        logDebug('toggleSchedTask: ' + e.message, 'error');
+    }
+}
+
+// ---- Default App ----
+
+async function saveDefaultApp() {
+    if (!isConnected) { logDebug('Not connected', 'warning'); return; }
+    const sel = document.getElementById('defaultAppSelect');
+    if (!sel) return;
+    const da = parseInt(sel.value);
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/settings`, {
+            method: 'POST', body: JSON.stringify({ defaultApp: da })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        _statusMsg('defaultAppStatus', '✓ Saved — reboot to apply', true);
+    } catch(e) {
+        _statusMsg('defaultAppStatus', '✗ ' + e.message, false);
+    }
+}
+
+
+// ---- Settings tab population ----
+
+async function loadSettingsTab() {
+    try {
+        const endpoint = getApiEndpoint();
+        const resp = await apiFetch(`${endpoint}/api/settings`, { method: 'GET', mode: 'cors' });
+        if (!resp.ok) return;
+        const d = await resp.json();
+
+        // Timing
+        if (d.timing) {
+            _setVal('timingKeyPress',    d.timing.key_press_delay);
+            _setVal('timingKeyRelease',  d.timing.key_release_delay);
+            _setVal('timingBetweenKeys', d.timing.between_keys_delay);
+            _setVal('timingBetweenSend', d.timing.between_send_text_delay);
+            _setVal('timingSpecialKey',  d.timing.special_key_delay);
+            _setVal('timingToken',       d.timing.token_delay);
+        }
+
+        // Device identity
+        if (d.device) {
+            _setVal('newDeviceManufacturer', d.device.manufacturer);
+            _setVal('newDeviceProduct',      d.device.product);
+            _setVal('newHostname',           d.device.hostname);
+            _setVal('newUsbSerial',          d.device.usb_serial);
+        }
+
+        // Sync endpoint input
+        const ep = document.getElementById('settingsApiEndpoint');
+        if (ep && !ep.value) ep.value = getApiEndpoint();
+
+        // Default app selector
+        if (d.defaultApp !== undefined) {
+            const sel = document.getElementById('defaultAppSelect');
+            if (sel) sel.value = String(d.defaultApp);
+        }
+    } catch (e) {
+        logDebug('loadSettingsTab: ' + e.message, 'warning');
+    }
+}
+
+function _setVal(id, val) {
+    const el = document.getElementById(id);
+    if (el && val !== undefined && val !== null) el.value = val;
+}
+
+function _statusMsg(id, msg, ok) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'settings-status ' + (ok ? 'success' : 'error');
+    setTimeout(() => { el.textContent = ''; el.className = 'settings-status'; }, 4000);
+}
+
+async function saveTimingSettings() {
+    if (!isConnected) { logDebug('Not connected', 'warning'); return; }
+    const timing = {
+        key_press_delay:         parseInt(document.getElementById('timingKeyPress')?.value)    || 0,
+        key_release_delay:       parseInt(document.getElementById('timingKeyRelease')?.value)  || 0,
+        between_keys_delay:      parseInt(document.getElementById('timingBetweenKeys')?.value) || 0,
+        between_send_text_delay: parseInt(document.getElementById('timingBetweenSend')?.value) || 0,
+        special_key_delay:       parseInt(document.getElementById('timingSpecialKey')?.value)  || 0,
+        token_delay:             parseInt(document.getElementById('timingToken')?.value)        || 0,
+    };
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/settings`, {
+            method: 'POST', mode: 'cors',
+            body: JSON.stringify({ timing })
+        });
+        if (resp.ok) {
+            logDebug('Timing settings saved', 'success');
+            _statusMsg('timingStatus', '✓ Saved', true);
+        } else {
+            throw new Error('HTTP ' + resp.status);
+        }
+    } catch(e) {
+        logDebug('saveTimingSettings: ' + e.message, 'error');
+        _statusMsg('timingStatus', '✗ ' + e.message, false);
+    }
+}
+
 
 function toggleTokenExamples(section = 'controls') {
     const content = document.getElementById(`tokenExamplesContent${section === 'controls' ? 'Controls' : 'Registers'}`);
@@ -3749,9 +3965,23 @@ async function connect() {
         await loadMTLSStatus();
         await loadKeymapSettings();
 
+        // Sync settings tab endpoint field
+        const sepEl = document.getElementById('settingsApiEndpoint');
+        if (sepEl) sepEl.value = getApiEndpoint();
+
         const registersTab = document.getElementById('registers-tab');
         if (registersTab && registersTab.classList.contains('active')) {
             await loadRegisters();
+        }
+
+        const settingsTabEl = document.getElementById('settings-tab');
+        if (settingsTabEl && settingsTabEl.classList.contains('active')) {
+            await loadSettingsTab();
+        }
+
+        const schedTab = document.getElementById('schedtasks-tab');
+        if (schedTab && schedTab.classList.contains('active')) {
+            await loadSchedTasks();
         }
 
         // Update credstore lock badge (tab + global sidebar)
@@ -4025,58 +4255,37 @@ async function sendMouseMovement() {
 }
 
 async function updateDeviceSettings() {
-    if (requestInProgress) {
-        logDebug('Device settings update skipped - another request in progress', 'warning');
+    if (!isConnected) { logDebug('Not connected', 'warning'); return; }
+
+    const manufacturer = document.getElementById('newDeviceManufacturer')?.value.trim();
+    const product      = document.getElementById('newDeviceProduct')?.value.trim();
+    const hostname_    = document.getElementById('newHostname')?.value.trim();
+    const usbSerial    = document.getElementById('newUsbSerial')?.value.trim();
+
+    if (!manufacturer && !product && !hostname_ && !usbSerial) {
+        logDebug('No device identity fields filled in', 'warning');
         return;
     }
 
-    const manufacturer = document.getElementById('newDeviceManufacturer').value.trim();
-    const product = document.getElementById('newDeviceProduct').value.trim();
-    
-    if (!manufacturer && !product) {
-        alert('Please enter manufacturer or product name');
-        return;
-    }
+    const device = {};
+    if (manufacturer) device.manufacturer = manufacturer;
+    if (product)      device.product      = product;
+    if (hostname_)    device.hostname     = hostname_;
+    if (usbSerial)    device.usb_serial   = usbSerial;
 
     try {
-        requestInProgress = true;
-        updateRequestStatus();
-
-        const endpoint = getApiEndpoint();
-        const body = {};
-        if (manufacturer) body.manufacturer = manufacturer;
-        if (product) body.product = product;
-
-        const response = await apiFetch(`${endpoint}/api/device`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            mode: 'cors',
-            body: JSON.stringify(body)
+        const resp = await apiFetch(`${getApiEndpoint()}/api/settings`, {
+            method: 'POST', mode: 'cors',
+            body: JSON.stringify({ device })
         });
-
-        if (response.ok) {
-            const result = await response.json();
-            logDebug(`Device settings updated: ${JSON.stringify(body)}`, 'success');
-            
-            // Clear the input fields
-            document.getElementById('newDeviceManufacturer').value = '';
-            document.getElementById('newDeviceProduct').value = '';
-            
-            // Refresh device info
+        if (resp.ok) {
+            logDebug('Device identity saved', 'success');
             await loadDeviceSettings();
-            
-            alert('Device settings updated. Restart device for USB changes to take effect.');
         } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error('HTTP ' + resp.status);
         }
-    } catch (error) {
-        logDebug(`Device settings update failed: ${error.message}`, 'error');
-        alert(`Failed to update device settings: ${error.message}`);
-    } finally {
-        requestInProgress = false;
-        updateRequestStatus();
+    } catch(e) {
+        logDebug('updateDeviceSettings: ' + e.message, 'error');
     }
 }
 
@@ -4093,6 +4302,9 @@ async function loadDeviceSettings() {
             logDebug(`Device data -- ${JSON.stringify(data).substring(0, 120)}`, 'info');
             safeSetText('deviceManufacturer', data.manufacturer || '-');
             safeSetText('deviceProduct', data.product || '-');
+            // populate settings tab fields if present
+            _setVal('newDeviceManufacturer', data.manufacturer);
+            _setVal('newDeviceProduct',      data.product);
         }
     } catch (error) {
         console.log('Failed to load device settings:', error.message);

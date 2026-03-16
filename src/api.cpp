@@ -9,6 +9,7 @@
 #include "crypto_utils.h"
 #include "keymap.h"
 #include "credential_store.h"
+#include "scheduled_tasks.h"
 
 String currentNonce = "";
 
@@ -783,6 +784,15 @@ void handleSettings() {
         doc["utcOffset"]             = utcOffsetSeconds;
         doc["device"]["manufacturer"] = usbManufacturer;
         doc["device"]["product"]     = usbProduct;
+        doc["device"]["hostname"]    = hostnameStr;
+        doc["device"]["usb_serial"]  = usbSerialNumber;
+        doc["defaultApp"]            = defaultAppIndex;
+        doc["timing"]["key_press_delay"]         = g_keyPressDelay;
+        doc["timing"]["key_release_delay"]       = g_keyReleaseDelay;
+        doc["timing"]["between_keys_delay"]      = g_betweenKeysDelay;
+        doc["timing"]["between_send_text_delay"] = g_betweenSendTextDelay;
+        doc["timing"]["special_key_delay"]       = g_specialKeyDelay;
+        doc["timing"]["token_delay"]             = g_tokenDelay;
 #ifdef BOARD_HAS_USB_HID
         doc["usb"]["enabled"] = usbEnabled;
 #endif
@@ -852,6 +862,33 @@ void handleSettings() {
                 if (usbEnabled) { USB.manufacturerName(usbManufacturer.c_str()); USB.productName(usbProduct.c_str()); }
 #endif
             }
+            if (device.containsKey("hostname") && device["hostname"].as<String>().length() > 0) {
+                hostnameStr = device["hostname"].as<String>();
+                hostname = hostnameStr.c_str();
+                saveHostnameSettings();
+                WiFi.setHostname(hostname);
+            }
+            if (device.containsKey("usb_serial") && device["usb_serial"].as<String>().length() > 0) {
+                usbSerialNumber = device["usb_serial"].as<String>();
+                saveHostnameSettings();
+            }
+        }
+
+        if (doc["timing"].is<JsonObject>()) {
+            JsonObject t = doc["timing"];
+            bool changed = false;
+            if (t.containsKey("key_press_delay"))         { g_keyPressDelay        = max(0, t["key_press_delay"].as<int>());         changed = true; }
+            if (t.containsKey("key_release_delay"))       { g_keyReleaseDelay      = max(0, t["key_release_delay"].as<int>());       changed = true; }
+            if (t.containsKey("between_keys_delay"))      { g_betweenKeysDelay     = max(0, t["between_keys_delay"].as<int>());      changed = true; }
+            if (t.containsKey("between_send_text_delay")) { g_betweenSendTextDelay = max(0, t["between_send_text_delay"].as<int>()); changed = true; }
+            if (t.containsKey("special_key_delay"))       { g_specialKeyDelay      = max(0, t["special_key_delay"].as<int>());       changed = true; }
+            if (t.containsKey("token_delay"))             { g_tokenDelay           = max(0, t["token_delay"].as<int>());             changed = true; }
+            if (changed) saveTimingSettings();
+        }
+
+        if (doc.containsKey("defaultApp")) {
+            int da = doc["defaultApp"].as<int>();
+            if (da >= 1) { defaultAppIndex = da; saveDefaultAppSettings(); }
         }
 
 #ifdef BOARD_HAS_USB_HID
@@ -863,7 +900,7 @@ void handleSettings() {
                 if (usbEnabled && !usbInitialized) {
                     USB.manufacturerName(usbManufacturer.c_str());
                     USB.productName(usbProduct.c_str());
-                    USB.serialNumber(USB_SERIAL_NUMBER);
+                    USB.serialNumber(usbSerialNumber.c_str());
                     if (fido2Enabled) FIDO2Device.begin();
                     USB.begin();
                     if (usbKeyboardEnabled) { USBKeyboard.begin(); usbKeyboardReady = true; }
@@ -1460,6 +1497,97 @@ void handleCredStoreKey() {
     server.client().stop();
 }
 
+// ---- Scheduled Tasks ----
+
+void handleSchedTasks() {
+    addCorsHeaders();
+    server.sendHeader("Connection", "close");
+    if (!checkApiKey()) return;
+
+    if (server.method() == HTTP_GET) {
+        JsonDocument doc;
+        JsonArray arr = doc["tasks"].to<JsonArray>();
+        for (const ScheduledTask& t : scheduledTasks) {
+            JsonObject o = arr.add<JsonObject>();
+            o["id"]      = t.id;
+            o["label"]   = t.label;
+            o["year"]    = t.year;
+            o["month"]   = t.month;
+            o["day"]     = t.day;
+            o["hour"]    = t.hour;
+            o["minute"]  = t.minute;
+            o["second"]  = t.second;
+            o["payload"] = t.payload;
+            o["enabled"] = t.enabled;
+            o["repeat"]  = t.repeat;
+        }
+        doc["count"] = (int)scheduledTasks.size();
+        String resp; serializeJson(doc, resp);
+        sendEncrypted(200, resp);
+        server.client().stop(); return;
+    }
+
+    if (server.method() == HTTP_POST) {
+        if (!canProceed()) return;
+        JsonDocument doc;
+        if (!parseJsonBody(doc)) { requestComplete(); return; }
+
+        // toggle enable: { "id": N, "enabled": bool }
+        if (doc.containsKey("id") && doc.containsKey("enabled")) {
+            int id = doc["id"].as<int>();
+            for (ScheduledTask& t : scheduledTasks) {
+                if (t.id == id) { t.enabled = doc["enabled"].as<bool>(); saveScheduledTasks(); break; }
+            }
+            sendEncrypted(200, "{\"status\":\"ok\"}");
+            requestComplete(); return;
+        }
+
+        // Add new task
+        ScheduledTask t;
+        t.label   = doc["label"]   | String("");
+        t.year    = doc["year"]    | 0;
+        t.month   = doc["month"]   | 0;
+        t.day     = doc["day"]     | 0;
+        t.hour    = doc["hour"]    | 0;
+        t.minute  = doc["minute"]  | 0;
+        t.second  = doc["second"]  | 0;
+        t.payload = doc["payload"] | String("");
+        t.enabled = doc["enabled"] | true;
+        t.repeat  = doc["repeat"]  | false;
+        t.fired   = false;
+
+        if (t.payload.isEmpty()) {
+            sendEncrypted(400, "{\"error\":\"payload required\"}");
+            requestComplete(); return;
+        }
+
+        int newId = addScheduledTask(t);
+        JsonDocument resp;
+        resp["status"] = "ok";
+        resp["id"]     = newId;
+        String rs; serializeJson(resp, rs);
+        sendEncrypted(200, rs);
+        requestComplete(); return;
+    }
+
+    if (server.method() == HTTP_DELETE) {
+        if (!canProceed()) return;
+        JsonDocument doc;
+        if (!parseJsonBody(doc)) { requestComplete(); return; }
+        int id = doc["id"] | -1;
+        if (id < 0) {
+            sendEncrypted(400, "{\"error\":\"id required\"}");
+            requestComplete(); return;
+        }
+        bool ok = deleteScheduledTask(id);
+        sendEncrypted(ok ? 200 : 404, ok ? "{\"status\":\"ok\"}" : "{\"error\":\"not found\"}");
+        requestComplete(); return;
+    }
+
+    server.send(405, "text/plain", "Method not allowed");
+    server.client().stop();
+}
+
 // ---- Route setup ----
 
 void setupRoutes() {
@@ -1511,6 +1639,9 @@ void setupRoutes() {
     server.on("/api/credstore",          HTTP_GET,     handleCredStore);
     server.on("/api/credstore",          HTTP_POST,    handleCredStore);
     server.on("/api/credstore/rekey",    HTTP_POST,    handleCredStoreKey);
+    server.on("/api/schedtasks",         HTTP_GET,     handleSchedTasks);
+    server.on("/api/schedtasks",         HTTP_POST,    handleSchedTasks);
+    server.on("/api/schedtasks",         HTTP_DELETE,  handleSchedTasks);
     server.on("/send/text",              HTTP_POST,    handleSendText);
     server.on("/send/mouse",             HTTP_POST,    handleSendMouse);
     server.on("/api/sink",               HTTP_GET,     handleSink);
@@ -1527,7 +1658,8 @@ void setupRoutes() {
         "/api/registers/import", "/api/ota", "/api/ota/spiffs",
         "/api/mtls", "/api/mtls/certs",
         "/api/nonce", "/api/keymap",
-        "/api/credstore", "/api/credstore/rekey"
+        "/api/credstore", "/api/credstore/rekey",
+        "/api/schedtasks"
     };
     for (const char* path : opts) server.on(path, HTTP_OPTIONS, handleOptions);
 

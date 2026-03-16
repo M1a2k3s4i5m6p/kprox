@@ -61,7 +61,7 @@ String apiKey        = DEFAULT_API_KEY;
 String usbManufacturer = DEFAULT_MANUFACTURER;
 String usbProduct    = DEFAULT_PRODUCT_NAME;
 
-const char* hostname   = HOSTNAME;
+const char* hostname   = hostnameStr.c_str();
 const char* deviceName = DEFAULT_PRODUCT_NAME;
 
 bool bluetoothEnabled     = true;
@@ -206,6 +206,8 @@ void setup() {
     loadApiKeySettings();
     loadUtcOffsetSettings();
     loadSinkSettings();
+    loadTimingSettings();
+    loadHostnameSettings();
     loadMTLSSettings();
     loadKeymapSettings();
 #ifdef BOARD_M5STACK_ATOMS3
@@ -227,7 +229,7 @@ void setup() {
     if (usbEnabled) {
         USB.manufacturerName(usbManufacturer.c_str());
         USB.productName(usbProduct.c_str());
-        USB.serialNumber(USB_SERIAL_NUMBER);
+        USB.serialNumber(usbSerialNumber.c_str());
         if (fido2Enabled) FIDO2Device.begin();
         USB.begin();
         KProxConsumer.begin();  // creates send semaphore; addDevice() ran in constructor

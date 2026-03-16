@@ -151,6 +151,60 @@ void loadKeymapSettings() {
     if (activeKeymap.isEmpty()) activeKeymap = "en";
 }
 
+void saveTimingSettings() {
+    preferences.begin("kprox", false);
+    preferences.putInt("kpressDelay",   g_keyPressDelay);
+    preferences.putInt("krelDelay",     g_keyReleaseDelay);
+    preferences.putInt("btwKeysDelay",  g_betweenKeysDelay);
+    preferences.putInt("btwSendDelay",  g_betweenSendTextDelay);
+    preferences.putInt("specKeyDelay",  g_specialKeyDelay);
+    preferences.putInt("tokenDelay",    g_tokenDelay);
+    preferences.end();
+    blinkLED(3, LED_COLOR_SAVE, LED_SAVE_DUTY_CYCLE);
+}
+
+void loadTimingSettings() {
+    preferences.begin("kprox", false);
+    g_keyPressDelay        = preferences.getInt("kpressDelay",  KEY_PRESS_DELAY);
+    g_keyReleaseDelay      = preferences.getInt("krelDelay",    KEY_RELEASE_DELAY);
+    g_betweenKeysDelay     = preferences.getInt("btwKeysDelay", BETWEEN_KEYS_DELAY);
+    g_betweenSendTextDelay = preferences.getInt("btwSendDelay", BETWEEN_SEND_TEXT_DELAY);
+    g_specialKeyDelay      = preferences.getInt("specKeyDelay", SPECIAL_KEY_DELAY);
+    g_tokenDelay           = preferences.getInt("tokenDelay",   TOKEN_DELAY);
+    preferences.end();
+}
+
+void saveHostnameSettings() {
+    preferences.begin("kprox", false);
+    preferences.putString("hostname",  hostnameStr);
+    preferences.putString("usbSerial", usbSerialNumber);
+    preferences.end();
+    blinkLED(3, LED_COLOR_SAVE, LED_SAVE_DUTY_CYCLE);
+}
+
+void loadHostnameSettings() {
+    preferences.begin("kprox", false);
+    hostnameStr    = preferences.getString("hostname",  HOSTNAME);
+    usbSerialNumber = preferences.getString("usbSerial", USB_SERIAL_NUMBER);
+    preferences.end();
+    if (hostnameStr.isEmpty())     hostnameStr     = HOSTNAME;
+    if (usbSerialNumber.isEmpty()) usbSerialNumber = USB_SERIAL_NUMBER;
+    hostname = hostnameStr.c_str();
+}
+
+void saveDefaultAppSettings() {
+    preferences.begin("kprox", false);
+    preferences.putInt("defaultApp", defaultAppIndex);
+    preferences.end();
+}
+
+void loadDefaultAppSettings() {
+    preferences.begin("kprox", false);
+    defaultAppIndex = preferences.getInt("defaultApp", 1);
+    preferences.end();
+    if (defaultAppIndex < 1) defaultAppIndex = 1;
+}
+
 void wipeAllSettings() {
     preferences.begin("kprox", false);
     preferences.clear();

@@ -11,12 +11,15 @@
 #include "../mtls.h"
 #include "../keymap.h"
 #include "../credential_store.h"
+#include "../scheduled_tasks.h"
 #include "ui_manager.h"
 #include "app_launcher.h"
 #include "app_kprox.h"
 #include "app_keyboard_hid.h"
 #include "app_clock.h"
 #include "app_settings.h"
+#include "app_qrprox.h"
+#include "app_schedprox.h"
 #include "app_credstore.h"
 #include "app_gadgets.h"
 #include "app_regedit.h"
@@ -208,6 +211,9 @@ void setup() {
     loadApiKeySettings();
     loadUtcOffsetSettings();
     loadSinkSettings();
+    loadTimingSettings();
+    loadHostnameSettings();
+    loadDefaultAppSettings();
     loadMTLSSettings();
     loadKeymapSettings();
     loadUSBSettings();
@@ -223,6 +229,7 @@ void setup() {
     feedWatchdog();
     keymapInit();
     credStoreInit();
+    loadScheduledTasks();
 
     // Construct BLE objects here — after settings are loaded — so the device
     // name and manufacturer are the persisted values, not compile-time defaults.
@@ -378,21 +385,27 @@ void setup() {
     static Cardputer::AppSinkProx    appSinkProx;
     static Cardputer::AppKeyboardHID appKeyboard;
     static Cardputer::AppClock       appClock;
+    static Cardputer::AppQRProx      appQRProx;
+    static Cardputer::AppSchedProx   appSchedProx;
     static Cardputer::AppSettings    appSettings;
 
-    Cardputer::uiManager.addApp(&launcher);
-    Cardputer::uiManager.addApp(&appKProx);
-    Cardputer::uiManager.addApp(&appFuzzyProx);
-    Cardputer::uiManager.addApp(&appRegEdit);
-    Cardputer::uiManager.addApp(&appCredStore);
-    Cardputer::uiManager.addApp(&appGadgets);
-    Cardputer::uiManager.addApp(&appSinkProx);
-    Cardputer::uiManager.addApp(&appKeyboard);
-    Cardputer::uiManager.addApp(&appClock);
-    Cardputer::uiManager.addApp(&appSettings);
+    // Registration order determines launcher icon index (0 = launcher, 1..N = user apps)
+    Cardputer::uiManager.addApp(&launcher);    // 0
+    Cardputer::uiManager.addApp(&appKProx);    // 1
+    Cardputer::uiManager.addApp(&appFuzzyProx);// 2
+    Cardputer::uiManager.addApp(&appRegEdit);  // 3
+    Cardputer::uiManager.addApp(&appCredStore);// 4
+    Cardputer::uiManager.addApp(&appGadgets);  // 5
+    Cardputer::uiManager.addApp(&appSinkProx); // 6
+    Cardputer::uiManager.addApp(&appKeyboard); // 7
+    Cardputer::uiManager.addApp(&appClock);    // 8
+    Cardputer::uiManager.addApp(&appQRProx);   // 9
+    Cardputer::uiManager.addApp(&appSchedProx);// 10
+    Cardputer::uiManager.addApp(&appSettings); // 11
 
-    // Start directly in KProx app (index 1)
-    Cardputer::uiManager.launchApp(1);
+    int numApps = (int)Cardputer::uiManager.apps().size();
+    int startApp = (defaultAppIndex >= 1 && defaultAppIndex < numApps) ? defaultAppIndex : 1;
+    Cardputer::uiManager.launchApp(startApp);
     Cardputer::uiManager.notifyInteraction();
 }
 
@@ -471,6 +484,8 @@ void loop() {
     }
 
     cleanupConnections();
+
+    checkScheduledTasks();
 
     if (!isHalted && mouseBatch.hasMovement && millis() - mouseBatch.lastUpdate > MOUSE_BATCH_TIMEOUT) {
         sendBatchedMouseMovement();

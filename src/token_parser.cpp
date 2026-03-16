@@ -882,7 +882,7 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
 
     if (!g_parserAbort) {
         hidReleaseAll();
-        delay(KEY_RELEASE_DELAY);
+        delay(g_keyReleaseDelay);
     }
 }
 

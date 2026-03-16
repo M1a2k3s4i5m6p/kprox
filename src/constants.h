@@ -199,9 +199,9 @@ typedef struct { uint8_t r, g, b; } LEDColor;
 // F13-F24 are already defined in BleComboKeyboard.h as 0xF0-0xFB. Do not redefine.
 
 // ---- Timing constants (ms) ----
-#define KEY_PRESS_DELAY          25
-#define KEY_RELEASE_DELAY        15
-#define BETWEEN_KEYS_DELAY       30
-#define BETWEEN_SEND_TEXT_DELAY  100
+#define KEY_PRESS_DELAY          10
+#define KEY_RELEASE_DELAY        10
+#define BETWEEN_KEYS_DELAY       10
+#define BETWEEN_SEND_TEXT_DELAY  10
 #define SPECIAL_KEY_DELAY        50
-#define TOKEN_DELAY              100
+#define TOKEN_DELAY              10

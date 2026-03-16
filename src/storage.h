@@ -31,4 +31,13 @@ void loadKeymapSettings();
 void saveSinkSettings();
 void loadSinkSettings();
 
+void saveTimingSettings();
+void loadTimingSettings();
+
+void saveHostnameSettings();
+void loadHostnameSettings();
+
+void saveDefaultAppSettings();
+void loadDefaultAppSettings();
+
 void wipeAllSettings();

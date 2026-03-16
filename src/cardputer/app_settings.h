@@ -15,17 +15,14 @@ public:
     uint16_t iconColor() const override { return 0x07E0; }
 
 private:
-    // 0=WiFi, 1=Bluetooth, 2=USB, 3=API Key, 4=Device Identity, 5=Sink Config
-    static constexpr int NUM_PAGES = 6;
+    // 0=WiFi, 1=BT, 2=USB, 3=API Key, 4=Device Identity, 5=Sink Config, 6=Timing, 7=Network Identity
+    static constexpr int NUM_PAGES = 9;
     int  _page        = 0;
     bool _needsRedraw = true;
 
-    // Page 0: BT toggles  (3 items: BT enable, BT Keyboard, BT Mouse)
-    // Page 1: USB toggles (4 items: USB enable, USB Keyboard, USB Mouse, FIDO2)
     int  _toggleSel  = 0;
     bool _rebootNote = false;
 
-    // Page 2: WiFi setup
     enum WifiInputState { WS_SSID, WS_PASS, WS_CONNECTING, WS_DONE };
     WifiInputState _wifiState = WS_SSID;
     String         _wifiInputBuf;
@@ -33,11 +30,13 @@ private:
     String         _wifiStatusMsg;
     bool           _wifiSuccess = false;
 
-    // Pages 3 & 4: editable fields
     int    _idSel   = 0;
     bool   _editing = false;
     String _editBuf;
     bool   _idSaved = false;
+
+    // Timing page
+    int    _timingSel = 0;
 
     void _drawTopBar(int pageNum);
     void _drawBottomBar(const char* hint);
@@ -47,12 +46,18 @@ private:
     void _drawPage3();
     void _drawPage4();
     void _drawPage5();
+    void _drawPage6();
+    void _drawPage7();
+    void _drawPage8();
     void _handlePage0(KeyInput ki);
     void _handlePage1(KeyInput ki);
     void _handlePage2(KeyInput ki);
     void _handlePage3(KeyInput ki);
     void _handlePage4(KeyInput ki);
     void _handlePage5(KeyInput ki);
+    void _handlePage6(KeyInput ki);
+    void _handlePage7(KeyInput ki);
+    void _handlePage8(KeyInput ki);
     void _connectWifi();
     void _drawInputField(int x, int y, int w, const String& text, bool active, bool masked = false);
     void _drawToggleRow(int y, bool selected, const char* label, bool enabled,

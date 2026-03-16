@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Unlock Android",
+    "description": "Unlock Android device, must set the credential 'android' in the credential store and credential store must be unlocked.",
+    "content": "{SYSTEMWAKE}{SLEEP 100}{UP}{ENTER}{SLEEP 100}{CREDSTORE android}{ENTER}"
+  }
+}
