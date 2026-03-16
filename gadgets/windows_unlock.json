@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Unlock Windows",
+    "description": "Unlocks a Windows lock screen using the 'winblows' credential from the credential store. The credential store must be unlocked before use.",
+    "content": "{CHORD CTRL+ALT+DEL}{SLEEP 1000}{CREDSTORE winblows}{ENTER}"
+  }
+}
