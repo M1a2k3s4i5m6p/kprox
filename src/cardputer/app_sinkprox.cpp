@@ -173,15 +173,16 @@ void AppSinkProx::_draw() {
     disp.drawString("POST http://" + baseIP + "/api/sink", 4, y); y += 12;
     disp.drawString("POST http://" + baseMdns + "/api/sink", 4, y); y += 15;
 
-    // curl tip — small font
+    // curl tip
     disp.setTextColor(disp.color565(100, 160, 120), SK_BG);
     disp.setTextSize(1);
-    disp.drawString("curl example:", 4, y); y += 12;
+    disp.drawString("curl tip:", 4, y); y += 12;
     disp.setTextSize(0);
     disp.setTextColor(disp.color565(140, 190, 140), SK_BG);
-    disp.drawString(("curl -X POST http://" + baseIP + "/api/sink").c_str(), 4, y); y += 9;
-    disp.drawString("-H \"X-Auth:<hmac>\" -d '{\"text\":\"hello\"}'", 4, y); y += 11;
-    disp.setTextSize(1);
+    disp.drawString(("curl -X POST http://" + baseMdns + "/api/sink").c_str(), 4, y); y += 9;
+    disp.drawString("  -H \"Content-Type: text/plain\"", 4, y); y += 9;
+    disp.drawString("  --data-binary \"your data here\"", 4, y); y += 11;
+    disp.setTextSize(0);
 
     // Status message
     if (_statusMsg.length() > 0) {

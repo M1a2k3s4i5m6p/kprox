@@ -1,0 +1,7 @@
+{
+  "gadget": {
+    "name": "Linux S3 suspend",
+    "description": "Suspends linux to S3 sleep using consumer controls 0x82 (System Sleep) KEY_SLEEP signal.",
+    "content": "{SYSTEMSLEEP}"
+  }
+}
