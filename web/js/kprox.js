@@ -24,6 +24,7 @@ let lastTrackpadPosition = {x: 0, y: 0};
 let trackpadPendingDx = 0;
 let trackpadPendingDy = 0;
 let ipAddress = null;
+let deviceHostname = null;
 
 // Mouse movement pipeline -- separate from the main API queue to avoid latency from
 // nonce serialisation competing with keyboard/register requests.
@@ -1755,6 +1756,71 @@ async function sinkDelete() {
     } catch(e) { logDebug('Sink delete error: ' + e.message, 'error'); }
 }
 
+async function saveSinkMaxSize() {
+    if (!isConnected) { logDebug('Not connected', 'warning'); return; }
+    const val = parseInt(document.getElementById('sinkMaxSizeInput')?.value) || 0;
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/settings`, {
+            method: 'POST', body: JSON.stringify({ maxSinkSize: val })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        _statusMsg('sinkMaxStatus', `✓ Limit set to ${val === 0 ? 'unlimited' : val + ' bytes'}`, true);
+        await refreshSinkSize();
+    } catch(e) {
+        _statusMsg('sinkMaxStatus', '✗ ' + e.message, false);
+    }
+}
+
+async function refreshSinkSize() {
+    if (!isConnected) return;
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/sink_size`, { method: 'GET' });
+        if (!resp.ok) return;
+        const d = await resp.json();
+        const cur = d.size ?? 0;
+        const max = d.max_size ?? 0;
+        const label = document.getElementById('sinkCurrentSize');
+        if (label) {
+            label.textContent = max > 0
+                ? `${cur} / ${max} bytes`
+                : `${cur} bytes (unlimited)`;
+        }
+        updateSinkBadge(cur);
+        if (d.max_size !== undefined) _setVal('sinkMaxSizeInput', d.max_size);
+    } catch(e) { /* silently skip */ }
+}
+
+function updateSinkCurlExamples() {
+    const ip   = ipAddress;
+    const host = deviceHostname;
+
+    const ipEl   = document.getElementById('sinkCurlIp');
+    const hostEl = document.getElementById('sinkCurlHostname');
+    const fileEl = document.getElementById('sinkCurlFile');
+
+    if (!ipEl || !hostEl || !fileEl) return;
+
+    if (!ip) {
+        const placeholder = 'Connect to device to generate command';
+        ipEl.textContent = hostEl.textContent = fileEl.textContent = placeholder;
+        return;
+    }
+
+    ipEl.textContent =
+`curl -X POST http://${ip}/api/sink \\
+  -H "Content-Type: text/plain" \\
+  --data-binary "your data here"`;
+
+    hostEl.textContent = host
+        ? `curl -X POST http://${host}.local/api/sink \\\n  -H "Content-Type: text/plain" \\\n  --data-binary "your data here"`
+        : '(hostname not available — enable mDNS in device settings)';
+
+    fileEl.textContent =
+`curl -X POST http://${ip}/api/sink \\
+  -H "Content-Type: text/plain" \\
+  --data-binary @yourfile.txt`;
+}
+
 function updateConnectivityUI(data) {
     // BT
     const btBtn = document.getElementById('bluetoothToggle');
@@ -2444,7 +2510,7 @@ function fuzzyRender(out) {
                      style="display:flex;align-items:center;gap:8px;padding:5px 8px;
                             background:${rowBg};border-bottom:1px solid ${border};cursor:pointer;"
                      onclick="fuzzySelectRow(${vi})">
-                    <span style="color:#6c757d;font-size:11px;min-width:26px;">#${idx}</span>
+                    <span style="color:#6c757d;font-size:11px;min-width:26px;">#${idx + 1}</span>
                     <span style="color:#28a745;font-size:11px;min-width:10px;">${isActive ? '*' : ''}</span>
                     <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;"
                           title="${escapeHtml(content)}">${escapeHtml(label)}</span>
@@ -2806,13 +2872,26 @@ async function addSchedTask() {
     if (!isConnected) { logDebug('Not connected', 'warning'); return; }
     const payload = document.getElementById('schedPayload')?.value.trim();
     if (!payload) { _statusMsg('schedAddStatus', '✗ Payload is required', false); return; }
+
+    const dtVal = document.getElementById('schedDatetime')?.value || '';
+    let year = 0, month = 0, day = 0, hour = 0, minute = 0;
+    if (dtVal) {
+        const dt = new Date(dtVal);
+        // year 1970 = "any year" sentinel → send 0
+        year   = dt.getFullYear() === 1970 ? 0 : dt.getFullYear();
+        month  = dt.getFullYear() === 1970 ? 0 : (dt.getMonth() + 1);
+        day    = dt.getFullYear() === 1970 ? 0 : dt.getDate();
+        hour   = dt.getHours();
+        minute = dt.getMinutes();
+    }
+
     const task = {
         label:   document.getElementById('schedLabel')?.value.trim() || '',
-        year:    parseInt(document.getElementById('schedYear')?.value)   || 0,
-        month:   parseInt(document.getElementById('schedMonth')?.value)  || 0,
-        day:     parseInt(document.getElementById('schedDay')?.value)    || 0,
-        hour:    parseInt(document.getElementById('schedHour')?.value)   || 0,
-        minute:  parseInt(document.getElementById('schedMinute')?.value) || 0,
+        year,
+        month,
+        day,
+        hour,
+        minute,
         second:  parseInt(document.getElementById('schedSecond')?.value) || 0,
         payload,
         enabled: true,
@@ -2824,10 +2903,11 @@ async function addSchedTask() {
         });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         _statusMsg('schedAddStatus', '✓ Task added', true);
-        // clear form
-        ['schedLabel','schedPayload'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
-        ['schedYear','schedMonth','schedDay','schedHour','schedMinute','schedSecond'].forEach(id => { const e=document.getElementById(id); if(e) e.value='0'; });
-        const rep = document.getElementById('schedRepeat'); if(rep) rep.checked=false;
+        document.getElementById('schedLabel').value   = '';
+        document.getElementById('schedPayload').value = '';
+        document.getElementById('schedDatetime').value = '';
+        document.getElementById('schedSecond').value  = '0';
+        const rep = document.getElementById('schedRepeat'); if (rep) rep.checked = false;
         await loadSchedTasks();
     } catch(e) {
         _statusMsg('schedAddStatus', '✗ ' + e.message, false);
@@ -2915,8 +2995,93 @@ async function loadSettingsTab() {
             const sel = document.getElementById('defaultAppSelect');
             if (sel) sel.value = String(d.defaultApp);
         }
+
+        // Sink buffer max size
+        if (d.maxSinkSize !== undefined) {
+            _setVal('sinkMaxSizeInput', d.maxSinkSize);
+        }
+        refreshSinkSize();
+        updateSinkCurlExamples();
+
+        // App layout
+        if (d.appOrder && d.appHidden) {
+            _renderAppLayout(d.appOrder, d.appHidden);
+        }
     } catch (e) {
         logDebug('loadSettingsTab: ' + e.message, 'warning');
+    }
+}
+
+// ---- App Layout ----
+
+const APP_NAMES = ['KProx','FuzzyProx','RegEdit','CredStore','Gadgets','SinkProx','Keyboard','Clock','QRProx','SchedProx','Settings'];
+let _appOrder  = [];
+let _appHidden = [];
+
+function _renderAppLayout(order, hidden) {
+    _appOrder  = order  ? [...order]  : Array.from({length: APP_NAMES.length}, (_, i) => i + 1);
+    _appHidden = hidden ? [...hidden] : Array(_appOrder.length).fill(false);
+
+    const el = document.getElementById('appLayoutList');
+    if (!el) return;
+
+    el.innerHTML = _appOrder.map((appIdx, pos) => {
+        const name       = APP_NAMES[appIdx - 1] || `App ${appIdx}`;
+        const isSettings = appIdx === APP_NAMES.length;
+        const hidden_    = _appHidden[pos] || false;
+        const rowBg      = hidden_ ? '#f8d7da' : '#f0fff4';
+        const badge      = isSettings ? '<span style="font-size:11px;color:#6c757d;margin-left:6px;">always visible</span>'
+            : `<button onclick="_appLayoutToggle(${pos})" style="padding:2px 8px;font-size:11px;background:${hidden_ ? '#198754' : '#dc3545'};color:#fff;border:none;border-radius:3px;cursor:pointer;">${hidden_ ? 'Show' : 'Hide'}</button>`;
+        const moveUp   = pos > 0 && !isSettings
+            ? `<button onclick="_appLayoutMove(${pos},-1)" style="padding:2px 6px;font-size:11px;background:#6c757d;color:#fff;border:none;border-radius:3px;cursor:pointer;">↑</button>` : '';
+        const moveDown = pos < _appOrder.length - 2 && !isSettings
+            ? `<button onclick="_appLayoutMove(${pos},1)" style="padding:2px 6px;font-size:11px;background:#6c757d;color:#fff;border:none;border-radius:3px;cursor:pointer;">↓</button>` : '';
+        return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:${rowBg};border:1px solid #dee2e6;border-radius:4px;margin-bottom:4px;">
+            <span style="color:#6c757d;font-size:11px;min-width:20px;">${pos + 1}.</span>
+            <span style="flex:1;font-size:13px;${hidden_ ? 'color:#999;text-decoration:line-through;' : ''}">${_esc(name)}</span>
+            ${moveUp}${moveDown}${badge}
+        </div>`;
+    }).join('');
+}
+
+function _appLayoutToggle(pos) {
+    if (pos < _appHidden.length && _appOrder[pos] !== APP_NAMES.length) {
+        _appHidden[pos] = !_appHidden[pos];
+        _renderAppLayout(_appOrder, _appHidden);
+    }
+}
+
+function _appLayoutMove(pos, delta) {
+    const newPos = pos + delta;
+    if (newPos < 0 || newPos >= _appOrder.length - 1) return; // can't move past Settings
+    [_appOrder[pos],  _appOrder[newPos]]  = [_appOrder[newPos],  _appOrder[pos]];
+    [_appHidden[pos], _appHidden[newPos]] = [_appHidden[newPos], _appHidden[pos]];
+    _renderAppLayout(_appOrder, _appHidden);
+}
+
+async function loadAppLayout() {
+    if (!isConnected) return;
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/settings`, { method: 'GET' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const d = await resp.json();
+        if (d.appOrder && d.appHidden) _renderAppLayout(d.appOrder, d.appHidden);
+    } catch(e) {
+        logDebug('loadAppLayout: ' + e.message, 'error');
+    }
+}
+
+async function saveAppLayout() {
+    if (!isConnected) { logDebug('Not connected', 'warning'); return; }
+    try {
+        const resp = await apiFetch(`${getApiEndpoint()}/api/settings`, {
+            method: 'POST',
+            body: JSON.stringify({ appOrder: _appOrder, appHidden: _appHidden })
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        _statusMsg('appLayoutStatus', '✓ Layout saved', true);
+    } catch(e) {
+        _statusMsg('appLayoutStatus', '✗ ' + e.message, false);
     }
 }
 
@@ -3856,6 +4021,7 @@ async function connect() {
         // Extract basic info
         safeSetText('deviceName', data.boardType || '-');
         safeSetText('hostname',   data.hostname  || '-');
+        if (data.hostname) deviceHostname = data.hostname;
         safeSetText('freeHeap',   data.free_heap ? `${(data.free_heap / 1024).toFixed(1)} KB` : '-');
         safeSetText('uptime',     data.uptime    ? `${Math.floor(data.uptime / 1000)}s` : '-');
 
@@ -3870,7 +4036,7 @@ async function connect() {
         // IP -- available directly on response and also nested under wifi
         const ip = data.ip || (data.connections && data.connections.wifi && data.connections.wifi.ip) || '-';
         safeSetText('ipAddress', ip);
-        if (ip !== '-') ipAddress = ip;
+        if (ip !== '-') { ipAddress = ip; updateSinkCurlExamples(); }
 
         if (data.activeKeymap) {
             safeSetText('keymapActive', data.activeKeymap);

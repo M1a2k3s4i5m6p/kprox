@@ -192,6 +192,13 @@ extern String usbSerialNumber;
 
 // ---- Default startup app (Cardputer launcher index) ----
 extern int defaultAppIndex;
+
+// App display order and visibility (indices 1..N_APPS into registered apps).
+// appOrder[i] = registered app index to show at launcher position i.
+// appHidden[i] = true if that registered app index should not appear in launcher.
+// Settings app (last registered) can never be hidden.
+extern std::vector<int>  appOrder;
+extern std::vector<bool> appHidden;
 // Cleared at the start of putTokenString() before each new run.
 extern bool g_parserAbort;
 

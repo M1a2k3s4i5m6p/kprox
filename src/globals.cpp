@@ -13,4 +13,8 @@ String hostnameStr     = HOSTNAME;
 String usbSerialNumber = USB_SERIAL_NUMBER;
 
 // ---- Default startup app ----
-int defaultAppIndex = 1; // 1 = KProx (first real app after launcher)
+int defaultAppIndex = 1;
+
+// ---- App display order and visibility ----
+std::vector<int>  appOrder;
+std::vector<bool> appHidden;

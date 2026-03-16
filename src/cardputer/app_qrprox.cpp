@@ -2,6 +2,7 @@
 
 #include "../globals.h"
 #include "app_qrprox.h"
+#include "../hid.h"
 #include <WiFi.h>
 #include <qrcode.h>
 
@@ -103,13 +104,23 @@ void AppQRProx::_draw() {
     // Bottom bar
     disp.fillRect(0, disp.height() - 14, disp.width(), 14, disp.color565(16, 16, 16));
     disp.setTextColor(disp.color565(110, 110, 110), disp.color565(16, 16, 16));
-    disp.drawString("Scan to open web interface  ESC", 2, disp.height() - 13);
+    disp.drawString("Scan to open  BtnG0=type URL  ESC", 2, disp.height() - 13);
 }
 
 void AppQRProx::onUpdate() {
     if (_needsRedraw) {
         _draw();
         _needsRedraw = false;
+    }
+
+    // Physical G0 button — must be checked before the anyKey gate since no
+    // keyboard key needs to be pressed alongside it.
+    if (M5Cardputer.BtnA.wasPressed()) {
+        uiManager.notifyInteraction();
+        if (WiFi.status() == WL_CONNECTED) {
+            sendPlainText("http://" + WiFi.localIP().toString());
+        }
+        return;
     }
 
     KeyInput ki = pollKeys();
@@ -119,7 +130,6 @@ void AppQRProx::onUpdate() {
     if (ki.esc) {
         uiManager.returnToLauncher();
     } else {
-        // Any other key refreshes (WiFi state may have changed)
         _needsRedraw = true;
     }
 }

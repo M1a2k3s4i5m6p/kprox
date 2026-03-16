@@ -75,6 +75,24 @@ void UIManager::addApp(AppBase* app) {
     _apps.push_back(app);
 }
 
+std::vector<int> UIManager::visibleApps() const {
+    std::vector<int> result;
+    int numApps = (int)_apps.size() - 1; // exclude launcher at 0
+    if (appOrder.empty() || (int)appOrder.size() < numApps) {
+        // fallback: natural order, nothing hidden
+        for (int i = 1; i <= numApps; i++) result.push_back(i);
+    } else {
+        for (size_t i = 0; i < appOrder.size(); i++) {
+            int idx = appOrder[i];
+            if (idx >= 1 && idx < (int)_apps.size()) {
+                bool hidden = (i < appHidden.size()) && appHidden[i];
+                if (!hidden) result.push_back(idx);
+            }
+        }
+    }
+    return result;
+}
+
 void UIManager::launchApp(int index) {
     if (index < 0 || index >= (int)_apps.size()) return;
     if (_currentApp < (int)_apps.size()) _apps[_currentApp]->onExit();

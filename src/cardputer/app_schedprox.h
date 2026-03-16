@@ -14,21 +14,23 @@ public:
     void onUpdate() override;
     void requestRedraw() override { _needsRedraw = true; }
     const char* appName() const override { return "SchedProx"; }
-    uint16_t iconColor() const override { return 0x8C20; } // amber
+    uint16_t iconColor() const override { return 0x8C20; }
     bool handlesGlobalBtnA() const override { return true; }
 
 private:
-    enum State { ST_LIST, ST_VIEW, ST_ADD_FIELD, ST_CONFIRM_DELETE };
+    enum State { ST_LIST, ST_VIEW, ST_ADD, ST_CONFIRM_DELETE };
     State  _state       = ST_LIST;
     bool   _needsRedraw = true;
 
-    // List view
-    int _listSel  = 0;
+    int _listSel    = 0;
     int _listScroll = 0;
 
-    // Add/edit — field index maps to: 0=label 1=year 2=month 3=day 4=hour 5=minute 6=second 7=payload 8=repeat
-    int    _fieldSel  = 0;
+    // Add form state — 4 sections: 0=label 1=datetime 2=payload 3=options
+    int    _addSection  = 0;  // which row is selected
+    // datetime cursor: 0=year 1=month 2=day 3=hour 4=minute 5=second
+    int    _dtCursor    = 0;
     String _editBuf;
+    bool   _editingText = false;  // for label/payload text fields
     ScheduledTask _draft;
 
     void _resetDraft();
@@ -44,9 +46,13 @@ private:
 
     void _drawTopBar(const char* title);
     void _drawBottomBar(const char* hint);
-    bool _fieldIsNumeric(int fi);
-    String _draftField(int fi);
-    void _applyField(int fi, const String& val);
+
+    // datetime helpers
+    void  _dtIncrement(int cursor, int delta);
+    int   _dtGet(int cursor) const;
+    void  _dtSet(int cursor, int val);
+    const char* _dtLabel(int cursor) const;
+    int   _dtMax(int cursor) const;
 };
 
 } // namespace Cardputer

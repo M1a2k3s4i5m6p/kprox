@@ -507,6 +507,51 @@
                     </div>
 
                     <div class="section settings-section">
+                        <h3>App Layout</h3>
+                        <p class="settings-hint" style="margin-bottom:10px;">Drag to reorder apps in the launcher. Toggle visibility to hide apps. Settings cannot be hidden.</p>
+                        <div id="appLayoutList" style="margin-bottom:10px;"></div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button onclick="loadAppLayout()">Refresh</button>
+                            <button onclick="saveAppLayout()">Save Layout</button>
+                        </div>
+                        <div id="appLayoutStatus" class="settings-status"></div>
+                    </div>
+
+                    <div class="section settings-section">
+                        <h3>Sink Buffer</h3>
+                        <p class="settings-hint" style="margin-bottom:12px;">The sink is a write-only accumulator. Any client can POST unstructured data to it without authentication. Flush it via the sidebar to replay the contents as HID keystrokes.</p>
+
+                        <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
+                            <div class="settings-field" style="flex:0 0 220px;">
+                                <label class="settings-label">Max Buffer Size (bytes) <span class="settings-default">0 = unlimited</span></label>
+                                <input type="number" id="sinkMaxSizeInput" min="0" value="0" style="width:100%;" />
+                                <div class="settings-hint">Current usage: <span id="sinkCurrentSize">—</span></div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:6px;padding-top:18px;">
+                                <button onclick="saveSinkMaxSize()">Save Limit</button>
+                                <button onclick="refreshSinkSize()" style="background:#6c757d;">Refresh Size</button>
+                            </div>
+                        </div>
+                        <div id="sinkMaxStatus" class="settings-status" style="margin-bottom:14px;"></div>
+
+                        <h4 style="margin:0 0 8px;">POST to sink buffer</h4>
+                        <p class="settings-hint" style="margin-bottom:10px;">No API key required. The body is stored verbatim; a <code>{"text":"…"}</code> JSON wrapper is also accepted and unwrapped automatically.</p>
+
+                        <div style="margin-bottom:10px;">
+                            <div style="font-size:12px;color:#6c757d;margin-bottom:4px;">By IP address</div>
+                            <pre id="sinkCurlIp" style="background:#1e1e1e;color:#d4d4d4;padding:10px 12px;border-radius:4px;font-size:12px;overflow-x:auto;margin:0;white-space:pre-wrap;word-break:break-all;">Connect to device to generate command</pre>
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            <div style="font-size:12px;color:#6c757d;margin-bottom:4px;">By hostname (.local mDNS)</div>
+                            <pre id="sinkCurlHostname" style="background:#1e1e1e;color:#d4d4d4;padding:10px 12px;border-radius:4px;font-size:12px;overflow-x:auto;margin:0;white-space:pre-wrap;word-break:break-all;">Connect to device to generate command</pre>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;color:#6c757d;margin-bottom:4px;">Pipe a file</div>
+                            <pre id="sinkCurlFile" style="background:#1e1e1e;color:#d4d4d4;padding:10px 12px;border-radius:4px;font-size:12px;overflow-x:auto;margin:0;white-space:pre-wrap;word-break:break-all;">Connect to device to generate command</pre>
+                        </div>
+                    </div>
+
+                    <div class="section settings-section">
                         <h3>System Controls</h3>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;">
                             <button onclick="wipeSettings()" class="danger-btn" style="width:auto;margin-bottom:0;">Wipe Settings</button>
@@ -619,7 +664,7 @@
                 <div id="schedtasks-tab" class="tab-content">
                     <div class="section settings-section">
                         <h3>Scheduled Tasks</h3>
-                        <p class="settings-hint" style="margin-bottom:14px;">Tasks fire when the device clock matches the configured time. Year/Month/Day set to 0 match any value. Requires WiFi + NTP sync.</p>
+                        <p class="settings-hint" style="margin-bottom:14px;">Tasks fire when the device clock matches the configured time. Leave the date-time at epoch (1970-01-01T00:00) to match any date — only the time components that matter need to be non-zero. Requires WiFi + NTP sync.</p>
 
                         <!-- Add task form -->
                         <div class="settings-subsection" style="padding:14px;border:1px solid #dee2e6;border-radius:6px;margin-bottom:18px;">
@@ -635,31 +680,16 @@
                                     <div class="settings-hint">Any valid KProx token string.</div>
                                 </div>
                             </div>
-                            <div class="settings-grid" style="margin-top:10px;">
-                                <div class="settings-field">
-                                    <label class="settings-label">Year <span class="settings-default">0 = any</span></label>
-                                    <input type="number" id="schedYear" min="0" max="2099" placeholder="0" value="0" style="width:100%;" />
+                            <div style="margin-top:12px;">
+                                <label class="settings-label">Date &amp; Time <span class="settings-default">set date to 1970-01-01 to match any date (daily)</span></label>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+                                    <input type="datetime-local" id="schedDatetime" style="flex:1;min-width:180px;" />
+                                    <div style="display:flex;align-items:center;gap:6px;">
+                                        <label class="settings-label" style="margin:0;white-space:nowrap;">Second <span class="settings-default">0–59</span></label>
+                                        <input type="number" id="schedSecond" min="0" max="59" value="0" style="width:60px;" />
+                                    </div>
                                 </div>
-                                <div class="settings-field">
-                                    <label class="settings-label">Month <span class="settings-default">0 = any, 1–12</span></label>
-                                    <input type="number" id="schedMonth" min="0" max="12" placeholder="0" value="0" style="width:100%;" />
-                                </div>
-                                <div class="settings-field">
-                                    <label class="settings-label">Day <span class="settings-default">0 = any, 1–31</span></label>
-                                    <input type="number" id="schedDay" min="0" max="31" placeholder="0" value="0" style="width:100%;" />
-                                </div>
-                                <div class="settings-field">
-                                    <label class="settings-label">Hour <span class="settings-default">0–23</span></label>
-                                    <input type="number" id="schedHour" min="0" max="23" placeholder="0" value="0" style="width:100%;" />
-                                </div>
-                                <div class="settings-field">
-                                    <label class="settings-label">Minute <span class="settings-default">0–59</span></label>
-                                    <input type="number" id="schedMinute" min="0" max="59" placeholder="0" value="0" style="width:100%;" />
-                                </div>
-                                <div class="settings-field">
-                                    <label class="settings-label">Second <span class="settings-default">0–59</span></label>
-                                    <input type="number" id="schedSecond" min="0" max="59" placeholder="0" value="0" style="width:100%;" />
-                                </div>
+                                <div class="settings-hint" style="margin-top:4px;">Year 0 (1970) = match any year, month 0 = any month, day 0 = any day.</div>
                             </div>
                             <div style="display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap;">
                                 <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">

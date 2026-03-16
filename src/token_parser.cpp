@@ -358,6 +358,13 @@ static String evaluateAllTokens(String input, std::map<String, String>& vars) {
             label.trim();
             replacement = credStoreLocked ? "" : credStoreGet(label);
             resolved    = true;
+        } else if (upperToken == "KPROX_IP") {
+#ifdef BOARD_M5STACK_CARDPUTER
+            replacement = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "";
+#else
+            replacement = WiFi.localIP().toString();
+#endif
+            resolved    = true;
         }
 
         if (resolved) {

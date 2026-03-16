@@ -96,24 +96,23 @@ void AppLauncher::_drawIcon(int appIndex, int screenX, bool selected) {
     int slotW = ICON_SEL_SIZE + ICON_GAP;
     int drawX = screenX + (slotW - iconSz) / 2;
 
-    int appIdx = appIndex + 1;
-
-    const uint16_t* icon = uiManager.apps()[appIdx]->appIcon();
+    // appIndex is already the real registered index (1-based)
+    const uint16_t* icon = uiManager.apps()[appIndex]->appIcon();
     if (icon) {
         disp.pushImage(drawX, iconY, iconSz, iconSz, icon);
     } else {
-        uint16_t col = uiManager.apps()[appIdx]->iconColor();
+        uint16_t col = uiManager.apps()[appIndex]->iconColor();
         disp.fillRoundRect(drawX, iconY, iconSz, iconSz, 8, col);
 
         disp.setTextSize(selected ? 3 : 2);
         disp.setTextColor(TFT_WHITE, col);
-        char letter[2] = { uiManager.apps()[appIdx]->appName()[0], 0 };
+        char letter[2] = { uiManager.apps()[appIndex]->appName()[0], 0 };
         int tw = disp.textWidth(letter);
         int th = disp.fontHeight();
         disp.drawString(letter, drawX + (iconSz - tw) / 2, iconY + (iconSz - th) / 2);
     }
 
-    const char* name = uiManager.apps()[appIdx]->appName();
+    const char* name = uiManager.apps()[appIndex]->appName();
     disp.setTextSize(1);
     uint16_t labelColor = selected ? TFT_YELLOW : disp.color565(200, 200, 200);
     disp.setTextColor(labelColor, TFT_BLACK);
@@ -129,8 +128,12 @@ void AppLauncher::_drawMenu() {
 
     _drawStatusBar();
 
-    int numApps = (int)uiManager.apps().size() - 1;
+    std::vector<int> visible = uiManager.visibleApps();
+    int numApps = (int)visible.size();
     if (numApps <= 0) return;
+
+    // Clamp selection
+    if (_selected >= numApps) _selected = numApps - 1;
 
     int slotW   = ICON_SEL_SIZE + ICON_GAP;
     int centerX = disp.width() / 2;
@@ -139,7 +142,7 @@ void AppLauncher::_drawMenu() {
     for (int i = 0; i < numApps; i++) {
         int sx = startX + i * slotW;
         if (sx + slotW < 0 || sx > disp.width()) continue;
-        _drawIcon(i, sx, i == _selected);
+        _drawIcon(visible[i], sx, i == _selected);
     }
 
     disp.setTextSize(1);
@@ -163,7 +166,8 @@ void AppLauncher::onUpdate() {
     if (!ki.anyKey) return;
     uiManager.notifyInteraction();
 
-    int numApps = (int)uiManager.apps().size() - 1;
+    std::vector<int> visible = uiManager.visibleApps();
+    int numApps = (int)visible.size();
 
     if (ki.arrowLeft || ki.arrowUp) {
         _selected = (_selected - 1 + numApps) % numApps;
@@ -172,7 +176,7 @@ void AppLauncher::onUpdate() {
         _selected = (_selected + 1) % numApps;
         _needsRedraw = true;
     } else if (ki.enter) {
-        uiManager.launchApp(_selected + 1);
+        if (_selected < numApps) uiManager.launchApp(visible[_selected]);
     }
 }
 

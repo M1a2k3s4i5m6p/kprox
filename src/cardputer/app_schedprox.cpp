@@ -12,19 +12,61 @@ static constexpr int      SP_BAR_H = 16;
 static constexpr int      SP_BOT_H = 14;
 static constexpr int      SP_Y     = SP_BAR_H + 3;
 
-static const char* FIELD_NAMES[9] = {
-    "Label", "Year (0=any)", "Month (0=any)", "Day (0=any)",
-    "Hour", "Minute", "Second", "Payload", "Repeat? (y/n)"
-};
-
-bool AppSchedProx::_fieldIsNumeric(int fi) {
-    return fi >= 1 && fi <= 6;
+void AppSchedProx::_resetDraft() {
+    _draft         = ScheduledTask{};
+    _draft.enabled = true;
+    _draft.repeat  = false;
 }
 
-void AppSchedProx::_resetDraft() {
-    _draft          = ScheduledTask{};
-    _draft.enabled  = true;
-    _draft.repeat   = false;
+// ---- datetime field helpers ----
+
+int AppSchedProx::_dtGet(int cursor) const {
+    switch (cursor) {
+        case 0: return _draft.year;
+        case 1: return _draft.month;
+        case 2: return _draft.day;
+        case 3: return _draft.hour;
+        case 4: return _draft.minute;
+        case 5: return _draft.second;
+    }
+    return 0;
+}
+
+void AppSchedProx::_dtSet(int cursor, int val) {
+    switch (cursor) {
+        case 0: _draft.year   = val; break;
+        case 1: _draft.month  = val; break;
+        case 2: _draft.day    = val; break;
+        case 3: _draft.hour   = val; break;
+        case 4: _draft.minute = val; break;
+        case 5: _draft.second = val; break;
+    }
+}
+
+int AppSchedProx::_dtMax(int cursor) const {
+    switch (cursor) {
+        case 0: return 2099;
+        case 1: return 12;
+        case 2: return 31;
+        case 3: return 23;
+        case 4: return 59;
+        case 5: return 59;
+    }
+    return 0;
+}
+
+const char* AppSchedProx::_dtLabel(int cursor) const {
+    static const char* labels[6] = { "Y", "Mo", "D", "H", "Mi", "S" };
+    return labels[cursor];
+}
+
+void AppSchedProx::_dtIncrement(int cursor, int delta) {
+    int maxVal = _dtMax(cursor);
+    int cur    = _dtGet(cursor);
+    cur += delta;
+    if (cur < 0)       cur = maxVal;
+    if (cur > maxVal)  cur = 0;
+    _dtSet(cursor, cur);
 }
 
 // ---- bars ----
@@ -57,9 +99,9 @@ void AppSchedProx::_drawList() {
     disp.fillScreen(SP_BG);
     _drawTopBar("Tasks");
 
-    int y        = SP_Y;
-    int rowH     = 17;
-    int visible  = (disp.height() - SP_BAR_H - SP_BOT_H - 4) / rowH;
+    int y       = SP_Y;
+    int rowH    = 17;
+    int visible = (disp.height() - SP_BAR_H - SP_BOT_H - 4) / rowH;
 
     if (scheduledTasks.empty()) {
         disp.setTextColor(disp.color565(100, 100, 100), SP_BG);
@@ -82,10 +124,10 @@ void AppSchedProx::_drawList() {
         if (sel) disp.fillRect(0, y - 1, disp.width(), rowH, rowBg);
 
         disp.fillCircle(6, y + 6, 3,
-            t.enabled ? disp.color565(80,220,80) : disp.color565(100,100,100));
+            t.enabled ? disp.color565(80, 220, 80) : disp.color565(100, 100, 100));
 
         disp.setTextSize(1);
-        disp.setTextColor(sel ? TFT_WHITE : disp.color565(200,200,200), rowBg);
+        disp.setTextColor(sel ? TFT_WHITE : disp.color565(200, 200, 200), rowBg);
         String lbl = (sel ? "> " : "  ") +
                      (t.label.isEmpty() ? String("Task " + String(t.id)) : t.label);
         if ((int)lbl.length() > 18) lbl = lbl.substring(0, 18);
@@ -100,15 +142,15 @@ void AppSchedProx::_drawList() {
             snprintf(sched, sizeof(sched), "daily %02d:%02d:%02d", t.hour, t.minute, t.second);
 
         int sw = disp.textWidth(sched);
-        disp.setTextColor(sel ? disp.color565(255,200,80) : disp.color565(120,120,120), rowBg);
+        disp.setTextColor(sel ? disp.color565(255, 200, 80) : disp.color565(120, 120, 120), rowBg);
         disp.drawString(sched, disp.width() - sw - 2, y);
         y += rowH;
     }
 
     if ((int)scheduledTasks.size() > visible) {
-        char pg[10]; snprintf(pg, sizeof(pg), "%d/%d", _listSel+1, (int)scheduledTasks.size());
-        disp.setTextColor(disp.color565(80,80,80), SP_BG);
-        disp.drawString(pg, disp.width()-disp.textWidth(pg)-2, disp.height()-SP_BOT_H-10);
+        char pg[10]; snprintf(pg, sizeof(pg), "%d/%d", _listSel + 1, (int)scheduledTasks.size());
+        disp.setTextColor(disp.color565(80, 80, 80), SP_BG);
+        disp.drawString(pg, disp.width() - disp.textWidth(pg) - 2, disp.height() - SP_BOT_H - 10);
     }
 
     _drawBottomBar("up/dn  ENTER view  N=new  D=del  ESC");
@@ -116,15 +158,15 @@ void AppSchedProx::_drawList() {
 
 void AppSchedProx::_handleList(KeyInput ki) {
     int n = max(1, (int)scheduledTasks.size());
-    if (ki.arrowUp)   { _listSel = (_listSel-1+n)%n; _needsRedraw = true; }
-    if (ki.arrowDown) { _listSel = (_listSel+1)%n;   _needsRedraw = true; }
+    if (ki.arrowUp)   { _listSel = (_listSel - 1 + n) % n; _needsRedraw = true; }
+    if (ki.arrowDown) { _listSel = (_listSel + 1) % n;     _needsRedraw = true; }
     if (ki.esc)       { uiManager.returnToLauncher(); return; }
     if (ki.enter && !scheduledTasks.empty()) { _state = ST_VIEW; _needsRedraw = true; return; }
-    if ((ki.ch=='n'||ki.ch=='N')) {
-        _resetDraft(); _fieldSel = 0; _editBuf = "";
-        _state = ST_ADD_FIELD; _needsRedraw = true;
+    if (ki.ch == 'n' || ki.ch == 'N') {
+        _resetDraft(); _addSection = 0; _dtCursor = 0; _editBuf = ""; _editingText = false;
+        _state = ST_ADD; _needsRedraw = true;
     }
-    if ((ki.ch=='d'||ki.ch=='D') && !scheduledTasks.empty()) {
+    if ((ki.ch == 'd' || ki.ch == 'D') && !scheduledTasks.empty()) {
         _state = ST_CONFIRM_DELETE; _needsRedraw = true;
     }
 }
@@ -134,21 +176,21 @@ void AppSchedProx::_handleList(KeyInput ki) {
 void AppSchedProx::_drawView(const ScheduledTask& t) {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SP_BG);
-    String title = t.label.isEmpty() ? String("Task "+String(t.id)) : t.label;
+    String title = t.label.isEmpty() ? String("Task " + String(t.id)) : t.label;
     _drawTopBar(title.c_str());
 
     int y = SP_Y;
     disp.setTextSize(1);
 
     auto row = [&](const char* lbl, const String& val, uint16_t vc) {
-        disp.setTextColor(disp.color565(130,130,130), SP_BG);
+        disp.setTextColor(disp.color565(130, 130, 130), SP_BG);
         disp.drawString(lbl, 4, y);
-        int lw = disp.textWidth(lbl)+4;
+        int lw = disp.textWidth(lbl) + 4;
         disp.setTextColor(vc, SP_BG);
         String v = val;
-        while ((int)v.length()>0 && disp.textWidth(v)>(disp.width()-lw-6))
-            v = v.substring(0, v.length()-1);
-        disp.drawString(v, 4+lw, y);
+        while ((int)v.length() > 0 && disp.textWidth(v) > (disp.width() - lw - 6))
+            v = v.substring(0, v.length() - 1);
+        disp.drawString(v, 4 + lw, y);
         y += 13;
     };
 
@@ -156,149 +198,203 @@ void AppSchedProx::_drawView(const ScheduledTask& t) {
     snprintf(sched, sizeof(sched), "%04d-%02d-%02d  %02d:%02d:%02d",
              t.year, t.month, t.day, t.hour, t.minute, t.second);
     row("When:",    sched,          TFT_YELLOW);
-    row("Repeat:",  t.repeat?"yes":"no", t.repeat?disp.color565(80,220,80):disp.color565(180,80,80));
-    row("Enabled:", t.enabled?"yes":"no", t.enabled?disp.color565(80,220,80):disp.color565(160,160,160));
+    row("Repeat:",  t.repeat  ? "yes" : "no", t.repeat  ? disp.color565(80, 220, 80) : disp.color565(180, 80, 80));
+    row("Enabled:", t.enabled ? "yes" : "no", t.enabled ? disp.color565(80, 220, 80) : disp.color565(160, 160, 160));
 
-    // Payload — may be long, wrap across 2 lines
-    disp.setTextColor(disp.color565(130,130,130), SP_BG);
+    disp.setTextColor(disp.color565(130, 130, 130), SP_BG);
     disp.drawString("Payload:", 4, y); y += 12;
-    disp.setTextColor(disp.color565(180,220,180), SP_BG);
+    disp.setTextColor(disp.color565(180, 220, 180), SP_BG);
     String pay = t.payload;
-    int maxCh = (disp.width()-8) / 6;
-    if ((int)pay.length() > maxCh*2) pay = pay.substring(0, maxCh*2-3) + "...";
+    int maxCh = (disp.width() - 8) / 6;
+    if ((int)pay.length() > maxCh * 2) pay = pay.substring(0, maxCh * 2 - 3) + "...";
     if ((int)pay.length() > maxCh) {
         disp.drawString(pay.substring(0, maxCh), 4, y); y += 12;
-        disp.drawString(pay.substring(maxCh),    4, y); y += 12;
+        disp.drawString(pay.substring(maxCh),    4, y);
     } else {
-        disp.drawString(pay, 4, y); y += 12;
+        disp.drawString(pay, 4, y);
     }
 
-    // Toggle enable hint
-    disp.setTextColor(disp.color565(80,80,100), SP_BG);
-    disp.drawString("E=toggle enable", 4, y);
-
-    _drawBottomBar("E=toggle  D=delete  ESC back");
+    _drawBottomBar("E=toggle enable  D=delete  ESC back");
 }
 
 void AppSchedProx::_handleView(KeyInput ki) {
     if (ki.esc) { _state = ST_LIST; _needsRedraw = true; return; }
     if (_listSel >= (int)scheduledTasks.size()) { _state = ST_LIST; _needsRedraw = true; return; }
     ScheduledTask& t = scheduledTasks[_listSel];
-    if (ki.ch=='e'||ki.ch=='E') { t.enabled = !t.enabled; saveScheduledTasks(); _needsRedraw = true; }
-    if (ki.ch=='d'||ki.ch=='D') { _state = ST_CONFIRM_DELETE; _needsRedraw = true; }
+    if (ki.ch == 'e' || ki.ch == 'E') { t.enabled = !t.enabled; saveScheduledTasks(); _needsRedraw = true; }
+    if (ki.ch == 'd' || ki.ch == 'D') { _state = ST_CONFIRM_DELETE; _needsRedraw = true; }
 }
 
-// ---- Add / Edit ----
+// ---- Add form ----
+// Sections: 0=label  1=datetime  2=payload  3=options(repeat)
+
+static void drawFieldBox(int x, int y, int w, const String& text, bool active) {
+    auto& disp = M5Cardputer.Display;
+    uint16_t fbg = disp.color565(40, 40, 40);
+    disp.fillRect(x, y, w, 14, fbg);
+    disp.setTextColor(TFT_WHITE, fbg);
+    disp.setTextSize(1);
+    int maxCh = (w - 6) / 6;
+    String s = text;
+    if ((int)s.length() > maxCh) s = s.substring(s.length() - maxCh);
+    if (active) s += "_";
+    disp.drawString(s, x + 3, y + 3);
+}
 
 void AppSchedProx::_drawAdd() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SP_BG);
     _drawTopBar("New Task");
 
-    int y = SP_Y;
+    int y = SP_Y + 2;
     disp.setTextSize(1);
 
-    // Show filled fields summary at top
-    auto preview = [&](const char* lbl, const String& val) {
-        if (val.isEmpty() || val == "0") return;
-        disp.setTextColor(disp.color565(100,100,100), SP_BG);
-        disp.drawString(lbl, 4, y);
-        disp.setTextColor(disp.color565(180,180,180), SP_BG);
-        disp.drawString(val.substring(0,18), 4+disp.textWidth(lbl)+4, y);
-        y += 11;
-    };
-    if (!_draft.label.isEmpty()) preview("Label:", _draft.label);
-    char sched[24];
-    snprintf(sched,sizeof(sched),"%04d-%02d-%02d %02d:%02d:%02d",
-             _draft.year,_draft.month,_draft.day,_draft.hour,_draft.minute,_draft.second);
-    preview("When: ", sched);
-    if (!_draft.payload.isEmpty()) {
-        String ps = _draft.payload;
-        if ((int)ps.length()>22) ps = ps.substring(0,19)+"...";
-        preview("Pay:  ", ps);
+    // --- Section 0: Label ---
+    bool s0sel = (_addSection == 0);
+    uint16_t s0bg = s0sel ? disp.color565(40, 30, 0) : (uint16_t)SP_BG;
+    if (s0sel) disp.fillRect(0, y - 1, disp.width(), 16, s0bg);
+    disp.setTextColor(s0sel ? TFT_WHITE : disp.color565(160, 160, 160), s0bg);
+    disp.drawString(s0sel ? "> Label:" : "  Label:", 4, y);
+    drawFieldBox(70, y, disp.width() - 74, _draft.label,
+                 s0sel && _editingText);
+    y += 18;
+
+    // --- Section 1: DateTime ---
+    bool s1sel = (_addSection == 1);
+    uint16_t s1bg = s1sel ? disp.color565(0, 30, 50) : (uint16_t)SP_BG;
+    if (s1sel) disp.fillRect(0, y - 1, disp.width(), 28, s1bg);
+
+    disp.setTextColor(s1sel ? TFT_WHITE : disp.color565(160, 160, 160), s1bg);
+    disp.drawString(s1sel ? "> When:" : "  When:", 4, y);
+
+    // hint: 0=any for Y/Mo/D
+    disp.setTextColor(disp.color565(80, 80, 80), s1bg);
+    disp.drawString("0=any", disp.width() - 36, y);
+    y += 11;
+
+    // Draw 6 datetime fields inline
+    static const int fieldW[6] = { 34, 20, 18, 18, 18, 18 };
+    static const char* sep[6]  = { "-", "-", " ", ":", ":", "" };
+    int fx = 10;
+    for (int i = 0; i < 6; i++) {
+        bool cur = (s1sel && _dtCursor == i);
+        uint16_t fbg = cur ? disp.color565(20, 60, 100) : disp.color565(35, 35, 35);
+        uint16_t ftc = cur ? TFT_WHITE : disp.color565(180, 180, 180);
+        disp.fillRoundRect(fx, y, fieldW[i], 14, 2, fbg);
+        disp.setTextColor(ftc, fbg);
+
+        int v = _dtGet(i);
+        char buf[8];
+        if (i == 0) snprintf(buf, sizeof(buf), v ? "%d" : "----", v);
+        else        snprintf(buf, sizeof(buf), v ? "%02d" : "--", v);
+
+        int tw = disp.textWidth(buf);
+        disp.drawString(buf, fx + (fieldW[i] - tw) / 2, y + 3);
+        fx += fieldW[i];
+
+        if (sep[i][0]) {
+            disp.setTextColor(disp.color565(100, 100, 100), s1bg);
+            disp.drawString(sep[i], fx, y + 3);
+            fx += disp.textWidth(sep[i]) + 1;
+        }
     }
 
-    y = max(y + 4, SP_Y + 44);
+    if (s1sel) {
+        disp.setTextColor(disp.color565(100, 160, 220), s1bg);
+        disp.drawString("</> field  up/dn value", 10, y + 16);
+    }
+    y += s1sel ? 32 : 18;
 
-    // Current field
-    disp.setTextColor(TFT_YELLOW, SP_BG);
-    char fieldHdr[40]; snprintf(fieldHdr, sizeof(fieldHdr), "Field %d/9: %s", _fieldSel+1, FIELD_NAMES[_fieldSel]);
-    disp.drawString(fieldHdr, 4, y); y += 14;
+    // --- Section 2: Payload ---
+    bool s2sel = (_addSection == 2);
+    uint16_t s2bg = s2sel ? disp.color565(0, 40, 20) : (uint16_t)SP_BG;
+    if (s2sel) disp.fillRect(0, y - 1, disp.width(), 16, s2bg);
+    disp.setTextColor(s2sel ? TFT_WHITE : disp.color565(160, 160, 160), s2bg);
+    disp.drawString(s2sel ? "> Payload:" : "  Payload:", 4, y);
+    drawFieldBox(66, y, disp.width() - 70, _draft.payload,
+                 s2sel && _editingText);
+    y += 18;
 
-    // Input box
-    uint16_t fbg = disp.color565(40,40,40);
-    disp.fillRect(4, y, disp.width()-8, 14, fbg);
-    disp.setTextColor(TFT_WHITE, fbg);
-    String display = _editBuf;
-    int maxCh = (disp.width()-12)/6;
-    if ((int)display.length() > maxCh) display = display.substring(display.length()-maxCh);
-    disp.drawString(display + "_", 6, y+2);
+    // --- Section 3: Options ---
+    bool s3sel = (_addSection == 3);
+    uint16_t s3bg = s3sel ? disp.color565(40, 20, 40) : (uint16_t)SP_BG;
+    if (s3sel) disp.fillRect(0, y - 1, disp.width(), 14, s3bg);
+    disp.setTextColor(s3sel ? TFT_WHITE : disp.color565(160, 160, 160), s3bg);
+    char optBuf[32];
+    snprintf(optBuf, sizeof(optBuf), "%s Repeat: %s", s3sel ? ">" : " ", _draft.repeat ? "YES" : "no");
+    disp.drawString(optBuf, 4, y);
+    y += 18;
 
-    _drawBottomBar("type  ENTER next  ESC cancel  </> field");
+    // --- Save button row ---
+    bool saveSel = (_addSection == 4);
+    uint16_t saveBg = saveSel ? disp.color565(20, 70, 20) : disp.color565(20, 50, 20);
+    disp.fillRoundRect(4, y, 60, 14, 3, saveBg);
+    disp.setTextColor(saveSel ? TFT_WHITE : disp.color565(120, 200, 120), saveBg);
+    disp.drawString(saveSel ? "> SAVE" : "  save", 8, y + 3);
+
+    if (_editingText)
+        _drawBottomBar("type  DEL=backspace  ENTER=confirm  ESC=cancel");
+    else
+        _drawBottomBar("up/dn section  ENTER=select  ESC=back");
 }
 
 void AppSchedProx::_handleAdd(KeyInput ki) {
-    static const int NFIELDS = 9;
-
-    if (ki.esc)        { _state = ST_LIST; _needsRedraw = true; return; }
-    if (ki.arrowLeft)  { _fieldSel = (_fieldSel-1+NFIELDS)%NFIELDS; _editBuf = _draftField(_fieldSel); _needsRedraw = true; return; }
-    if (ki.arrowRight) { _fieldSel = (_fieldSel+1)%NFIELDS;          _editBuf = _draftField(_fieldSel); _needsRedraw = true; return; }
-
-    if (ki.del && _editBuf.length()>0) { _editBuf.remove(_editBuf.length()-1); _needsRedraw = true; return; }
-
-    if (ki.enter) {
-        _applyField(_fieldSel, _editBuf);
-        if (_fieldSel < NFIELDS-1) {
-            _fieldSel++;
-            _editBuf = _draftField(_fieldSel);
-        } else {
-            // Save
-            addScheduledTask(_draft);
-            _state = ST_LIST;
-            _listSel = (int)scheduledTasks.size()-1;
+    // --- Text editing mode ---
+    if (_editingText) {
+        if (ki.esc)  { _editingText = false; _editBuf = ""; _needsRedraw = true; return; }
+        if (ki.del && _editBuf.length() > 0) { _editBuf.remove(_editBuf.length() - 1); _needsRedraw = true; return; }
+        if (ki.enter) {
+            if      (_addSection == 0) _draft.label   = _editBuf;
+            else if (_addSection == 2) _draft.payload = _editBuf;
+            _editingText = false; _editBuf = ""; _needsRedraw = true; return;
         }
-        _needsRedraw = true;
+        if (ki.ch) { _editBuf += ki.ch; _needsRedraw = true; }
         return;
     }
 
-    // Numeric fields: digits only
-    if (_fieldIsNumeric(_fieldSel)) {
-        if (ki.ch >= '0' && ki.ch <= '9') { _editBuf += ki.ch; _needsRedraw = true; }
-    } else if (_fieldSel == 8) {
-        // repeat: y/n
-        if (ki.ch=='y'||ki.ch=='Y') { _editBuf = "y"; _needsRedraw = true; }
-        if (ki.ch=='n'||ki.ch=='N') { _editBuf = "n"; _needsRedraw = true; }
-    } else {
-        if (ki.ch) { _editBuf += ki.ch; _needsRedraw = true; }
+    // --- DateTime section ---
+    if (_addSection == 1) {
+        if (ki.arrowLeft)  { _dtCursor = (_dtCursor - 1 + 6) % 6; _needsRedraw = true; return; }
+        if (ki.arrowRight) { _dtCursor = (_dtCursor + 1) % 6;      _needsRedraw = true; return; }
+        if (ki.arrowUp)    { _dtIncrement(_dtCursor, 1);  _needsRedraw = true; return; }
+        if (ki.arrowDown)  { _dtIncrement(_dtCursor, -1); _needsRedraw = true; return; }
+        // digits: type directly into the current field
+        if (ki.ch >= '0' && ki.ch <= '9') {
+            int cur = _dtGet(_dtCursor);
+            int nxt = cur * 10 + (ki.ch - '0');
+            int mx  = _dtMax(_dtCursor);
+            if (nxt > mx) nxt = ki.ch - '0';
+            _dtSet(_dtCursor, nxt);
+            _needsRedraw = true; return;
+        }
+        if (ki.enter) { _addSection = 2; _needsRedraw = true; return; }
+        if (ki.esc)   { _state = ST_LIST; _needsRedraw = true; return; }
+        return;
     }
-}
 
-String AppSchedProx::_draftField(int fi) {
-    switch (fi) {
-        case 0: return _draft.label;
-        case 1: return _draft.year   ? String(_draft.year)   : "";
-        case 2: return _draft.month  ? String(_draft.month)  : "";
-        case 3: return _draft.day    ? String(_draft.day)    : "";
-        case 4: return String(_draft.hour);
-        case 5: return String(_draft.minute);
-        case 6: return String(_draft.second);
-        case 7: return _draft.payload;
-        case 8: return _draft.repeat ? "y" : "n";
-    }
-    return "";
-}
+    // --- Navigation between sections ---
+    if (ki.esc)       { _state = ST_LIST; _needsRedraw = true; return; }
+    if (ki.arrowUp)   { _addSection = (_addSection - 1 + 5) % 5; _needsRedraw = true; return; }
+    if (ki.arrowDown) { _addSection = (_addSection + 1) % 5;      _needsRedraw = true; return; }
 
-void AppSchedProx::_applyField(int fi, const String& val) {
-    switch (fi) {
-        case 0: _draft.label   = val; break;
-        case 1: _draft.year    = val.toInt(); break;
-        case 2: _draft.month   = val.toInt(); break;
-        case 3: _draft.day     = val.toInt(); break;
-        case 4: _draft.hour    = val.toInt(); break;
-        case 5: _draft.minute  = val.toInt(); break;
-        case 6: _draft.second  = val.toInt(); break;
-        case 7: _draft.payload = val; break;
-        case 8: _draft.repeat  = (val == "y" || val == "Y"); break;
+    if (ki.enter) {
+        switch (_addSection) {
+            case 0:
+                _editBuf = _draft.label; _editingText = true; _needsRedraw = true; break;
+            case 1:
+                // handled above, but belt-and-suspenders
+                break;
+            case 2:
+                _editBuf = _draft.payload; _editingText = true; _needsRedraw = true; break;
+            case 3:
+                _draft.repeat = !_draft.repeat; _needsRedraw = true; break;
+            case 4:
+                if (_draft.payload.isEmpty()) { _addSection = 2; _editingText = true; _editBuf = ""; _needsRedraw = true; break; }
+                addScheduledTask(_draft);
+                _state = ST_LIST;
+                _listSel = (int)scheduledTasks.size() - 1;
+                _needsRedraw = true; break;
+        }
     }
 }
 
@@ -308,28 +404,25 @@ void AppSchedProx::_drawConfirmDelete(const ScheduledTask& t) {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SP_BG);
     _drawTopBar("Delete?");
-
-    String lbl = t.label.isEmpty() ? String("Task "+String(t.id)) : t.label;
+    String lbl = t.label.isEmpty() ? String("Task " + String(t.id)) : t.label;
     disp.setTextSize(1);
-    disp.setTextColor(disp.color565(220,80,80), SP_BG);
-    disp.drawString("Delete task:", 4, SP_Y+6);
+    disp.setTextColor(disp.color565(220, 80, 80), SP_BG);
+    disp.drawString("Delete task:", 4, SP_Y + 6);
     disp.setTextColor(TFT_WHITE, SP_BG);
-    disp.drawString(lbl, 4, SP_Y+20);
-    disp.setTextColor(disp.color565(160,160,160), SP_BG);
-    disp.drawString("Y = confirm  N/ESC = cancel", 4, SP_Y+40);
-
+    disp.drawString(lbl, 4, SP_Y + 20);
+    disp.setTextColor(disp.color565(160, 160, 160), SP_BG);
+    disp.drawString("Y = confirm  N/ESC = cancel", 4, SP_Y + 40);
     _drawBottomBar("Y=delete  N/ESC=cancel");
 }
 
 void AppSchedProx::_handleConfirmDelete(KeyInput ki) {
-    if (ki.esc || ki.ch=='n' || ki.ch=='N') {
+    if (ki.esc || ki.ch == 'n' || ki.ch == 'N') {
         _state = (_listSel < (int)scheduledTasks.size()) ? ST_VIEW : ST_LIST;
         _needsRedraw = true; return;
     }
-    if (ki.ch=='y' || ki.ch=='Y') {
+    if (ki.ch == 'y' || ki.ch == 'Y') {
         if (_listSel < (int)scheduledTasks.size()) {
-            int id = scheduledTasks[_listSel].id;
-            deleteScheduledTask(id);
+            deleteScheduledTask(scheduledTasks[_listSel].id);
             if (_listSel >= (int)scheduledTasks.size() && _listSel > 0) _listSel--;
         }
         _state = ST_LIST; _needsRedraw = true;
@@ -355,7 +448,7 @@ void AppSchedProx::onUpdate() {
                     _drawView(scheduledTasks[_listSel]);
                 else { _state = ST_LIST; _drawList(); }
                 break;
-            case ST_ADD_FIELD:
+            case ST_ADD:
                 _drawAdd();
                 break;
             case ST_CONFIRM_DELETE:
@@ -374,7 +467,7 @@ void AppSchedProx::onUpdate() {
     switch (_state) {
         case ST_LIST:           _handleList(ki);          break;
         case ST_VIEW:           _handleView(ki);          break;
-        case ST_ADD_FIELD:      _handleAdd(ki);           break;
+        case ST_ADD:            _handleAdd(ki);           break;
         case ST_CONFIRM_DELETE: _handleConfirmDelete(ki); break;
     }
 }

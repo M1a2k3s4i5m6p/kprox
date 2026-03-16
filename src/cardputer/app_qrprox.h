@@ -13,6 +13,7 @@ public:
     void requestRedraw() override { _needsRedraw = true; }
     const char* appName() const override { return "QRProx"; }
     uint16_t iconColor() const override { return 0x0518; } // dark teal
+    bool handlesGlobalBtnA() const override { return true; }
 
 private:
     bool _needsRedraw = true;

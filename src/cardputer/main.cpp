@@ -346,12 +346,30 @@ void setup() {
         if (ledEnabled) setLED(LED_COLOR_WIFI_ERROR, 500);
         disp.setTextColor(WS_ERR, WS_BG);
         disp.drawString("Connection failed", 4, y);
+        y += 14;
+        disp.setTextColor(WS_WARN, WS_BG);
+        disp.drawString("Continuing without WiFi...", 4, y);
     }
 
     delay(800);
     feedWatchdog();
     } else {
         WiFi.mode(WIFI_OFF);
+        // Brief "no WiFi" notice before proceeding to startup app
+        const uint16_t NW_BG  = disp.color565(18, 18, 28);
+        const uint16_t NW_BAR = disp.color565(80, 50, 10);
+        disp.fillScreen(NW_BG);
+        disp.fillRect(0, 0, disp.width(), 18, NW_BAR);
+        disp.setTextSize(1);
+        disp.setTextColor(TFT_WHITE, NW_BAR);
+        disp.drawString("KProx", 4, 3);
+        disp.setTextColor(disp.color565(220, 160, 0), NW_BG);
+        disp.drawString("WiFi disabled.", 4, 26);
+        disp.setTextColor(disp.color565(130, 130, 130), NW_BG);
+        disp.drawString("Enable in Settings > WiFi.", 4, 42);
+        disp.drawString("Web interface unavailable.", 4, 56);
+        delay(1500);
+        feedWatchdog();
     }
 
     if (registers.empty()) {
@@ -402,6 +420,9 @@ void setup() {
     Cardputer::uiManager.addApp(&appQRProx);   // 9
     Cardputer::uiManager.addApp(&appSchedProx);// 10
     Cardputer::uiManager.addApp(&appSettings); // 11
+
+    // Load persisted app order/visibility (11 user apps, indices 1..11)
+    loadAppLayout(11);
 
     int numApps = (int)Cardputer::uiManager.apps().size();
     int startApp = (defaultAppIndex >= 1 && defaultAppIndex < numApps) ? defaultAppIndex : 1;

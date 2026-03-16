@@ -5,7 +5,9 @@
 #include "../storage.h"
 #include "../connection.h"
 #include "../hid.h"
+#include "../registers.h"
 #include <WiFi.h>
+#include <algorithm>
 
 namespace Cardputer {
 
@@ -29,7 +31,7 @@ void AppSettings::_drawTopBar(int pageNum) {
     static const char* pageLabels[NUM_PAGES] = {
         "WiFi Settings", "Bluetooth", "USB HID", "API Key",
         "Device Identity", "Sink Config", "HID Timing 1/2", "HID Timing 2/2",
-        "Startup App"
+        "Startup App", "App Layout"
     };
     disp.drawString(pageLabels[pageNum], 4, 3);
 
@@ -597,17 +599,12 @@ void AppSettings::_drawPage6() {
     drawTimingRows(0, 3, _timingSel, _editing, labels, descs, vals, _editBuf, _idSaved);
 
     if (_editing) _drawBottomBar("digits  ENTER save  ESC cancel");
-    else          _drawBottomBar("up/dn  ENTER edit  BtnA=test  </>");
+    else          _drawBottomBar("up/dn  ENTER edit  BtnG0=test  </>");
 }
 
 void AppSettings::_handlePage6(KeyInput ki) {
     static constexpr int N = 3;
     int* vals[N] = { &g_keyPressDelay, &g_keyReleaseDelay, &g_betweenKeysDelay };
-
-    if (!_editing && M5Cardputer.BtnA.wasPressed()) {
-        sendPlainText("abcdefghijklmnopqrstuvwxyz");
-        _needsRedraw = true; return;
-    }
 
     if (_editing) {
         if (ki.esc)   { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
@@ -651,17 +648,12 @@ void AppSettings::_drawPage7() {
     drawTimingRows(3, 3, _timingSel, _editing, labels, descs, vals, _editBuf, _idSaved);
 
     if (_editing) _drawBottomBar("digits  ENTER save  ESC cancel");
-    else          _drawBottomBar("up/dn  ENTER edit  BtnA=test  </>");
+    else          _drawBottomBar("up/dn  ENTER edit  BtnG0=test  </>");
 }
 
 void AppSettings::_handlePage7(KeyInput ki) {
     static constexpr int N = 3;
     int* vals[N] = { &g_betweenSendTextDelay, &g_specialKeyDelay, &g_tokenDelay };
-
-    if (!_editing && M5Cardputer.BtnA.wasPressed()) {
-        sendPlainText("abcdefghijklmnopqrstuvwxyz");
-        _needsRedraw = true; return;
-    }
 
     if (_editing) {
         if (ki.esc)   { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
@@ -740,14 +732,136 @@ void AppSettings::_drawPage8() {
 void AppSettings::_handlePage8(KeyInput ki) {
     static constexpr int N = 11;
     if (ki.arrowLeft)  { _page = 7; _timingSel = 0; _editing = false; _idSaved = false; _needsRedraw = true; }
-    else if (ki.arrowRight) { _page = 0; _needsRedraw = true; } // wrap
+    else if (ki.arrowRight) { _page = 9; _idSel = 0; _needsRedraw = true; }
     else if (ki.arrowUp)   { _idSel = (_idSel - 1 + N) % N; _idSaved = false; _needsRedraw = true; }
     else if (ki.arrowDown) { _idSel = (_idSel + 1) % N;      _idSaved = false; _needsRedraw = true; }
     else if (ki.enter) {
-        defaultAppIndex = _idSel + 1; // user apps start at index 1
+        defaultAppIndex = _idSel + 1;
         saveDefaultAppSettings();
         _idSaved = true;
         _needsRedraw = true;
+    }
+}
+
+// ---- Page 9: App Layout ----
+
+static const char* APP_LAYOUT_NAMES[] = {
+    "KProx", "FuzzyProx", "RegEdit", "CredStore",
+    "Gadgets", "SinkProx", "Keyboard", "Clock",
+    "QRProx", "SchedProx", "Settings"
+};
+static constexpr int N_LAYOUT_APPS = 11;
+
+void AppSettings::_drawPage9() {
+    auto& disp = M5Cardputer.Display;
+    disp.fillScreen(SETTINGS_BG);
+    _drawTopBar(9);
+
+    int y = CONTENT_Y;
+    disp.setTextSize(1);
+    disp.setTextColor(labelColor(), SETTINGS_BG);
+    disp.drawString("App order & visibility:", 4, y); y += 14;
+
+    // Ensure appOrder is populated
+    if ((int)appOrder.size() < N_LAYOUT_APPS) {
+        for (int i = (int)appOrder.size() + 1; i <= N_LAYOUT_APPS; i++) appOrder.push_back(i);
+    }
+    while ((int)appHidden.size() < (int)appOrder.size()) appHidden.push_back(false);
+
+    int visible = (disp.height() - y - BAR_BOT_H - 4) / 15;
+    int scroll  = 0;
+    if (_idSel >= visible) scroll = _idSel - visible + 1;
+
+    for (int i = 0; i < N_LAYOUT_APPS && (i - scroll) < visible; i++) {
+        if (i < scroll) continue;
+        int slot   = i;
+        int appIdx = appOrder[slot] - 1;  // 0-based into APP_LAYOUT_NAMES
+        bool isSettings = (appOrder[slot] == N_LAYOUT_APPS);  // Settings is always last registered
+        bool hidden = appHidden[slot];
+        bool sel    = (_idSel == slot);
+
+        uint16_t rowBg = sel ? selBgColor() : (uint16_t)SETTINGS_BG;
+        if (sel) disp.fillRect(0, y - 1, disp.width(), 14, rowBg);
+
+        // Position indicator
+        char pos[4]; snprintf(pos, sizeof(pos), "%2d.", slot + 1);
+        disp.setTextColor(disp.color565(80, 80, 80), rowBg);
+        disp.drawString(pos, 4, y);
+
+        // App name
+        disp.setTextColor(sel ? TFT_WHITE : (hidden ? disp.color565(80, 80, 80) : labelColor()), rowBg);
+        const char* name = (appIdx >= 0 && appIdx < N_LAYOUT_APPS) ? APP_LAYOUT_NAMES[appIdx] : "?";
+        char lbl[24]; snprintf(lbl, sizeof(lbl), "%s%s", sel ? "> " : "  ", name);
+        disp.drawString(lbl, 24, y);
+
+        // Badges
+        int rx = disp.width() - 4;
+        if (isSettings) {
+            const char* badge = "FIXED";
+            int bw = disp.textWidth(badge) + 6;
+            rx -= bw;
+            disp.fillRoundRect(rx, y - 1, bw, 12, 2, disp.color565(30, 30, 80));
+            disp.setTextColor(disp.color565(100, 100, 200), disp.color565(30, 30, 80));
+            disp.drawString(badge, rx + 3, y);
+        } else {
+            const char* vis = hidden ? "HIDDEN" : "SHOW";
+            uint16_t bb = hidden ? disp.color565(70, 20, 20) : disp.color565(20, 60, 20);
+            uint16_t bc = hidden ? disp.color565(200, 60, 60) : disp.color565(80, 220, 80);
+            int bw = disp.textWidth(vis) + 8;
+            rx -= bw;
+            disp.fillRoundRect(rx, y - 1, bw, 12, 3, bb);
+            disp.setTextColor(bc, bb);
+            disp.drawString(vis, rx + 4, y);
+        }
+
+        y += 15;
+    }
+
+    if (_idSaved) {
+        disp.setTextColor(TFT_GREEN, SETTINGS_BG);
+        disp.drawString("Saved!", 4, disp.height() - BAR_BOT_H - 14);
+    }
+
+    _drawBottomBar("up/dn select  ENTER toggle  H=hide  </> move  ESC");
+}
+
+void AppSettings::_handlePage9(KeyInput ki) {
+    if ((int)appOrder.size() < N_LAYOUT_APPS) {
+        for (int i = (int)appOrder.size() + 1; i <= N_LAYOUT_APPS; i++) appOrder.push_back(i);
+    }
+    while ((int)appHidden.size() < (int)appOrder.size()) appHidden.push_back(false);
+
+    if (ki.arrowLeft && !ki.fn) {
+        // Move selected app one position earlier in the order
+        if (_idSel > 0 && appOrder[_idSel] != N_LAYOUT_APPS) {
+            std::swap(appOrder[_idSel], appOrder[_idSel - 1]);
+            std::swap(appHidden[_idSel], appHidden[_idSel - 1]);
+            _idSel--;
+            saveAppLayout(); _idSaved = true;
+        } else {
+            _page = 8; _idSel = 0; _editing = false; _idSaved = false;
+        }
+        _needsRedraw = true; return;
+    }
+    if (ki.arrowRight && !ki.fn) {
+        // Move selected app one position later
+        if (_idSel < N_LAYOUT_APPS - 1 && appOrder[_idSel] != N_LAYOUT_APPS) {
+            std::swap(appOrder[_idSel], appOrder[_idSel + 1]);
+            std::swap(appHidden[_idSel], appHidden[_idSel + 1]);
+            _idSel++;
+            saveAppLayout(); _idSaved = true;
+        } else if (_idSel == N_LAYOUT_APPS - 1) {
+            _page = 0; _needsRedraw = true; return;  // wrap
+        }
+        _needsRedraw = true; return;
+    }
+    if (ki.arrowUp)   { _idSel = (_idSel - 1 + N_LAYOUT_APPS) % N_LAYOUT_APPS; _idSaved = false; _needsRedraw = true; return; }
+    if (ki.arrowDown) { _idSel = (_idSel + 1) % N_LAYOUT_APPS;                  _idSaved = false; _needsRedraw = true; return; }
+
+    // ENTER or H — toggle hidden (Settings app always stays visible)
+    if ((ki.enter || ki.ch == 'h' || ki.ch == 'H') && appOrder[_idSel] != N_LAYOUT_APPS) {
+        appHidden[_idSel] = !appHidden[_idSel];
+        saveAppLayout(); _idSaved = true; _needsRedraw = true;
     }
 }
 
@@ -766,7 +880,16 @@ void AppSettings::onExit() {
 }
 
 void AppSettings::onUpdate() {
-    // BtnA cycles pages, but timing pages use it for alphabet test — they consume it themselves
+    // BtnA on timing pages triggers the test action — check before the keyboard anyKey gate
+    // so a bare button press (no keyboard input) still fires.
+    if ((_page == 6 || _page == 7) && !_editing && M5Cardputer.BtnA.wasPressed()) {
+        uiManager.notifyInteraction();
+        playRegister(activeRegister);
+        _needsRedraw = true;
+        return;
+    }
+
+    // BtnA cycles pages on all other pages
     if (M5Cardputer.BtnA.wasPressed() && _page != 6 && _page != 7) {
         uiManager.notifyInteraction();
         _page = (_page + 1) % NUM_PAGES;
@@ -788,6 +911,7 @@ void AppSettings::onUpdate() {
             case 6: _drawPage6(); break;  // HID Timing 1/2
             case 7: _drawPage7(); break;  // HID Timing 2/2
             case 8: _drawPage8(); break;  // Startup App
+            case 9: _drawPage9(); break;  // App Layout
         }
         _needsRedraw = false;
     }
@@ -813,6 +937,7 @@ void AppSettings::onUpdate() {
         case 6: _handlePage6(ki); break;  // HID Timing 1/2
         case 7: _handlePage7(ki); break;  // HID Timing 2/2
         case 8: _handlePage8(ki); break;  // Startup App
+        case 9: _handlePage9(ki); break;  // App Layout
     }
 }
 

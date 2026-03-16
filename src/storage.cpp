@@ -205,6 +205,72 @@ void loadDefaultAppSettings() {
     if (defaultAppIndex < 1) defaultAppIndex = 1;
 }
 
+// appOrder  — stored as comma-separated ints, e.g. "1,2,3,4,5,6,7,8,9,10,11"
+// appHidden — stored as comma-separated 0/1 flags in the same index order
+void saveAppLayout() {
+    String order, hidden;
+    for (size_t i = 0; i < appOrder.size(); i++) {
+        if (i) { order += ','; hidden += ','; }
+        order  += String(appOrder[i]);
+        hidden += String(appHidden.size() > i && appHidden[i] ? 1 : 0);
+    }
+    preferences.begin("kprox", false);
+    preferences.putString("appOrder",  order);
+    preferences.putString("appHidden", hidden);
+    preferences.end();
+}
+
+void loadAppLayout(int numApps) {
+    preferences.begin("kprox", false);
+    String order  = preferences.getString("appOrder",  "");
+    String hidden = preferences.getString("appHidden", "");
+    preferences.end();
+
+    appOrder.clear();
+    appHidden.clear();
+
+    // Parse order
+    if (order.length() > 0) {
+        int start = 0;
+        while (start < (int)order.length()) {
+            int comma = order.indexOf(',', start);
+            int val = (comma < 0) ? order.substring(start).toInt()
+                                  : order.substring(start, comma).toInt();
+            if (val >= 1 && val <= numApps) appOrder.push_back(val);
+            if (comma < 0) break;
+            start = comma + 1;
+        }
+    }
+    // Parse hidden flags
+    if (hidden.length() > 0) {
+        int start = 0;
+        int idx   = 0;
+        while (start < (int)hidden.length()) {
+            int comma = hidden.indexOf(',', start);
+            int val = (comma < 0) ? hidden.substring(start).toInt()
+                                  : hidden.substring(start, comma).toInt();
+            if (idx < (int)appOrder.size()) appHidden.push_back(val != 0);
+            idx++;
+            if (comma < 0) break;
+            start = comma + 1;
+        }
+    }
+
+    // Ensure appOrder contains every valid index 1..numApps exactly once,
+    // filling in any that are missing (newly registered apps after an upgrade).
+    for (int i = 1; i <= numApps; i++) {
+        bool found = false;
+        for (int v : appOrder) if (v == i) { found = true; break; }
+        if (!found) appOrder.push_back(i);
+    }
+    // Ensure appHidden is same length as appOrder, defaulting to false.
+    while ((int)appHidden.size() < (int)appOrder.size()) appHidden.push_back(false);
+    // Settings app (last registered index = numApps) is never hideable.
+    for (size_t i = 0; i < appOrder.size(); i++) {
+        if (appOrder[i] == numApps) appHidden[i] = false;
+    }
+}
+
 void wipeAllSettings() {
     preferences.begin("kprox", false);
     preferences.clear();

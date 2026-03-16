@@ -10,6 +10,9 @@
 #include "keymap.h"
 #include "credential_store.h"
 #include "scheduled_tasks.h"
+#ifdef BOARD_M5STACK_CARDPUTER
+#include "cardputer/ui_manager.h"
+#endif
 
 String currentNonce = "";
 
@@ -787,6 +790,14 @@ void handleSettings() {
         doc["device"]["hostname"]    = hostnameStr;
         doc["device"]["usb_serial"]  = usbSerialNumber;
         doc["defaultApp"]            = defaultAppIndex;
+        doc["maxSinkSize"]           = maxSinkSize;
+        // App layout
+        JsonArray orderArr  = doc["appOrder"].to<JsonArray>();
+        JsonArray hiddenArr = doc["appHidden"].to<JsonArray>();
+        for (size_t i = 0; i < appOrder.size(); i++) {
+            orderArr.add(appOrder[i]);
+            hiddenArr.add((i < appHidden.size()) ? appHidden[i] : false);
+        }
         doc["timing"]["key_press_delay"]         = g_keyPressDelay;
         doc["timing"]["key_release_delay"]       = g_keyReleaseDelay;
         doc["timing"]["between_keys_delay"]      = g_betweenKeysDelay;
@@ -889,6 +900,36 @@ void handleSettings() {
         if (doc.containsKey("defaultApp")) {
             int da = doc["defaultApp"].as<int>();
             if (da >= 1) { defaultAppIndex = da; saveDefaultAppSettings(); }
+        }
+
+        if (doc.containsKey("maxSinkSize")) {
+            int ms = doc["maxSinkSize"].as<int>();
+            if (ms >= 0) { maxSinkSize = ms; saveSinkSettings(); }
+        }
+
+        if (doc["appOrder"].is<JsonArray>() && doc["appHidden"].is<JsonArray>()) {
+            JsonArray orderArr  = doc["appOrder"].as<JsonArray>();
+            JsonArray hiddenArr = doc["appHidden"].as<JsonArray>();
+            appOrder.clear();
+            appHidden.clear();
+            int idx = 0;
+            for (JsonVariant v : orderArr) {
+                int val = v.as<int>();
+                appOrder.push_back(val);
+                bool h = (idx < (int)hiddenArr.size()) ? hiddenArr[idx].as<bool>() : false;
+                appHidden.push_back(h);
+                idx++;
+            }
+            // Settings app (last) is never hidden
+#ifdef BOARD_M5STACK_CARDPUTER
+            int numApps = (int)Cardputer::uiManager.apps().size() - 1;
+#else
+            int numApps = (int)appOrder.size();
+#endif
+            for (size_t i = 0; i < appOrder.size(); i++) {
+                if (appOrder[i] == numApps) appHidden[i] = false;
+            }
+            saveAppLayout();
         }
 
 #ifdef BOARD_HAS_USB_HID

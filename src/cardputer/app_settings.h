@@ -13,10 +13,11 @@ public:
     void onExit() override;
     const char* appName() const override { return "Settings"; }
     uint16_t iconColor() const override { return 0x07E0; }
+    bool handlesGlobalBtnA() const override { return true; }
 
 private:
-    // 0=WiFi, 1=BT, 2=USB, 3=API Key, 4=Device Identity, 5=Sink Config, 6=Timing, 7=Network Identity
-    static constexpr int NUM_PAGES = 9;
+    // 0=WiFi, 1=BT, 2=USB, 3=API Key, 4=Device Identity, 5=Sink Config, 6=Timing 1/2, 7=Timing 2/2, 8=Startup App, 9=App Layout
+    static constexpr int NUM_PAGES = 10;
     int  _page        = 0;
     bool _needsRedraw = true;
 
@@ -49,6 +50,7 @@ private:
     void _drawPage6();
     void _drawPage7();
     void _drawPage8();
+    void _drawPage9();
     void _handlePage0(KeyInput ki);
     void _handlePage1(KeyInput ki);
     void _handlePage2(KeyInput ki);
@@ -58,6 +60,7 @@ private:
     void _handlePage6(KeyInput ki);
     void _handlePage7(KeyInput ki);
     void _handlePage8(KeyInput ki);
+    void _handlePage9(KeyInput ki);
     void _connectWifi();
     void _drawInputField(int x, int y, int w, const String& text, bool active, bool masked = false);
     void _drawToggleRow(int y, bool selected, const char* label, bool enabled,

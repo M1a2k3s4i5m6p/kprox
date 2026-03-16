@@ -40,4 +40,7 @@ void loadHostnameSettings();
 void saveDefaultAppSettings();
 void loadDefaultAppSettings();
 
+void saveAppLayout();
+void loadAppLayout(int numApps);
+
 void wipeAllSettings();

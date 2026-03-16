@@ -39,6 +39,7 @@ public:
     int currentAppIndex() const { return _currentApp; }
     AppBase* currentApp() { return _apps[_currentApp]; }
     const std::vector<AppBase*>& apps() const { return _apps; }
+    std::vector<int> visibleApps() const;
     bool isScreenOn() const { return _screenOn; }
 
 private:
