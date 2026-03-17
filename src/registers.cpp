@@ -21,11 +21,6 @@ void loadRegisters() {
         registerNames[i] = preferences.getString(nameKey.c_str(), "");
     }
 
-    ledEnabled = preferences.getBool("ledEnabled", true);
-    ledColorR  = preferences.getUChar("ledColorR", 0);
-    ledColorG  = preferences.getUChar("ledColorG", 255);
-    ledColorB  = preferences.getUChar("ledColorB", 0);
-
     preferences.end();
     registersLoaded = true;
 }

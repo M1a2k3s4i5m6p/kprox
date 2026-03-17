@@ -53,7 +53,7 @@ bool fido2Enabled       = false;
 bool bleKeyboardEnabled = true;
 bool bleMouseEnabled    = true;
 
-int maxSinkSize = 0; // 0 = unlimited
+// maxSinkSize defined in globals.cpp
 
 String wifiSSID      = DEFAULT_WIFI_SSID;
 String wifiPassword  = DEFAULT_WIFI_PASSWORD;
@@ -66,6 +66,7 @@ const char* deviceName = DEFAULT_PRODUCT_NAME;
 
 bool bluetoothEnabled     = true;
 bool bluetoothInitialized = false;
+bool wifiEnabled          = true;
 bool mdnsEnabled          = false;
 bool isLooping            = false;
 bool isHalted             = false;
@@ -207,6 +208,8 @@ void setup() {
     loadUtcOffsetSettings();
     loadSinkSettings();
     loadTimingSettings();
+    loadLEDSettings();
+    loadCsSecuritySettings();
     loadHostnameSettings();
     loadMTLSSettings();
     loadKeymapSettings();

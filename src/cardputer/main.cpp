@@ -215,6 +215,7 @@ void setup() {
     loadUtcOffsetSettings();
     loadSinkSettings();
     loadTimingSettings();
+    loadLEDSettings();
     loadCsSecuritySettings();
     loadHostnameSettings();
     loadDefaultAppSettings();

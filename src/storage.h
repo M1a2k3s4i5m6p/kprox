@@ -24,6 +24,7 @@ void saveUtcOffsetSettings();
 void loadUtcOffsetSettings();
 
 void saveLEDSettings();
+void loadLEDSettings();
 
 void saveKeymapSettings();
 void loadKeymapSettings();

@@ -138,6 +138,15 @@ void saveLEDSettings() {
     blinkLED(10, LED_COLOR_SAVE, LED_SAVE_DUTY_CYCLE);
 }
 
+void loadLEDSettings() {
+    preferences.begin("kprox", false);
+    ledEnabled = preferences.getBool("ledEnabled", true);
+    ledColorR  = preferences.getUChar("ledColorR", 0);
+    ledColorG  = preferences.getUChar("ledColorG", 255);
+    ledColorB  = preferences.getUChar("ledColorB", 0);
+    preferences.end();
+}
+
 void saveKeymapSettings() {
     preferences.begin("kprox", false);
     preferences.putString("keymap", activeKeymap);
