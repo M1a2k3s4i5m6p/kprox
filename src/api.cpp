@@ -16,6 +16,9 @@
 #include <inttypes.h>
 #ifdef BOARD_M5STACK_CARDPUTER
 #include "cardputer/ui_manager.h"
+#ifdef BOARD_M5STACK_CARDPUTER
+#include <SD.h>
+#endif
 #endif
 
 String currentNonce = "";
@@ -262,6 +265,24 @@ void handleApiStatus() {
     doc["looping"]             = isLooping;
     doc["looping_register"]    = loopingRegister;
     doc["free_heap"]           = ESP.getFreeHeap();
+    doc["min_free_heap"]       = ESP.getMinFreeHeap();
+    doc["max_alloc_heap"]      = ESP.getMaxAllocHeap();
+    doc["total_heap"]          = ESP.getHeapSize();
+    doc["psram_found"]         = psramFound();
+    doc["psram_size"]          = ESP.getPsramSize();
+    doc["psram_free"]          = ESP.getFreePsram();
+    doc["psram_min_free"]      = ESP.getMinFreePsram();
+    doc["sketch_size"]         = ESP.getSketchSize();
+    doc["free_sketch_space"]   = ESP.getFreeSketchSpace();
+    doc["spiffs_total"]        = SPIFFS.totalBytes();
+    doc["spiffs_used"]         = SPIFFS.usedBytes();
+    doc["sd_available"]        = sdAvailable();
+#ifdef BOARD_M5STACK_CARDPUTER
+    if (sdAvailable()) {
+        doc["sd_total"]        = SD.totalBytes();
+        doc["sd_used"]         = SD.usedBytes();
+    }
+#endif
     doc["uptime"]              = millis();
     doc["bleDeviceName"]       = deviceName;
     doc["ip"]                  = WiFi.localIP().toString();

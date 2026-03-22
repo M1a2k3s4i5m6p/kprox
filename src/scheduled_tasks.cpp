@@ -88,31 +88,39 @@ void checkScheduledTasks() {
     if (scheduledTasks.empty()) return;
     time_t now = time(nullptr);
     if (now < 100000) return; // NTP not synced
+
+    // Only check once per second at most
+    static time_t lastChecked = 0;
+    if (now == lastChecked) return;
+    lastChecked = now;
+
     struct tm* tm_ = localtime(&now);
     bool changed = false;
 
     for (ScheduledTask& t : scheduledTasks) {
         if (!t.enabled) continue;
-        if (!t.repeat && t.fired) continue;
 
         bool match = true;
         if (t.year   > 0 && t.year   != (tm_->tm_year + 1900)) match = false;
         if (t.month  > 0 && t.month  != (tm_->tm_mon  + 1))    match = false;
         if (t.day    > 0 && t.day    != tm_->tm_mday)           match = false;
-        if (t.hour   != tm_->tm_hour)                           match = false;
-        if (t.minute != tm_->tm_min)                            match = false;
-        if (t.second != tm_->tm_sec)                            match = false;
+        if (t.hour        != tm_->tm_hour)                       match = false;
+        if (t.minute      != tm_->tm_min)                        match = false;
+        // Match if current second >= task second so short-circuit second=0 always
+        // matches for the entire target minute after HH:MM:00
+        if (tm_->tm_sec < t.second)                              match = false;
 
         if (match && !t.fired) {
             t.fired = true;
             changed = true;
-            if (t.payload.length() > 0) {
+            if (t.payload.length() > 0)
                 pendingTokenStrings.push_back(t.payload);
-            }
-            if (t.repeat) t.fired = false; // re-arm immediately for next matching second
-        } else if (!match) {
-            t.fired = false; // reset so it can fire again next match
+            if (!t.repeat)
+                t.enabled = false;
+        } else if (!match && t.fired) {
+            if (t.repeat) t.fired = false;
         }
     }
-    (void)changed;
+
+    if (changed) saveScheduledTasks();
 }

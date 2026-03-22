@@ -136,7 +136,6 @@ unsigned long lastWifiCheck   = 0;
 unsigned long lastStatusPrint = 0;
 
 int loopingRegister = -1;
-std::vector<String> pendingTokenStrings;
 long                utcOffsetSeconds = 0;
 int activeRegister  = 0;
 int currentMouseX   = 0;
@@ -494,7 +493,7 @@ void setup() {
     Cardputer::uiManager.addApp(&appSettings); // 15
 
     // Load persisted app order/visibility (12 user apps, indices 1..12)
-    loadAppLayout(12);
+    loadAppLayout((int)Cardputer::uiManager.apps().size() - 1);
 
     int numApps = (int)Cardputer::uiManager.apps().size();
     int startApp = (defaultAppIndex >= 1 && defaultAppIndex < numApps) ? defaultAppIndex : 1;
@@ -518,13 +517,22 @@ void loop() {
     }
 
     static bool          mdnsSetupAttempted = false;
+    static bool          ntpSyncAttempted   = false;
     static unsigned long wifiConnectedTime  = 0;
 
-    if (WiFi.status() == WL_CONNECTED && !mdnsEnabled && !mdnsSetupAttempted) {
+    if (WiFi.status() == WL_CONNECTED) {
         if (!wifiConnectedTime) wifiConnectedTime = millis();
-        else if (millis() - wifiConnectedTime > 10000) { mdnsSetupAttempted = true; setupMDNS(); }
+        // NTP: retry whenever WiFi connects (also covers late connections)
+        if (!ntpSyncAttempted && millis() - wifiConnectedTime > 2000) {
+            ntpSyncAttempted = true;
+            initNTP();
+        }
+        if (!mdnsEnabled && !mdnsSetupAttempted && millis() - wifiConnectedTime > 10000) {
+            mdnsSetupAttempted = true; setupMDNS();
+        }
     } else if (WiFi.status() != WL_CONNECTED) {
-        wifiConnectedTime = 0;
+        wifiConnectedTime  = 0;
+        ntpSyncAttempted   = false;  // reset so it retries on next connection
     }
 
     if (!isHalted) {
@@ -544,12 +552,16 @@ void loop() {
         }
     }
 
+    checkScheduledTasks();
+
     if (!pendingTokenStrings.empty()) {
         credStoreLastActivity = millis();  // any HID output resets CS inactivity timer
         for (int i = (int)pendingTokenStrings.size() - 1; i >= 0; i--) {
             if (!pendingTokenStrings[i].startsWith("SCHED|")) {
                 String tok = pendingTokenStrings[i];
                 pendingTokenStrings.erase(pendingTokenStrings.begin() + i);
+                isHalted = false;
+                g_parserAbort = false;
                 putTokenString(tok);
             }
         }
@@ -578,8 +590,6 @@ void loop() {
     }
 
     cleanupConnections();
-
-    checkScheduledTasks();
 
     if (!isHalted && mouseBatch.hasMovement && millis() - mouseBatch.lastUpdate > MOUSE_BATCH_TIMEOUT) {
         sendBatchedMouseMovement();

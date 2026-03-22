@@ -9,6 +9,8 @@
 #include "../registers.h"
 #include <WiFi.h>
 #include <algorithm>
+#include "../sd_utils.h"
+#include <SD.h>
 
 namespace Cardputer {
 
@@ -32,7 +34,7 @@ void AppSettings::_drawTopBar(int pageNum) {
     static const char* pageLabels[NUM_PAGES] = {
         "WiFi Settings", "Bluetooth", "USB HID", "API Key",
         "Device Identity", "Sink Config", "HID Timing 1/2", "HID Timing 2/2",
-        "Startup App", "App Layout", "CS Security", "SD Storage"
+        "Startup App", "App Layout", "CS Security", "SD Storage", "Backups"
     };
     disp.drawString(pageLabels[pageNum], 4, 3);
 
@@ -1074,7 +1076,7 @@ void AppSettings::_handlePage11(KeyInput ki) {
         _page = 10; _toggleSel = 0; _editing = false; _editBuf = ""; _idSaved = false; _needsRedraw = true; return;
     }
     if (ki.arrowRight && !_editing) {
-        _page = 0; _toggleSel = 0; _editing = false; _editBuf = ""; _idSaved = false; _needsRedraw = true; return;
+        _page = 12; _backupSel = 0; _backupScroll = 0; _backupStatus = ""; _backupRefresh(); _needsRedraw = true; return;
     }
 
     if (ki.arrowUp)   { _toggleSel = (_toggleSel - 1 + 3) % 3; _idSaved = false; _editBuf = ""; _needsRedraw = true; return; }
@@ -1188,6 +1190,7 @@ void AppSettings::onUpdate() {
             case 9: _drawPage9(); break;  // App Layout
             case 10: _drawPage10(); break; // CS Security
             case 11: _drawPage11(); break; // SD Storage
+            case 12: _drawPage12(); break; // Backups
         }
         _needsRedraw = false;
     }
@@ -1216,7 +1219,293 @@ void AppSettings::onUpdate() {
         case 9: _handlePage9(ki); break;  // App Layout
         case 10: _handlePage10(ki); break; // CS Security
         case 11: _handlePage11(ki); break; // SD Storage
+        case 12: _handlePage12(ki); break; // Backups
     }
+}
+
+
+// ============================================================
+// Page 12: Backups
+// ============================================================
+// Backup format — SD card, path: /backups/kprox_YYYYMMDD_HHMMSS.json
+// JSON: { "version":1, "registers":[...], "registerNames":[...],
+//          "activeRegister":N, "settings":{...} }
+// "settings" is optional; "registers" is optional.
+// Either or both can be present depending on what was backed up.
+
+static const char* BACKUP_DIR = "/backups";
+
+void AppSettings::_backupRefresh() {
+    _backupFiles.clear();
+    if (!sdAvailable()) return;
+    // Unmount then remount to flush the FAT directory cache
+    sdUnmount();
+    if (!sdMount()) return;
+    File dir = SD.open(BACKUP_DIR);
+    if (!dir || !dir.isDirectory()) return;
+    File f = dir.openNextFile();
+    while (f) {
+        String name = String(f.name());
+        int sl = name.lastIndexOf('/');
+        if (sl >= 0) name = name.substring(sl + 1);
+        if (name.endsWith(".json")) _backupFiles.push_back(name);
+        f.close();
+        f = dir.openNextFile();
+    }
+    dir.close();
+    // Sort newest first (names are timestamps)
+    std::sort(_backupFiles.begin(), _backupFiles.end(),
+              [](const String& a, const String& b){ return a > b; });
+}
+
+bool AppSettings::_backupCreate(bool includeRegs, bool includeSettings) {
+    if (!sdAvailable()) { _backupStatus = "SD not available"; _backupStatusOk = false; return false; }
+    sdMkdir(BACKUP_DIR);
+
+    time_t t = time(nullptr);
+    struct tm* tm = localtime(&t);
+    char fname[48];
+    snprintf(fname, sizeof(fname), "%s/kprox_%04d%02d%02d_%02d%02d%02d.json",
+             BACKUP_DIR,
+             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+             tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+    JsonDocument doc;
+    doc["version"] = 1;
+
+    if (includeRegs) {
+        doc["activeRegister"] = activeRegister;
+        JsonArray arr = doc["registers"].to<JsonArray>();
+        for (int i = 0; i < (int)registers.size(); i++) {
+            JsonObject o = arr.add<JsonObject>();
+            o["number"]  = i;
+            o["content"] = registers[i];
+            o["name"]    = (i < (int)registerNames.size()) ? registerNames[i] : "";
+        }
+    }
+
+    if (includeSettings) {
+        JsonObject s = doc["settings"].to<JsonObject>();
+        s["wifiSSID"]           = wifiSSID;
+        s["wifiPassword"]       = wifiPassword;
+        s["hostname"]           = hostname;
+        s["deviceName"]         = deviceName;
+        s["bluetoothEnabled"]   = bluetoothEnabled;
+        s["usbEnabled"]         = usbEnabled;
+        s["ledEnabled"]         = ledEnabled;
+        s["defaultApp"]         = defaultAppIndex;
+        s["maxSinkSize"]        = maxSinkSize;
+        s["csAutoLockSecs"]     = csAutoLockSecs;
+        s["csAutoWipeAttempts"] = csAutoWipeAttempts;
+        s["csStorageLocation"]  = csStorageLocation;
+        s["bootRegEnabled"]     = bootRegEnabled;
+        s["bootRegIndex"]       = bootRegIndex;
+        s["bootRegLimit"]       = bootRegLimit;
+        // appOrder / appHidden
+        JsonArray orderArr = s["appOrder"].to<JsonArray>();
+        JsonArray hidArr   = s["appHidden"].to<JsonArray>();
+        for (size_t i = 0; i < appOrder.size(); i++) {
+            orderArr.add(appOrder[i]);
+            hidArr.add(i < appHidden.size() ? appHidden[i] : false);
+        }
+    }
+
+    String json;
+    serializeJson(doc, json);
+    if (!sdWriteFile(String(fname), json)) {
+        _backupStatus = "Write failed"; _backupStatusOk = false; return false;
+    }
+    _backupStatus = "Saved"; _backupStatusOk = true;
+    _backupRefresh();
+    return true;
+}
+
+bool AppSettings::_backupRestore(const String& filename) {
+    String path = String(BACKUP_DIR) + "/" + filename;
+    String json = sdReadFile(path);
+    if (json.isEmpty()) { _backupStatus = "Read failed"; _backupStatusOk = false; return false; }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, json)) { _backupStatus = "Parse error"; _backupStatusOk = false; return false; }
+
+    if (doc["registers"].is<JsonArray>()) {
+        registers.clear(); registerNames.clear();
+        for (JsonVariant v : doc["registers"].as<JsonArray>()) {
+            registers.push_back(v["content"] | "");
+            registerNames.push_back(v["name"]    | "");
+        }
+        if (!doc["activeRegister"].isNull()) {
+            int n = doc["activeRegister"].as<int>();
+            if (n >= 0 && (size_t)n < registers.size()) activeRegister = n;
+        }
+        saveRegisters();
+    }
+
+    if (doc["settings"].is<JsonObject>()) {
+        JsonObject s = doc["settings"];
+        if (!s["wifiSSID"].isNull()) wifiSSID = s["wifiSSID"].as<String>();
+        if (!s["wifiPassword"].isNull()) wifiPassword = s["wifiPassword"].as<String>();
+        if (!s["hostname"].isNull()) { hostnameStr = s["hostname"].as<String>(); hostname = hostnameStr.c_str(); }
+        if (!s["deviceName"].isNull()) { static String _devNameBuf; _devNameBuf = s["deviceName"].as<String>(); deviceName = _devNameBuf.c_str(); }
+        bluetoothEnabled = s["bluetoothEnabled"] | bluetoothEnabled;
+        usbEnabled = s["usbEnabled"] | usbEnabled;
+        ledEnabled = s["ledEnabled"] | ledEnabled;
+        defaultAppIndex = s["defaultApp"] | defaultAppIndex;
+        maxSinkSize = s["maxSinkSize"] | maxSinkSize;
+        csAutoLockSecs = s["csAutoLockSecs"] | csAutoLockSecs;
+        csAutoWipeAttempts = s["csAutoWipeAttempts"] | csAutoWipeAttempts;
+        if (!s["csStorageLocation"].isNull()) csStorageLocation = s["csStorageLocation"].as<String>();
+        bootRegEnabled = s["bootRegEnabled"] | bootRegEnabled;
+        bootRegIndex = s["bootRegIndex"] | bootRegIndex;
+        bootRegLimit = s["bootRegLimit"] | bootRegLimit;
+        if (s["appOrder"].is<JsonArray>() && s["appHidden"].is<JsonArray>()) {
+            appOrder.clear(); appHidden.clear();
+            for (int v : s["appOrder"].as<JsonArray>()) appOrder.push_back(v);
+            for (bool v : s["appHidden"].as<JsonArray>()) appHidden.push_back(v);
+        }
+        saveWiFiSettings();
+        saveWifiEnabledSettings();
+        saveBtSettings();
+        saveUSBSettings();
+        saveUSBIdentitySettings();
+        saveHostnameSettings();
+        saveSinkSettings();
+        saveLEDSettings();
+        saveCsSecuritySettings();
+        saveBootRegSettings();
+        saveAppLayout();
+        saveDefaultAppSettings();
+    }
+
+    _backupStatus = "Restored"; _backupStatusOk = true;
+    return true;
+}
+
+// ---- Draw page 12 ----
+
+void AppSettings::_drawPage12() {
+    auto& disp = M5Cardputer.Display;
+    disp.fillScreen(SETTINGS_BG);
+    _drawTopBar(12);
+
+    int y = CONTENT_Y;
+    disp.setTextSize(1);
+
+    // Action buttons: 0=regs only, 1=settings only, 2=both, then 3..N = restore entries
+    struct { const char* lbl; int sel; } actions[] = {
+        { "Backup Registers",         0 },
+        { "Backup Settings",          1 },
+        { "Backup Both",              2 },
+        { "Refresh list",             3 },
+    };
+    int nActions = 4;
+
+    for (int i = 0; i < nActions; i++) {
+        bool sel = (_backupSel == i);
+        uint16_t bg = sel ? selBgColor() : (uint16_t)SETTINGS_BG;
+        if (sel) disp.fillRect(0, y - 1, disp.width(), 14, bg);
+        disp.setTextColor(sel ? TFT_WHITE : labelColor(), bg);
+        char row[40]; snprintf(row, sizeof(row), "%s%s", sel ? "> " : "  ", actions[i].lbl);
+        disp.drawString(row, 4, y);
+        y += 15;
+    }
+
+    // Divider
+    disp.drawFastHLine(4, y, disp.width() - 8, disp.color565(50, 50, 50));
+    y += 4;
+
+    // SD backup file list
+    if (!sdAvailable()) {
+        disp.setTextColor(disp.color565(180, 80, 80), SETTINGS_BG);
+        disp.drawString("SD not available", 4, y);
+    } else if (_backupFiles.empty()) {
+        disp.setTextColor(disp.color565(100, 100, 100), SETTINGS_BG);
+        disp.drawString("No backups on SD", 4, y);
+    } else {
+        int visRows = (disp.height() - y - BAR_BOT_H - 14) / 14;
+        if (_backupSel >= nActions) {
+            int fileIdx = _backupSel - nActions;
+            if (fileIdx >= _backupScroll + visRows) _backupScroll = fileIdx - visRows + 1;
+            if (fileIdx < _backupScroll) _backupScroll = fileIdx;
+            if (_backupScroll < 0) _backupScroll = 0;
+        }
+        for (int i = 0; i < visRows && (_backupScroll + i) < (int)_backupFiles.size(); i++) {
+            int idx = _backupScroll + i;
+            bool sel = (_backupSel == nActions + idx);
+            uint16_t bg = sel ? selBgColor() : (uint16_t)SETTINGS_BG;
+            if (sel) disp.fillRect(0, y - 1, disp.width(), 13, bg);
+            disp.setTextColor(sel ? TFT_WHITE : disp.color565(140, 200, 140), bg);
+            String name = _backupFiles[idx];
+            // Trim to fit: "kprox_20240315_143022.json" -> "20240315 14:30"
+            String display = name;
+            if (name.startsWith("kprox_") && name.length() >= 20) {
+                String d2 = name.substring(6, 14);  // YYYYMMDD
+                String t2 = name.substring(15, 21); // HHMMSS
+                display = d2.substring(0,4)+"-"+d2.substring(4,6)+"-"+d2.substring(6)
+                          +" "+t2.substring(0,2)+":"+t2.substring(2,4);
+            }
+            if ((int)display.length() > 22) display = display.substring(0, 20) + "..";
+            disp.drawString((sel ? "> " : "  ") + display, 4, y);
+            if (sel) {
+                disp.setTextColor(disp.color565(100, 200, 100), bg);
+                disp.drawString("ENTER=restore", disp.width() - 82, y);
+            }
+            y += 14;
+        }
+    }
+
+    // Status message
+    if (!_backupStatus.isEmpty()) {
+        int sy = disp.height() - BAR_BOT_H - 14;
+        disp.setTextColor(_backupStatusOk ? TFT_GREEN : disp.color565(220, 80, 80), SETTINGS_BG);
+        disp.drawString(_backupStatus, 4, sy);
+    }
+
+    _drawBottomBar("up/dn  ENTER=action  D=delete  </> page");
+}
+
+// ---- Handle page 12 ----
+
+void AppSettings::_handlePage12(KeyInput ki) {
+    int nActions = 4;
+    int total = nActions + (int)_backupFiles.size();
+
+    if (ki.arrowLeft)  { _page = 11; _toggleSel = 0; _needsRedraw = true; return; }
+    if (ki.arrowRight) { _page = 0;  _toggleSel = 0; _needsRedraw = true; return; }
+
+    if (ki.arrowUp)   { _backupSel = (_backupSel - 1 + total) % total; _backupStatus = ""; _needsRedraw = true; return; }
+    if (ki.arrowDown) { _backupSel = (_backupSel + 1) % total;         _backupStatus = ""; _needsRedraw = true; return; }
+
+    if ((ki.ch == 'd' || ki.ch == 'D') && _backupSel >= nActions) {
+        int idx = _backupSel - nActions;
+        if (idx < (int)_backupFiles.size()) {
+            String path = String(BACKUP_DIR) + "/" + _backupFiles[idx];
+            bool deleted = sdDeleteFile(path);
+            _backupRefresh();  // remounts to flush cache
+            int maxSel = nActions + (int)_backupFiles.size() - 1;
+            if (_backupSel > maxSel) _backupSel = max(nActions - 1, maxSel);
+            _backupStatus = deleted ? "Deleted" : "Delete failed";
+            _backupStatusOk = deleted;
+        }
+        _needsRedraw = true; return;
+    }
+
+    if (!ki.enter) return;
+    _backupStatus = "";
+
+    switch (_backupSel) {
+        case 0: _backupCreate(true,  false); break;
+        case 1: _backupCreate(false, true);  break;
+        case 2: _backupCreate(true,  true);  break;
+        case 3: _backupRefresh(); _backupStatus = "Refreshed"; _backupStatusOk = true; break;
+        default: {
+            int idx = _backupSel - nActions;
+            if (idx >= 0 && idx < (int)_backupFiles.size())
+                _backupRestore(_backupFiles[idx]);
+            break;
+        }
+    }
+    _needsRedraw = true;
 }
 
 } // namespace Cardputer

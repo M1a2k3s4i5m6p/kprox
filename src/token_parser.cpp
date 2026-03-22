@@ -1119,6 +1119,13 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
                 sdExecPath = sdExecPath.substring(1, sdExecPath.length() - 1);
             kpsExecFile(sdExecPath, vars);
         }
+        else if (u.startsWith("EXEC ")) {
+            String arg = evaluateAllTokens(token.substring(5), vars);
+            arg.trim();
+            int idx = resolveRegisterArg(arg);
+            if (idx >= 0 && idx < (int)registers.size() && !registers[idx].isEmpty())
+                parseAndSendText(registers[idx], vars);
+        }
         else if (u.startsWith("IF ")) {
             String condition = token.substring(3);
             condition.trim();

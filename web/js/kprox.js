@@ -4659,6 +4659,7 @@ async function connect() {
         if (data.hostname) deviceHostname = data.hostname;
         safeSetText('freeHeap',   data.free_heap ? `${(data.free_heap / 1024).toFixed(1)} KB` : '-');
         safeSetText('uptime',     data.uptime    ? `${Math.floor(data.uptime / 1000)}s` : '-');
+        updateMemStatsUI(data);
 
         // Chip details
         const chipStr = data.chipModel
@@ -4721,6 +4722,7 @@ async function connect() {
         }
         updateLoopStatusUI();
         if (data.bootReg) updateBootProxStatusUI(data.bootReg);
+        updateMemStatsUI(data);
 
         if (data.hasOwnProperty('request_in_progress')) {
             requestInProgress = data.request_in_progress;
@@ -5465,6 +5467,7 @@ setInterval(async () => {
                 if (data.bootReg) updateBootProxStatusUI(data.bootReg);
 
                 safeSetText('freeHeap', data.free_heap ? `${(data.free_heap / 1024).toFixed(1)} KB` : '-');
+                updateMemStatsUI(data);
                 safeSetText('uptime', data.uptime ? `${Math.floor(data.uptime / 1000)}s` : '-');
             }
         } catch (error) {
@@ -6395,4 +6398,84 @@ async function bootRegResetCount() {
         });
         if (resp.ok) { _statusMsg('bootRegStatus', '\u2713 Count reset.', true); await loadBootReg(); }
     } catch(e) { _statusMsg('bootRegStatus', '\u2717 ' + e.message, false); }
+}
+
+// ============================================================
+// Memory Statistics Panel
+// ============================================================
+
+function _memBar(used, total, color) {
+    if (!total) return '';
+    const pct = Math.min(100, Math.round(used / total * 100));
+    const barColor = pct > 85 ? '#dc3545' : pct > 65 ? '#ffc107' : color;
+    return `<div style="margin:2px 0;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:1px;">
+            <span style="color:#adb5bd;">${_fmt(total - used)} free / ${_fmt(total)}</span>
+            <span style="color:${barColor};">${pct}%</span>
+        </div>
+        <div style="background:#343a40;border-radius:2px;height:5px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${barColor};border-radius:2px;transition:width 0.4s;"></div>
+        </div>
+    </div>`;
+}
+
+function _fmt(bytes) {
+    if (bytes === undefined || bytes === null) return '-';
+    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+    if (bytes >= 1024)    return (bytes / 1024).toFixed(1) + ' KB';
+    return bytes + ' B';
+}
+
+function updateMemStatsUI(d) {
+    const panel = document.getElementById('memStatsPanel');
+    if (!panel) return;
+
+    let html = '';
+
+    // Heap
+    if (d.total_heap) {
+        const used = d.total_heap - d.free_heap;
+        html += `<div style="color:#adb5bd;margin-top:3px;font-weight:600;">Heap</div>`;
+        html += _memBar(used, d.total_heap, '#0d6efd');
+        html += `<div style="display:flex;justify-content:space-between;color:#6c757d;margin-top:1px;">
+            <span>Low watermark: ${_fmt(d.min_free_heap)}</span>
+            <span>Max block: ${_fmt(d.max_alloc_heap)}</span>
+        </div>`;
+    }
+
+    // PSRAM
+    if (d.psram_found && d.psram_size > 0) {
+        const used = d.psram_size - d.psram_free;
+        html += `<div style="color:#adb5bd;margin-top:5px;font-weight:600;">PSRAM</div>`;
+        html += _memBar(used, d.psram_size, '#6f42c1');
+        html += `<div style="color:#6c757d;margin-top:1px;">Low watermark: ${_fmt(d.psram_min_free)}</div>`;
+    } else if (d.psram_found === false) {
+        html += `<div style="color:#6c757d;margin-top:3px;">PSRAM: not present</div>`;
+    }
+
+    // Flash (sketch + free sketch space)
+    if (d.sketch_size !== undefined) {
+        const sketchTotal = (d.sketch_size || 0) + (d.free_sketch_space || 0);
+        html += `<div style="color:#adb5bd;margin-top:5px;font-weight:600;">Flash (OTA partition)</div>`;
+        html += _memBar(d.sketch_size, sketchTotal, '#198754');
+        html += `<div style="color:#6c757d;margin-top:1px;">Sketch: ${_fmt(d.sketch_size)} &nbsp; Free: ${_fmt(d.free_sketch_space)}</div>`;
+    }
+
+    // SPIFFS
+    if (d.spiffs_total) {
+        html += `<div style="color:#adb5bd;margin-top:5px;font-weight:600;">SPIFFS</div>`;
+        html += _memBar(d.spiffs_used, d.spiffs_total, '#fd7e14');
+        html += `<div style="color:#6c757d;margin-top:1px;">Used: ${_fmt(d.spiffs_used)} / ${_fmt(d.spiffs_total)}</div>`;
+    }
+
+    // SD card
+    if (d.sd_available && d.sd_total) {
+        html += `<div style="color:#adb5bd;margin-top:5px;font-weight:600;">SD Card</div>`;
+        html += _memBar(d.sd_used, d.sd_total, '#20c997');
+        html += `<div style="color:#6c757d;margin-top:1px;">Used: ${_fmt(d.sd_used)} / ${_fmt(d.sd_total)}</div>`;
+    } else if (d.sd_available === false) {
+        html += `<div style="color:#6c757d;margin-top:3px;">SD Card: not inserted</div>`;
+    }
+
+    panel.innerHTML = html || '<div style="color:#6c757d;font-style:italic;">No data</div>';
 }

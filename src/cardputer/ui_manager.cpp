@@ -78,17 +78,26 @@ void UIManager::addApp(AppBase* app) {
 std::vector<int> UIManager::visibleApps() const {
     std::vector<int> result;
     int numApps = (int)_apps.size() - 1; // exclude launcher at 0
-    if (appOrder.empty() || (int)appOrder.size() < numApps) {
-        // fallback: natural order, nothing hidden
+
+    if (appOrder.empty()) {
         for (int i = 1; i <= numApps; i++) result.push_back(i);
-    } else {
-        for (size_t i = 0; i < appOrder.size(); i++) {
-            int idx = appOrder[i];
-            if (idx >= 1 && idx < (int)_apps.size()) {
-                bool hidden = (i < appHidden.size()) && appHidden[i];
-                if (!hidden) result.push_back(idx);
-            }
+        return result;
+    }
+
+    // Use the saved order. Any app index not present in appOrder
+    // (e.g. newly added apps) is appended at the end, visible by default.
+    for (size_t i = 0; i < appOrder.size(); i++) {
+        int idx = appOrder[i];
+        if (idx >= 1 && idx < (int)_apps.size()) {
+            bool hidden = (i < appHidden.size()) && appHidden[i];
+            if (!hidden) result.push_back(idx);
         }
+    }
+    // Append any app indices not present in appOrder
+    for (int i = 1; i <= numApps; i++) {
+        bool found = false;
+        for (int v : appOrder) { if (v == i) { found = true; break; } }
+        if (!found) result.push_back(i);
     }
     return result;
 }

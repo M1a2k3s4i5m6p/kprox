@@ -34,3 +34,5 @@ bool   bootRegEnabled    = false;
 int    bootRegIndex      = 0;
 int    bootRegLimit      = 0;
 int    bootRegFiredCount = 0;
+
+std::vector<String> pendingTokenStrings;

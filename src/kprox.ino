@@ -82,7 +82,6 @@ unsigned long lastWifiCheck   = 0;
 unsigned long lastStatusPrint = 0;
 
 int loopingRegister = -1;
-std::vector<String> pendingTokenStrings;
 long                utcOffsetSeconds = 0;
 int activeRegister  = 0;
 int currentMouseX   = 0;
