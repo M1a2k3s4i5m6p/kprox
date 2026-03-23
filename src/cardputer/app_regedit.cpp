@@ -154,6 +154,7 @@ static void _drawTopBar(int regIdx, int total, const char* modeLabel) {
     char lbl[36];
     snprintf(lbl, sizeof(lbl), "RegEdit  %s", modeLabel);
     disp.drawString(lbl, 4, 3);
+    drawTabHint(4 + disp.textWidth("RegEdit") + 3);
     char right[12];
     if (total == 0) snprintf(right, sizeof(right), "empty");
     else            snprintf(right, sizeof(right), "%d/%d", regIdx + 1, total);

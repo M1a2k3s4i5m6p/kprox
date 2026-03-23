@@ -51,4 +51,7 @@ void loadAppLayout(int numApps);
 void saveBootRegSettings();
 void loadBootRegSettings();
 
+void saveTimerProxSettings();
+void loadTimerProxSettings();
+
 void wipeAllSettings();

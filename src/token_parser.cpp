@@ -20,6 +20,16 @@
 // checks whether BtnA or ESC/backtick has been pressed; if so, halts execution.
 void checkParseInterrupt() {
     feedWatchdog();
+
+    if (g_haltDeadlineMs > 0 && millis() >= g_haltDeadlineMs) {
+        g_haltDeadlineMs = 0;
+        g_parserAbort = true;
+        haltAllOperations();
+        return;
+    }
+
+    if (g_parseInterruptHook) g_parseInterruptHook();
+
 #ifdef BOARD_M5STACK_CARDPUTER
     M5Cardputer.update();
     if (M5Cardputer.BtnA.wasPressed()) {

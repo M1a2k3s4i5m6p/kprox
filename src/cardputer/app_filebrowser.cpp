@@ -87,6 +87,7 @@ void AppFileBrowser::_drawTopBar() {
     int pw = disp.textWidth(p);
     disp.setTextColor(disp.color565(180, 255, 220), bc);
     disp.drawString(p, disp.width() - pw - 4, 3);
+    drawTabHint(4 + disp.textWidth("Files") + 3);
 }
 
 void AppFileBrowser::_drawBottomBar(const char* hint) {

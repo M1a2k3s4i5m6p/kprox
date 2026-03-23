@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 #include "../totp.h"
 
@@ -13,7 +14,8 @@ public:
     void onExit() override {}
     void onUpdate() override;
     const char* appName() const override { return "TOTProx"; }
-    uint16_t iconColor() const override  { return 0xF800; }
+    const char* appHelp()  const override { return "TOTP authenticator (2FA codes).\nAccounts stored in the credential store.\nBtnG0 types the current code to the host."; }
+    const uint16_t* appIcon() const override { return fa_lock_48; }
     bool handlesGlobalBtnA() const override { return true; } // red
 
 private:

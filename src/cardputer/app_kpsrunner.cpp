@@ -80,6 +80,7 @@ void AppKPSRunner::_drawTopBar() {
     int cw = disp.textWidth(cnt);
     disp.setTextColor(disp.color565(220, 180, 255), bc);
     disp.drawString(cnt, disp.width() - cw - 4, 3);
+    drawTabHint(4 + disp.textWidth("KPScript") + 3);
 }
 
 void AppKPSRunner::_drawBottomBar(const char* hint) {

@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 
 namespace Cardputer {
@@ -12,7 +13,8 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "Settings"; }
-    uint16_t iconColor() const override { return 0x07E0; }
+    const char* appHelp()  const override { return "Device settings across 13 pages.\nLeft/right arrows to change page.\nSettings are saved immediately."; }
+    const uint16_t* appIcon() const override { return fa_gear_48; }
     bool handlesGlobalBtnA() const override { return true; }
 
 private:

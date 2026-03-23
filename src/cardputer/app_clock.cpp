@@ -124,6 +124,7 @@ void AppClock::_drawClock() {
     disp.setTextSize(1);
     disp.setTextColor(TFT_WHITE, barColor);
     disp.drawString("Clock", 4, 3);
+    drawTabHint(4 + disp.textWidth("Clock") + 3);
 
     if (WiFi.status() == WL_CONNECTED) {
         String ip = WiFi.localIP().toString();

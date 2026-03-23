@@ -342,3 +342,27 @@ void loadBootRegSettings() {
     bootRegFiredCount = preferences.getInt( "bootRegFired", 0);
     preferences.end();
 }
+
+void saveTimerProxSettings() {
+    preferences.begin("kprox", false);
+    preferences.putInt("tpRegIdx", timerProxRegIdx);
+    preferences.putInt("tpFireH",  timerProxFireH);
+    preferences.putInt("tpFireM",  timerProxFireM);
+    preferences.putInt("tpFireS",  timerProxFireS);
+    preferences.putInt("tpHaltH",  timerProxHaltH);
+    preferences.putInt("tpHaltM",  timerProxHaltM);
+    preferences.putInt("tpHaltS",  timerProxHaltS);
+    preferences.end();
+}
+
+void loadTimerProxSettings() {
+    preferences.begin("kprox", false);
+    timerProxRegIdx = preferences.getInt("tpRegIdx", 0);
+    timerProxFireH  = preferences.getInt("tpFireH",  0);
+    timerProxFireM  = preferences.getInt("tpFireM",  5);
+    timerProxFireS  = preferences.getInt("tpFireS",  0);
+    timerProxHaltH  = preferences.getInt("tpHaltH",  0);
+    timerProxHaltM  = preferences.getInt("tpHaltM",  0);
+    timerProxHaltS  = preferences.getInt("tpHaltS",  0);
+    preferences.end();
+}

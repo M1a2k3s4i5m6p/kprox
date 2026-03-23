@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 #include <vector>
 
@@ -27,7 +28,8 @@ public:
     void onUpdate() override;
     void onExit() override {}
     const char* appName() const override { return "Gadgets"; }
-    uint16_t iconColor() const override  { return 0x07FF; }
+    const char* appHelp()  const override { return "Browse and install community gadgets.\nGadgets are pre-built token strings.\nRequires WiFi to fetch from GitHub."; }
+    const uint16_t* appIcon() const override { return fa_plug_48; }
 
 private:
     enum State { ST_IDLE, ST_DIR_LOADING, ST_GADGET_LOADING, ST_READY, ST_ERROR };

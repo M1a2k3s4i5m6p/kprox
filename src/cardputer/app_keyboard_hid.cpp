@@ -25,6 +25,7 @@ void AppKeyboardHID::_drawInfo() {
     disp.setTextColor(TFT_WHITE, disp.color565(50, 50, 60));
     disp.setTextSize(1);
     disp.drawString("HID Keyboard", 4, 3);
+    drawTabHint(4 + disp.textWidth("HID Keyboard") + 3);
 
     disp.setTextColor(ble ? TFT_GREEN : TFT_RED, disp.color565(50, 50, 60));
     disp.drawString(ble ? "BLE OK" : "BLE off", disp.width() - 52, 3);

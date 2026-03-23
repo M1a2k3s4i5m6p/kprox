@@ -277,6 +277,7 @@ static void _gdgTopBar(const char* right = nullptr) {
     disp.setTextSize(1);
     disp.setTextColor(TFT_WHITE, barBg);
     disp.drawString("Gadgets", 4, 3);
+    drawTabHint(4 + disp.textWidth("Gadgets") + 3);
     if (right) {
         int rw = disp.textWidth(right);
         disp.drawString(right, disp.width() - rw - 4, 3);

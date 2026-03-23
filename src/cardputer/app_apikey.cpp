@@ -16,6 +16,7 @@ void AppApiKey::_render() {
     disp.setTextColor(TFT_WHITE, disp.color565(120, 30, 140));
     disp.setTextSize(1);
     disp.drawString("Set API Key", 4, 3);
+    drawTabHint(4 + disp.textWidth("Set API Key") + 3);
 
     int y = 24;
     disp.setTextColor(disp.color565(180, 180, 180), BG);

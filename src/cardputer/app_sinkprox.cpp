@@ -64,6 +64,7 @@ void AppSinkProx::_drawHelp() {
     disp.setTextSize(1);
     disp.setTextColor(TFT_WHITE, barBg);
     disp.drawString("SinkProx  [Help]", 4, 3);
+    drawTabHint(4 + disp.textWidth("SinkProx") + 3);
     disp.setTextColor(disp.color565(120, 200, 200), barBg);
     disp.drawString("2/2", W - disp.textWidth("2/2") - 4, 3);
 

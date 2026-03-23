@@ -81,6 +81,7 @@ void AppFuzzyProx::_draw() {
     disp.setTextSize(1);
     disp.setTextColor(TFT_WHITE, barBg);
     disp.drawString("FuzzyProx", 4, 3);
+    drawTabHint(4 + disp.textWidth("FuzzyProx") + 3);
 
     // CS badge
     {

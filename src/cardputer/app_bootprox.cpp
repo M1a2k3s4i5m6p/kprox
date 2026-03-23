@@ -22,6 +22,7 @@ void AppBootProx::_drawTopBar() {
     int sw = disp.textWidth(st);
     disp.setTextColor(sc, bc);
     disp.drawString(st, disp.width() - sw - 4, 3);
+    drawTabHint(4 + disp.textWidth("BootProx") + 3);
 }
 
 void AppBootProx::_drawBottomBar(const char* hint) {

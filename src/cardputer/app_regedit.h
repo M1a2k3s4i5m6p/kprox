@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 #include <vector>
 
@@ -13,7 +14,8 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "RegEdit"; }
-    uint16_t iconColor() const override  { return 0xFFE0; }
+    const char* appHelp()  const override { return "Edit register name and token string content.\nUp/dn: browse  ENTER: edit  D: delete\nBtnG0: play active register"; }
+    const uint16_t* appIcon() const override { return fa_pen_to_square_48; }
     void requestRedraw() override { _needsRedraw = true; }
     bool handlesGlobalBtnA() const override { return true; }
 

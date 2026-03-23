@@ -99,7 +99,12 @@ void AppLauncher::_drawIcon(int appIndex, int screenX, bool selected) {
     // appIndex is already the real registered index (1-based)
     const uint16_t* icon = uiManager.apps()[appIndex]->appIcon();
     if (icon) {
-        disp.pushImage(drawX, iconY, iconSz, iconSz, icon);
+        // Always push at the fixed 48px size — the array is exactly ICON_SIZE×ICON_SIZE.
+        // Centre it within the (larger) selected slot so the selection highlight is
+        // provided by position/label colour rather than by scaling the bitmap.
+        int imgX = screenX + (slotW - ICON_SIZE) / 2;
+        int imgY = TOP_MARGIN + (ICON_SEL_SIZE - ICON_SIZE) / 2;
+        disp.pushImage(imgX, imgY, ICON_SIZE, ICON_SIZE, icon);
     } else {
         uint16_t col = uiManager.apps()[appIndex]->iconColor();
         disp.fillRoundRect(drawX, iconY, iconSz, iconSz, 8, col);
@@ -146,8 +151,29 @@ void AppLauncher::_drawMenu() {
     }
 
     disp.setTextSize(1);
-    disp.setTextColor(disp.color565(80, 80, 80), TFT_BLACK);
-    disp.drawString("< > navigate   ENTER select", 4, disp.height() - 12);
+
+    // Active register strip above bottom bar
+    {
+        int stripY = disp.height() - 25;
+        uint16_t stripBg = disp.color565(15, 15, 15);
+        disp.fillRect(0, stripY, disp.width(), 12, stripBg);
+        disp.setTextColor(disp.color565(70, 70, 70), stripBg);
+        if (registers.empty()) {
+            disp.drawString("No registers", 4, stripY + 2);
+        } else {
+            String rname = (activeRegister < (int)registerNames.size())
+                ? registerNames[activeRegister] : "";
+            String rtxt = "Active: [" + String(activeRegister + 1) + "]";
+            if (!rname.isEmpty()) rtxt += " " + rname;
+            if ((int)rtxt.length() > 30) rtxt = rtxt.substring(0, 28) + "..";
+            disp.setTextColor(disp.color565(100, 140, 100), stripBg);
+            disp.drawString(rtxt, 4, stripY + 2);
+        }
+    }
+
+    // Bottom hint
+    disp.setTextColor(disp.color565(70, 70, 70), TFT_BLACK);
+    disp.drawString("< > select   ENTER open   Tab help", 4, disp.height() - 11);
 }
 
 void AppLauncher::onUpdate() {

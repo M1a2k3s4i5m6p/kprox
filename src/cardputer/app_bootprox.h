@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 
 namespace Cardputer {
@@ -12,7 +13,8 @@ public:
     void onUpdate() override;
     void onExit() override {}
     const char* appName() const override { return "BootProx"; }
-    uint16_t iconColor() const override  { return 0x07FF; }
+    const char* appHelp()  const override { return "Configure a register to run on every boot.\nSet a fire limit to auto-disable after N boots.\n0 = fire on every boot indefinitely."; }
+    const uint16_t* appIcon() const override { return fa_rocket_48; }
     void requestRedraw() override        { _needsRedraw = true; }
 
 private:

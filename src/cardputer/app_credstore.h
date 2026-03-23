@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 #include "../totp.h"
 
@@ -25,7 +26,8 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "CredStore"; }
-    uint16_t iconColor() const override  { return 0xF800; }
+    const char* appHelp()  const override { return "Encrypted KeePass KDBX 3.1 credential store.\n\nFIRST USE: Select 'Unlock / Create', enter a passphrase (min 8 chars) and press ENTER. This creates the database and sets your key. You will need this key every time you unlock after a reboot.\n\nUNLOCKING: The store locks on reboot. Select 'Unlock / Create' and enter your passphrase to unlock. TOTP gate modes are also available under 'Key & Gate'.\n\nCREDENTIALS: Each entry stores a label, password, username, and notes. Use {CREDSTORE label}, {CREDSTORE username label}, or {CREDSTORE notes label} in token strings.\n\nSTORAGE: The database can be kept in built-in flash (NVS) or on the SD card. Switch under 'SD Storage' in Settings while unlocked to migrate automatically."; }
+    const uint16_t* appIcon() const override { return fa_key_48; }
     void requestRedraw() override { _needsRedraw = true; }
     bool handlesGlobalBtnA() const override { return true; }
 

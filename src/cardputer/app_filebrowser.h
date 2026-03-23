@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 #include <SD.h>
 #include <vector>
@@ -14,7 +15,8 @@ public:
     void onUpdate() override;
     void onExit() override {}
     const char* appName() const override { return "Files"; }
-    uint16_t iconColor() const override  { return 0x07E0; }
+    const char* appHelp()  const override { return "Browse and manage SD card files.\nENTER: view file or enter directory\nD: dump to HID  DEL: delete file"; }
+    const uint16_t* appIcon() const override { return fa_folder_open_48; }
     void requestRedraw() override        { _needsRedraw = true; }
     bool handlesGlobalBtnA() const override { return true; }
 

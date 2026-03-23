@@ -31,6 +31,7 @@
 #include "app_filebrowser.h"
 #include "app_kpsrunner.h"
 #include "app_bootprox.h"
+#include "app_timerprox.h"
 #include <M5Cardputer.h>
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -221,6 +222,7 @@ void setup() {
     loadCsSecuritySettings();
     loadCsStorageLocation();
     loadBootRegSettings();
+    loadTimerProxSettings();
     loadHostnameSettings();
     loadDefaultAppSettings();
     loadMTLSSettings();
@@ -472,6 +474,7 @@ void setup() {
     static Cardputer::AppFileBrowser appFileBrowser;
     static Cardputer::AppKPSRunner   appKPSRunner;
     static Cardputer::AppBootProx    appBootProx;
+    static Cardputer::AppTimerProx   appTimerProx;
     static Cardputer::AppSettings    appSettings;
 
     // Registration order determines launcher icon index (0 = launcher, 1..N = user apps)
@@ -490,7 +493,8 @@ void setup() {
     Cardputer::uiManager.addApp(&appFileBrowser);  // 12
     Cardputer::uiManager.addApp(&appKPSRunner);    // 13
     Cardputer::uiManager.addApp(&appBootProx);     // 14
-    Cardputer::uiManager.addApp(&appSettings); // 15
+    Cardputer::uiManager.addApp(&appTimerProx);    // 15
+    Cardputer::uiManager.addApp(&appSettings); // 16
 
     // Load persisted app order/visibility (12 user apps, indices 1..12)
     loadAppLayout((int)Cardputer::uiManager.apps().size() - 1);

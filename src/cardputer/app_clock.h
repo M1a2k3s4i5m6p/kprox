@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 
 namespace Cardputer {
@@ -16,7 +17,8 @@ public:
     void onEnter() override;
     void onUpdate() override;
     const char* appName() const override { return "Clock"; }
-    uint16_t iconColor() const override { return 0x1C12; }
+    const char* appHelp()  const override { return "Current time and NTP sync status.\nLeft/right: change timezone.\nRequires WiFi and NTP sync for accuracy."; }
+    const uint16_t* appIcon() const override { return fa_clock_48; }
 
 private:
     unsigned long _lastDraw = 0;

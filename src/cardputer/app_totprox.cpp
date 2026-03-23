@@ -30,7 +30,8 @@ void AppTOTProx::_drawTopBar(const char* subtitle) {
         disp.fillRoundRect(lx, 2, lw, TP_BAR_H - 4, 2, lb);
         disp.setTextColor(TFT_WHITE, lb);
         disp.drawString(lockStr, lx + 4, 4);
-    } else if (subtitle && *subtitle) {
+        drawTabHint(4 + disp.textWidth("TOTProx") + 3);
+} else if (subtitle && *subtitle) {
         int sw = disp.textWidth(subtitle);
         disp.setTextColor(disp.color565(255, 200, 200), bc);
         disp.drawString(subtitle, disp.width() - sw - 4, 3);

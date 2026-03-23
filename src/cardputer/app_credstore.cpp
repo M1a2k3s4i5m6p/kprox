@@ -66,6 +66,7 @@ void AppCredStore::_drawTopBar(int page) {
     snprintf(pg, sizeof(pg), "%d/%d", page + 1, NUM_PAGES);
     int pw = disp.textWidth(pg);
     disp.drawString(pg, disp.width() - pw - 4, 3);
+    drawTabHint(4 + disp.textWidth(PAGE_LABELS[page]) + 3);
 }
 
 void AppCredStore::_drawInputField(int x, int y, int w,

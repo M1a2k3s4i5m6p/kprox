@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 #include <vector>
 
@@ -13,7 +14,8 @@ public:
     void onUpdate() override;
     void onExit() override {}
     const char* appName() const override { return "KPScript"; }
-    uint16_t iconColor() const override  { return 0xF81F; }
+    const char* appHelp()  const override { return "Select and run KProx Script (.kps) files.\nScripts are stored on the SD card.\nR: rescan  ENTER: run selected script"; }
+    const uint16_t* appIcon() const override { return fa_code_48; }
     void requestRedraw() override        { _needsRedraw = true; }
     bool handlesGlobalBtnA() const override { return true; }
 

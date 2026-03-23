@@ -26,6 +26,7 @@ void AppQRProx::_draw() {
     disp.setTextSize(1);
     disp.setTextColor(TFT_WHITE, barBg);
     disp.drawString("QRProx", 4, 4);
+    drawTabHint(4 + disp.textWidth("QRProx") + 3);
 
     bool wifiOk = (WiFi.status() == WL_CONNECTED);
 

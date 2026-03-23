@@ -12,6 +12,7 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "API Key"; }
+    const char* appHelp()  const override { return "Change the device API key.\nENTER: edit key  save to apply.\nDefault key is kprox1337."; }
     uint16_t iconColor() const override { return 0x8C40; } // ~#882080
 
 private:

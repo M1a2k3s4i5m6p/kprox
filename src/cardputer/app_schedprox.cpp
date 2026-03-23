@@ -120,6 +120,7 @@ void AppSchedProx::_drawTopBar(const char* title) {
     int tw = d.textWidth(title);
     d.setTextColor(d.color565(255, 220, 100), bc);
     d.drawString(title, d.width() - tw - 4, 4);
+    drawTabHint(4 + d.textWidth("SchedProx") + 3);
 }
 
 void AppSchedProx::_drawBottomBar(const char* hint) {

@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 #include <vector>
 
@@ -14,7 +15,8 @@ public:
     void onExit() override;
     void requestRedraw() override { _needsRedraw = true; }
     const char* appName() const override { return "FuzzyProx"; }
-    uint16_t iconColor() const override  { return 0xF81F; } // magenta
+    const char* appHelp()  const override { return "Search all registers by name or content.\nType to filter  ENTER: play match\nBtnG0: play active register"; }
+    const uint16_t* appIcon() const override { return fa_magnifying_glass_48; } // magenta
     bool handlesGlobalBtnA() const override { return true; }
 
 private:

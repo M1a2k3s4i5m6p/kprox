@@ -42,6 +42,7 @@ void AppSettings::_drawTopBar(int pageNum) {
     snprintf(pageStr, sizeof(pageStr), "%d/%d", pageNum + 1, NUM_PAGES);
     int pw = disp.textWidth(pageStr);
     disp.drawString(pageStr, disp.width() - pw - 4, 3);
+    drawTabHint(4 + disp.textWidth(pageLabels[pageNum]) + 3);
 }
 
 void AppSettings::_drawBottomBar(const char* hint) {

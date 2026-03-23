@@ -12,6 +12,7 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "SetWiFi"; }
+    const char* appHelp()  const override { return "Configure WiFi credentials.\nType SSID and password then save.\nDevice reconnects automatically."; }
     uint16_t iconColor() const override { return 0x065F; }  // ~rgb(0,100,200)
 
 private:

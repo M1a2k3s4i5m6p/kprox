@@ -417,12 +417,16 @@ void accumulateMouseMovement(int16_t deltaX, int16_t deltaY) {
 
 // ---- Halt / resume ----
 
-bool g_parserAbort        = false;
-bool g_btnAHaltedPlayback = false;
+bool          g_parserAbort        = false;
+bool          g_btnAHaltedPlayback = false;
+unsigned long g_haltDeadlineMs     = 0;
+void        (*g_parseInterruptHook)() = nullptr;
 
 void haltAllOperations() {
-    g_parserAbort    = true;
-    isLooping        = false;
+    g_parserAbort        = true;
+    g_haltDeadlineMs     = 0;
+    g_parseInterruptHook = nullptr;
+    isLooping            = false;
     loopingRegister  = -1;
     isHalted         = true;
     pendingTokenStrings.clear();

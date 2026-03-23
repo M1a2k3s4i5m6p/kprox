@@ -178,6 +178,11 @@ extern int        currentMouseY;
 // ---- Sink ----
 extern int maxSinkSize; // 0 = unlimited
 
+// ---- TimerProx persisted settings ----
+extern int timerProxRegIdx;
+extern int timerProxFireH, timerProxFireM, timerProxFireS;
+extern int timerProxHaltH, timerProxHaltM, timerProxHaltS;
+
 // ---- Boot register ----
 extern bool   bootRegEnabled;
 extern int    bootRegIndex;    // 0-based register index
@@ -215,6 +220,16 @@ extern std::vector<int>  appOrder;
 extern std::vector<bool> appHidden;
 // Cleared at the start of putTokenString() before each new run.
 extern bool g_parserAbort;
+
+// Non-zero means haltAllOperations() should be called at or after this millis() timestamp.
+// Set by AppTimerProx when the register fires; checked by checkParseInterrupt() so
+// the halt triggers even while token execution is blocking the main loop.
+extern unsigned long g_haltDeadlineMs;
+
+// Optional hook called by checkParseInterrupt() on every tick during token execution.
+// Used by AppTimerProx to update the HALTING countdown display while the main loop is blocked.
+// Must be cleared before the installing object is destroyed.
+extern void (*g_parseInterruptHook)();
 
 // Set by checkParseInterrupt() when BtnA specifically triggered the abort.
 // KProx reads and clears this to skip the corresponding wasReleased event.

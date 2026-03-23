@@ -10,6 +10,7 @@ namespace Cardputer {
 void AppSetWifi::onEnter() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(disp.color565(30, 30, 30));
+    drawTabHint(4 + disp.textWidth("Set WiFi") + 3);
     disp.setTextScroll(true);
     disp.setTextSize(1);
     disp.setTextColor(TFT_WHITE, disp.color565(30, 30, 30));

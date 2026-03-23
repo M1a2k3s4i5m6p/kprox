@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 #include "../scheduled_tasks.h"
 
@@ -14,7 +15,8 @@ public:
     void onUpdate() override;
     void requestRedraw() override { _needsRedraw = true; }
     const char* appName() const override { return "SchedProx"; }
-    uint16_t iconColor() const override  { return 0x8C20; }
+    const char* appHelp()  const override { return "Manage time-triggered token string tasks.\nN: new task  D: delete  ENTER: view\nTasks require NTP sync to fire."; }
+    const uint16_t* appIcon() const override { return fa_calendar_days_48; }
     bool handlesGlobalBtnA() const override { return true; }
 
 private:

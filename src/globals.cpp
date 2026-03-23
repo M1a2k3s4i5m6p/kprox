@@ -29,6 +29,11 @@ String csStorageLocation = "nvs";
 // ---- Sink ----
 int maxSinkSize = 0; // 0 = unlimited
 
+// ---- TimerProx persisted settings ----
+int timerProxRegIdx = 0;
+int timerProxFireH = 0, timerProxFireM = 5, timerProxFireS = 0;
+int timerProxHaltH = 0, timerProxHaltM = 0, timerProxHaltS = 0;
+
 // ---- Boot register ----
 bool   bootRegEnabled    = false;
 int    bootRegIndex      = 0;

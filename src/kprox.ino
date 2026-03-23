@@ -211,6 +211,7 @@ void setup() {
     loadCsSecuritySettings();
     loadCsStorageLocation();
     loadBootRegSettings();
+    loadTimerProxSettings();
     loadHostnameSettings();
     loadMTLSSettings();
     loadKeymapSettings();

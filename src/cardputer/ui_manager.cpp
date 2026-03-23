@@ -2,6 +2,7 @@
 
 #include "../globals.h"
 #include "ui_manager.h"
+#include <vector>
 
 namespace Cardputer {
 
@@ -66,6 +67,20 @@ KeyInput pollKeys() {
 
     return ki;
 }
+
+void drawTabHint(int afterX) {
+    auto& disp = M5Cardputer.Display;
+    uint16_t bg = disp.color565(25, 40, 80);
+    uint16_t tc = disp.color565(100, 150, 230);
+    disp.setTextSize(1);
+    const char* label = "Tab help";
+    int bw = disp.textWidth(label) + 6;
+    int bx = afterX + 4;
+    disp.fillRoundRect(bx, 3, bw, 11, 2, bg);
+    disp.setTextColor(tc, bg);
+    disp.drawString(label, bx + 3, 4);
+}
+
 
 // ---- UIManager ----
 
@@ -169,8 +184,139 @@ void UIManager::update() {
         }
     }
 
+    // TAB: toggle help overlay
+    if (M5Cardputer.Keyboard.isPressed()) {
+        auto ks = M5Cardputer.Keyboard.keysState();
+        if (ks.tab) {
+            _showHelp = !_showHelp;
+            _helpScroll = 0;
+            _helpNeedsRedraw = _showHelp;
+            notifyInteraction();
+            if (!_showHelp) _apps[_currentApp]->requestRedraw();
+            while (M5Cardputer.Keyboard.isPressed()) { delay(20); M5Cardputer.update(); }
+            return;
+        }
+    }
+
+    if (_showHelp) {
+        bool helpRedraw = _helpNeedsRedraw;
+        if (M5Cardputer.Keyboard.isPressed()) {
+            auto ks = M5Cardputer.Keyboard.keysState();
+            bool consumed = false;
+            for (char ch : ks.word) {
+                if (ch == ';') { if (_helpScroll > 0) { _helpScroll--; helpRedraw = true; } consumed = true; }
+                if (ch == '.') { _helpScroll++; helpRedraw = true; consumed = true; }
+            }
+            if (ks.fn) {
+                // navigation only
+            } else if (!consumed) {
+                _showHelp = false;
+                notifyInteraction();
+                _apps[_currentApp]->requestRedraw();
+                while (M5Cardputer.Keyboard.isPressed()) { delay(20); M5Cardputer.update(); }
+                return;
+            }
+            while (M5Cardputer.Keyboard.isPressed()) { delay(20); M5Cardputer.update(); }
+        }
+        if (helpRedraw) {
+            _helpNeedsRedraw = false;
+            _apps[_currentApp]->requestRedraw();
+            _apps[_currentApp]->onUpdate();
+            _drawHelpOverlay(_apps[_currentApp]);
+        }
+        return;
+    }
+
     if (_currentApp < (int)_apps.size()) _apps[_currentApp]->onUpdate();
 }
 
+void UIManager::_drawHelpOverlay(AppBase* app) {
+    auto& disp = M5Cardputer.Display;
+    int pw = disp.width();
+    int ph = disp.height();
+
+    int margin = 8;
+    int pw2 = pw - margin * 2;
+    int ph2 = ph - margin * 2;
+    uint16_t bg     = disp.color565(10, 20, 40);
+    uint16_t border = disp.color565(60, 120, 200);
+    uint16_t titleC = disp.color565(100, 180, 255);
+    uint16_t bodyC  = disp.color565(200, 210, 220);
+    uint16_t dimC   = disp.color565(80, 90, 100);
+    uint16_t scrollC= disp.color565(60, 120, 200);
+
+    disp.fillRoundRect(margin, margin, pw2, ph2, 5, bg);
+    disp.drawRoundRect(margin, margin, pw2, ph2, 5, border);
+    disp.setTextSize(1);
+
+    // Title row
+    int ty = margin + 5;
+    disp.setTextColor(titleC, bg);
+    disp.drawString(String(app->appName()) + " Help", margin + 6, ty);
+    const char* tbadge = "TAB";
+    int tbw = disp.textWidth(tbadge) + 6;
+    disp.fillRoundRect(pw - margin - tbw - 2, ty - 1, tbw, 12, 3, disp.color565(30,50,90));
+    disp.setTextColor(disp.color565(100,150,255), disp.color565(30,50,90));
+    disp.drawString(tbadge, pw - margin - tbw + 1, ty);
+
+    ty += 14;
+    disp.drawFastHLine(margin + 4, ty, pw2 - 8, border);
+    ty += 4;
+
+    // Build all lines from help text (word-wrap + \n splits)
+    int maxChars = (pw2 - 14) / 6;
+    String txt = String(app->appHelp());
+    std::vector<String> lines;
+    while (txt.length() > 0) {
+        // Find next newline
+        int nl = txt.indexOf('\n');
+        String seg = (nl >= 0) ? txt.substring(0, nl) : txt;
+        txt = (nl >= 0) ? txt.substring(nl + 1) : String("");
+        // Word-wrap the segment
+        while (seg.length() > 0) {
+            if ((int)seg.length() <= maxChars) {
+                lines.push_back(seg); seg = "";
+            } else {
+                int brk = maxChars;
+                while (brk > 0 && seg[brk] != ' ') brk--;
+                if (brk == 0) brk = maxChars;
+                lines.push_back(seg.substring(0, brk));
+                seg = seg.substring(brk + 1);
+            }
+        }
+        if (nl >= 0) lines.push_back(""); // blank line after paragraph break
+    }
+
+    // Content area: from ty to (ph - margin - 14) for hint bar
+    int contentH = ph - margin - 14 - ty;
+    int lineH    = 12;
+    int visLines = contentH / lineH;
+
+    // Clamp scroll
+    int maxScroll = max(0, (int)lines.size() - visLines);
+    if (_helpScroll > maxScroll) _helpScroll = maxScroll;
+    if (_helpScroll < 0) _helpScroll = 0;
+
+    // Draw visible lines
+    disp.setTextColor(bodyC, bg);
+    for (int i = 0; i < visLines && (_helpScroll + i) < (int)lines.size(); i++) {
+        disp.drawString(lines[_helpScroll + i], margin + 6, ty + i * lineH);
+    }
+
+    // Scroll indicators
+    if (_helpScroll > 0) {
+        disp.setTextColor(scrollC, bg);
+        disp.drawString("^", pw - margin - 10, ty);
+    }
+    if (_helpScroll < maxScroll) {
+        disp.setTextColor(scrollC, bg);
+        disp.drawString("v", pw - margin - 10, ph - margin - 20);
+    }
+
+    // Hint bar
+    String hint = maxScroll > 0 ? "fn+;/. scroll  any key close" : "any key to close";
+    disp.setTextColor(dimC, bg);
+    disp.drawString(hint, margin + 6, ph - margin - 11);
+}
 } // namespace Cardputer
 #endif // BOARD_M5STACK_CARDPUTER

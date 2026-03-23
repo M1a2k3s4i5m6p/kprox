@@ -54,6 +54,7 @@ void AppKProx::_drawScreen() {
     } else {
         disp.drawString("KProx", 4, 3);
     }
+    drawTabHint(4 + disp.textWidth("KProx") + 3);
 
     // Right: credential store lock badge
     {

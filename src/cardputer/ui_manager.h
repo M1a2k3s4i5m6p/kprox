@@ -22,6 +22,7 @@ struct KeyInput {
 };
 
 KeyInput pollKeys();
+void     drawTabHint(int afterX); // draw small ? badge after title text
 
 class UIManager {
 public:
@@ -45,6 +46,11 @@ public:
 private:
     std::vector<AppBase*> _apps;
     int           _currentApp      = 0;
+    bool          _showHelp        = false;
+    int           _helpScroll      = 0;
+    bool          _helpNeedsRedraw = false;
+
+    void _drawHelpOverlay(AppBase* app);
     bool          _screenOn        = true;
     bool          _needsFullRedraw = false;
     unsigned long _lastInteraction = 0;

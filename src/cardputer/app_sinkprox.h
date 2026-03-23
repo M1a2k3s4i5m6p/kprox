@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 
 namespace Cardputer {
@@ -13,7 +14,8 @@ public:
     void onExit() override {}
     void requestRedraw() override { _needsRedraw = true; }
     const char* appName() const override { return "SinkProx"; }
-    uint16_t iconColor() const override  { return 0x04FF; }
+    const char* appHelp()  const override { return "View the unauthenticated write-only sink.\nSink accepts plain text from any client.\nENTER: flush and execute  D: delete"; }
+    const uint16_t* appIcon() const override { return fa_sink_48; }
     bool handlesGlobalBtnA() const override { return true; }
 
 private:

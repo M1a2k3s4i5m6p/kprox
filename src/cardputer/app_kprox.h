@@ -2,6 +2,7 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "app_base.h"
+#include "fa_icons.h"
 #include "ui_manager.h"
 
 namespace Cardputer {
@@ -12,8 +13,9 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "KProx"; }
+    const char* appHelp()  const override { return "Register playback and device status.\nUp/dn: browse registers  ENTER: play\nD: delete  BtnG0: play active"; }
     bool handlesGlobalBtnA() const override { return true; }
-    uint16_t iconColor() const override { return 0x3297; } // header blue
+    const uint16_t* appIcon() const override { return fa_jet_fighter_48; } // header blue
 
 private:
     String _numberBuf;

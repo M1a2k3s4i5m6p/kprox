@@ -34,6 +34,9 @@ public:
     // Return true if the app handles BtnA itself; UIManager will not fire
     // the global "play current register" action for apps that return true.
     virtual bool handlesGlobalBtnA() const { return false; }
+
+    // Short help text shown when TAB is pressed. Keep to 2-3 lines max.
+    virtual const char* appHelp() const { return "No help available."; }
 };
 
 } // namespace Cardputer
