@@ -344,25 +344,50 @@ void loadBootRegSettings() {
 }
 
 void saveTimerProxSettings() {
+    Preferences preferences;
     preferences.begin("kprox", false);
-    preferences.putInt("tpRegIdx", timerProxRegIdx);
-    preferences.putInt("tpFireH",  timerProxFireH);
-    preferences.putInt("tpFireM",  timerProxFireM);
-    preferences.putInt("tpFireS",  timerProxFireS);
-    preferences.putInt("tpHaltH",  timerProxHaltH);
-    preferences.putInt("tpHaltM",  timerProxHaltM);
-    preferences.putInt("tpHaltS",  timerProxHaltS);
+    preferences.putInt("tpReg",   timerProxRegIdx);
+    preferences.putInt("tpFireH", timerProxFireH);
+    preferences.putInt("tpFireM", timerProxFireM);
+    preferences.putInt("tpFireS", timerProxFireS);
+    preferences.putInt("tpHaltH", timerProxHaltH);
+    preferences.putInt("tpHaltM", timerProxHaltM);
+    preferences.putInt("tpHaltS", timerProxHaltS);
+    preferences.putInt("tpRepH",  timerProxRepH);
+    preferences.putInt("tpRepM",  timerProxRepM);
+    preferences.putInt("tpRepS",  timerProxRepS);
     preferences.end();
 }
 
 void loadTimerProxSettings() {
-    preferences.begin("kprox", false);
-    timerProxRegIdx = preferences.getInt("tpRegIdx", 0);
-    timerProxFireH  = preferences.getInt("tpFireH",  0);
-    timerProxFireM  = preferences.getInt("tpFireM",  5);
-    timerProxFireS  = preferences.getInt("tpFireS",  0);
-    timerProxHaltH  = preferences.getInt("tpHaltH",  0);
-    timerProxHaltM  = preferences.getInt("tpHaltM",  0);
-    timerProxHaltS  = preferences.getInt("tpHaltS",  0);
+    Preferences preferences;
+    preferences.begin("kprox", true);
+    timerProxRegIdx = preferences.getInt("tpReg",   0);
+    timerProxFireH  = preferences.getInt("tpFireH", 0);
+    timerProxFireM  = preferences.getInt("tpFireM", 5);
+    timerProxFireS  = preferences.getInt("tpFireS", 0);
+    timerProxHaltH  = preferences.getInt("tpHaltH", 0);
+    timerProxHaltM  = preferences.getInt("tpHaltM", 0);
+    timerProxHaltS  = preferences.getInt("tpHaltS", 0);
+    timerProxRepH   = preferences.getInt("tpRepH",  0);
+    timerProxRepM   = preferences.getInt("tpRepM",  0);
+    timerProxRepS   = preferences.getInt("tpRepS",  0);
     preferences.end();
 }
+
+void saveDisplaySettings() {
+    Preferences preferences;
+    preferences.begin("kprox", false);
+    preferences.putInt("dispBright",  g_displayBrightness);
+    preferences.putULong("dispTimeout", g_screenTimeoutMs);
+    preferences.end();
+}
+
+void loadDisplaySettings() {
+    Preferences preferences;
+    preferences.begin("kprox", true);
+    g_displayBrightness = preferences.getInt("dispBright",    128);
+    g_screenTimeoutMs   = preferences.getULong("dispTimeout", 60000);
+    preferences.end();
+}
+

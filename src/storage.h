@@ -53,5 +53,7 @@ void loadBootRegSettings();
 
 void saveTimerProxSettings();
 void loadTimerProxSettings();
+void saveDisplaySettings();
+void loadDisplaySettings();
 
 void wipeAllSettings();

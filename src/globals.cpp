@@ -33,6 +33,10 @@ int maxSinkSize = 0; // 0 = unlimited
 int timerProxRegIdx = 0;
 int timerProxFireH = 0, timerProxFireM = 5, timerProxFireS = 0;
 int timerProxHaltH = 0, timerProxHaltM = 0, timerProxHaltS = 0;
+int timerProxRepH  = 0, timerProxRepM  = 0, timerProxRepS  = 0;
+
+int           g_displayBrightness = 128;
+unsigned long g_screenTimeoutMs   = 60000;
 
 // ---- Boot register ----
 bool   bootRegEnabled    = false;

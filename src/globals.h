@@ -182,6 +182,10 @@ extern int maxSinkSize; // 0 = unlimited
 extern int timerProxRegIdx;
 extern int timerProxFireH, timerProxFireM, timerProxFireS;
 extern int timerProxHaltH, timerProxHaltM, timerProxHaltS;
+extern int timerProxRepH,  timerProxRepM,  timerProxRepS;
+
+extern int           g_displayBrightness;  // 0-255, default 128
+extern unsigned long g_screenTimeoutMs;    // ms, default 60000
 
 // ---- Boot register ----
 extern bool   bootRegEnabled;

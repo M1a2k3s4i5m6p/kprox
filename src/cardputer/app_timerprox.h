@@ -33,7 +33,9 @@ private:
 
     enum State { ST_SETUP, ST_RUNNING };
     enum Field { F_REG=0, F_FIRE_H, F_FIRE_M, F_FIRE_S,
-                 F_HALT_H, F_HALT_M, F_HALT_S, F_START, F_COUNT };
+                 F_HALT_H, F_HALT_M, F_HALT_S,
+                 F_REP_H,  F_REP_M,  F_REP_S,
+                 F_START, F_COUNT };
 
     State         _state      = ST_SETUP;
     bool          _needsRedraw = true;
@@ -42,14 +44,19 @@ private:
     int    _regIdx  = 0;
     int    _fireH=0, _fireM=0, _fireS=0;
     int    _haltH=0, _haltM=0, _haltS=0;
+    int    _repH=0,  _repM=0,  _repS=0;
 
     unsigned long _startMs    = 0;
     unsigned long _firedMs    = 0;
+    unsigned long _haltEndMs  = 0;
+    unsigned long _repEndMs   = 0;
     unsigned long _lastDrawMs = 0;
     bool          _fired      = false;
+    int           _repeatCount = 0;
 
     void _save();
     void _load();
+    void _startTimer();
 
     void _drawTopBar();
     void _drawBottomBar(const char* hint);
@@ -64,6 +71,7 @@ private:
 
     long  _fireMs() { return (_fireH*3600L + _fireM*60L + _fireS) * 1000L; }
     long  _haltMs() { return (_haltH*3600L + _haltM*60L + _haltS) * 1000L; }
+    long  _repMs()  { return (_repH *3600L + _repM *60L + _repS)  * 1000L; }
 
     static void _drawTimeField(int x, int y, int val, bool sel, const char* lbl);
 };

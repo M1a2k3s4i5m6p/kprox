@@ -13,13 +13,13 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "Settings"; }
-    const char* appHelp()  const override { return "Device settings across 13 pages.\nLeft/right arrows to change page.\nSettings are saved immediately."; }
+    const char* appHelp()  const override { return "Device settings across 15 pages.\nLeft/right arrows to change page.\nSettings are saved immediately."; }
     const uint16_t* appIcon() const override { return fa_gear_48; }
     bool handlesGlobalBtnA() const override { return true; }
 
 private:
     // 0=WiFi, 1=BT, 2=USB, 3=API Key, 4=Device Identity, 5=Sink Config, 6=Timing 1/2, 7=Timing 2/2, 8=Startup App, 9=App Layout
-    static constexpr int NUM_PAGES = 13;
+    static constexpr int NUM_PAGES = 15;
     int  _page        = 0;
     bool _needsRedraw = true;
 
@@ -69,6 +69,17 @@ private:
     void _handlePage11(KeyInput ki);
     void _drawPage12();
     void _handlePage12(KeyInput ki);
+    void _drawPage13();
+    void _handlePage13(KeyInput ki);
+    void _drawPage14();
+    void _handlePage14(KeyInput ki);
+
+    // Keymap page state
+    int  _keymapSel   = 0;
+    bool _keymapSaved = false;
+
+    // Display page state
+    int  _dispSel     = 0;
 
     // Backup page state
     int             _backupSel   = 0;  // 0=create 1..N=restore entries

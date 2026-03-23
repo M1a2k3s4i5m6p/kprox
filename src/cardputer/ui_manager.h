@@ -26,7 +26,7 @@ void     drawTabHint(int afterX); // draw small ? badge after title text
 
 class UIManager {
 public:
-    static constexpr unsigned long SCREEN_TIMEOUT_MS = 60000;
+    static constexpr unsigned long SCREEN_TIMEOUT_MS = 60000; // kept for ABI; runtime uses g_screenTimeoutMs
 
     UIManager();
 

@@ -201,7 +201,7 @@ void setup() {
     M5Cardputer.begin(true);
 
     auto& disp = M5Cardputer.Display;
-    disp.setBrightness(128);
+    disp.setBrightness(g_displayBrightness);
 
     initWatchdog();
     randomSeed(esp_random());
@@ -224,6 +224,7 @@ void setup() {
     loadCsStorageLocation();
     loadBootRegSettings();
     loadTimerProxSettings();
+    loadDisplaySettings();
     loadHostnameSettings();
     loadDefaultAppSettings();
     loadMTLSSettings();

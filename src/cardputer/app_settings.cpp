@@ -10,6 +10,8 @@
 #include <WiFi.h>
 #include <algorithm>
 #include "../sd_utils.h"
+#include "../keymap.h"
+#include "../keymap_data.h"
 #include <SD.h>
 
 namespace Cardputer {
@@ -34,7 +36,8 @@ void AppSettings::_drawTopBar(int pageNum) {
     static const char* pageLabels[NUM_PAGES] = {
         "WiFi Settings", "Bluetooth", "USB HID", "API Key",
         "Device Identity", "Sink Config", "HID Timing 1/2", "HID Timing 2/2",
-        "Startup App", "App Layout", "CS Security", "SD Storage", "Backups"
+        "Startup App", "App Layout", "CS Security", "SD Storage", "Backups",
+        "Keymap", "Display"
     };
     disp.drawString(pageLabels[pageNum], 4, 3);
 
@@ -111,7 +114,7 @@ void AppSettings::_drawToggleRow(int y, bool selected, const char* label,
 
 // ---- Page 0: Bluetooth ----
 
-void AppSettings::_drawPage0() {
+void AppSettings::_drawPage1() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SETTINGS_BG);
     _drawTopBar(0);
@@ -142,7 +145,7 @@ void AppSettings::_drawPage0() {
     _drawBottomBar("up/dn  ENTER toggle  C reconnect  </> page  ESC");
 }
 
-void AppSettings::_handlePage0(KeyInput ki) {
+void AppSettings::_handlePage1(KeyInput ki) {
     static constexpr int N = 3;
     if (ki.arrowLeft)  { _page = 0; _needsRedraw = true; return; }  // left of BT = WiFi
     if (ki.arrowRight) { _page = 2; _toggleSel = 0; _needsRedraw = true; return; }  // right of BT = USB
@@ -176,7 +179,7 @@ void AppSettings::_handlePage0(KeyInput ki) {
 
 // ---- Page 1: USB HID ----
 
-void AppSettings::_drawPage1() {
+void AppSettings::_drawPage2() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SETTINGS_BG);
     _drawTopBar(1);
@@ -203,7 +206,7 @@ void AppSettings::_drawPage1() {
     _drawBottomBar("up/dn  ENTER toggle  </> page  ESC back");
 }
 
-void AppSettings::_handlePage1(KeyInput ki) {
+void AppSettings::_handlePage2(KeyInput ki) {
     static constexpr int N = 4;
     if (ki.arrowLeft)  { _page = 1; _toggleSel = 0; _needsRedraw = true; return; }  // left of USB = BT
     if (ki.arrowRight) {
@@ -258,7 +261,7 @@ void AppSettings::_connectWifi() {
 
 // ---- Page 2: Set WiFi ----
 
-void AppSettings::_drawPage2() {
+void AppSettings::_drawPage0() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SETTINGS_BG);
     _drawTopBar(2);
@@ -317,7 +320,7 @@ void AppSettings::_drawPage2() {
     }
 }
 
-void AppSettings::_handlePage2(KeyInput ki) {
+void AppSettings::_handlePage0(KeyInput ki) {
     if (_wifiState == WS_DONE) {
         if (ki.anyKey) { _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; }
         _needsRedraw = true; return;
@@ -355,7 +358,7 @@ void AppSettings::_handlePage2(KeyInput ki) {
         if (_wifiState == WS_SSID) {
             if (_wifiInputBuf.length() > 0) { _newSSID = _wifiInputBuf; _wifiInputBuf = ""; _wifiState = WS_PASS; }
         } else if (_wifiState == WS_PASS) {
-            _wifiState = WS_CONNECTING; _needsRedraw = true; _drawPage2(); _connectWifi();
+            _wifiState = WS_CONNECTING; _needsRedraw = true; _drawPage0(); _connectWifi();
         }
         _needsRedraw = true; return;
     }
@@ -1069,7 +1072,7 @@ void AppSettings::_drawPage11() {
         disp.drawString(_editBuf, 4, y);
     }
 
-    _drawBottomBar("up/dn select  ENTER apply  </> page");
+    _drawBottomBar("up/dn=select  ENTER=apply  fn+</>= page");
 }
 
 void AppSettings::_handlePage11(KeyInput ki) {
@@ -1149,6 +1152,9 @@ void AppSettings::onEnter() {
     _idSel = 0; _editing = false; _idSaved = false; _editBuf = "";
     _timingSel = 0;
     _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = "";
+    _keymapSaved = false; _dispSel = 0;
+    _keymapSel = 0;
+    for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } }
     _needsRedraw = true;
 }
 
@@ -1179,9 +1185,9 @@ void AppSettings::onUpdate() {
 
     if (_needsRedraw) {
         switch (_page) {
-            case 0: _drawPage2(); break;  // WiFi Settings
-            case 1: _drawPage0(); break;  // Bluetooth
-            case 2: _drawPage1(); break;  // USB HID
+            case 0: _drawPage0(); break;  // WiFi Settings
+            case 1: _drawPage1(); break;  // Bluetooth
+            case 2: _drawPage2(); break;  // USB HID
             case 3: _drawPage3(); break;  // API Key
             case 4: _drawPage4(); break;  // Device Identity
             case 5: _drawPage5(); break;  // Sink Config
@@ -1192,6 +1198,8 @@ void AppSettings::onUpdate() {
             case 10: _drawPage10(); break; // CS Security
             case 11: _drawPage11(); break; // SD Storage
             case 12: _drawPage12(); break; // Backups
+            case 13: _drawPage13(); break; // Keymap
+            case 14: _drawPage14(); break; // Display
         }
         _needsRedraw = false;
     }
@@ -1208,9 +1216,9 @@ void AppSettings::onUpdate() {
     }
 
     switch (_page) {
-        case 0: _handlePage2(ki); break;  // WiFi Settings
-        case 1: _handlePage0(ki); break;  // Bluetooth
-        case 2: _handlePage1(ki); break;  // USB HID
+        case 0: _handlePage0(ki); break;  // WiFi Settings
+        case 1: _handlePage1(ki); break;  // Bluetooth
+        case 2: _handlePage2(ki); break;  // USB HID
         case 3: _handlePage3(ki); break;  // API Key
         case 4: _handlePage4(ki); break;  // Device Identity
         case 5: _handlePage5(ki); break;  // Sink Config
@@ -1221,6 +1229,8 @@ void AppSettings::onUpdate() {
         case 10: _handlePage10(ki); break; // CS Security
         case 11: _handlePage11(ki); break; // SD Storage
         case 12: _handlePage12(ki); break; // Backups
+        case 13: _handlePage13(ki); break; // Keymap
+        case 14: _handlePage14(ki); break; // Display
     }
 }
 
@@ -1471,8 +1481,14 @@ void AppSettings::_handlePage12(KeyInput ki) {
     int nActions = 4;
     int total = nActions + (int)_backupFiles.size();
 
-    if (ki.arrowLeft)  { _page = 11; _toggleSel = 0; _needsRedraw = true; return; }
-    if (ki.arrowRight) { _page = 0;  _toggleSel = 0; _needsRedraw = true; return; }
+    if (ki.arrowLeft)  { _page = 11; _toggleSel = 0; _needsRedraw = true; return; }  // SD Storage
+    if (ki.arrowRight) {
+        _page = 13; _keymapSaved = false;
+        for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } }
+        _needsRedraw = true; return;
+    }  // Keymap
+
+
 
     if (ki.arrowUp)   { _backupSel = (_backupSel - 1 + total) % total; _backupStatus = ""; _needsRedraw = true; return; }
     if (ki.arrowDown) { _backupSel = (_backupSel + 1) % total;         _backupStatus = ""; _needsRedraw = true; return; }
@@ -1507,6 +1523,165 @@ void AppSettings::_handlePage12(KeyInput ki) {
         }
     }
     _needsRedraw = true;
+}
+
+// ============================================================
+// Page 13: Keymap Selection
+// ============================================================
+
+static const char* s_builtinKeymapNames[] = {
+    "English (US)", "German (QWERTZ)", "French (AZERTY)", "Italian",
+    "Spanish", "Swedish", "Swiss German", "Portuguese",
+    "British (UK)", "Norwegian", "Finnish", "Danish",
+    "Dutch", "Polish", "Hungarian", "Dvorak", "Colemak"
+};
+
+static const char* s_builtinKeymapIds[] = {
+    "en", "de", "fr", "it", "es", "se", "ch", "pt",
+    "gb", "no", "fi", "da", "nl", "pl", "hu", "dvorak", "colemak"
+};
+static constexpr int S_BUILTIN_COUNT = 17;
+
+void AppSettings::_drawPage13() {
+    auto& d = M5Cardputer.Display;
+    _drawTopBar(13);
+    d.fillRect(0, BAR_TOP_H, d.width(), d.height() - BAR_TOP_H - BAR_BOT_H, 0x0000);
+
+    d.setTextSize(1);
+    int y = BAR_TOP_H + 4;
+    int rowH = 11;
+    int visRows = (d.height() - BAR_TOP_H - BAR_BOT_H - 4) / rowH;
+    int scroll = max(0, _keymapSel - visRows / 2);
+
+    for (int i = scroll; i < S_BUILTIN_COUNT && (i - scroll) < visRows; i++) {
+        bool sel     = (i == _keymapSel);
+        bool active  = (activeKeymap == String(s_builtinKeymapIds[i]));
+        uint16_t bg  = sel ? d.color565(20, 60, 120) : (uint16_t)0x0000;
+        uint16_t tc  = active ? (uint16_t)TFT_GREEN : sel ? (uint16_t)TFT_WHITE : d.color565(180,180,180);
+        if (sel) d.fillRect(0, y, d.width(), rowH, bg);
+        d.setTextColor(tc, bg);
+        String label = String(active ? "* " : "  ") + s_builtinKeymapNames[i];
+        d.drawString(label, 4, y + 1);
+        y += rowH;
+    }
+
+    if (_keymapSaved) {
+        d.setTextColor(TFT_GREEN, 0x0000);
+        d.drawString("Saved!", d.width() - 44, BAR_TOP_H + 4);
+    }
+
+    _drawBottomBar("up/dn=select  ENTER=apply  fn+</>= page");
+}
+
+void AppSettings::_handlePage13(KeyInput ki) {
+    if (ki.fn && ki.arrowLeft)  { _page = 12; _backupSel = 0; _backupScroll = 0; _backupStatus = ""; _backupRefresh(); _needsRedraw = true; return; }
+    if (ki.fn && ki.arrowRight) { _page = 14; _dispSel = 0; _needsRedraw = true; return; }
+
+    if (ki.arrowUp)   { if (_keymapSel > 0) _keymapSel--; _keymapSaved = false; _needsRedraw = true; return; }
+    if (ki.arrowDown) { if (_keymapSel < S_BUILTIN_COUNT - 1) _keymapSel++; _keymapSaved = false; _needsRedraw = true; return; }
+
+    if (ki.enter) {
+        keymapLoad(String(s_builtinKeymapIds[_keymapSel]));
+        keymapSaveActive();
+        _keymapSaved = true;
+        _needsRedraw = true;
+    }
+}
+
+// ============================================================
+// Page 14: Display Settings
+// ============================================================
+
+void AppSettings::_drawPage14() {
+    auto& d = M5Cardputer.Display;
+    _drawTopBar(14);
+    d.fillRect(0, BAR_TOP_H, d.width(), d.height() - BAR_TOP_H - BAR_BOT_H, 0x0000);
+    d.setTextSize(1);
+
+    int y = BAR_TOP_H + 8;
+
+    // Brightness row
+    {
+        bool sel = (_dispSel == 0);
+        uint16_t bg = sel ? d.color565(20, 60, 120) : (uint16_t)0x0000;
+        if (sel) d.fillRect(0, y - 2, d.width(), 14, bg);
+        d.setTextColor(sel ? TFT_WHITE : d.color565(160,160,160), bg);
+        d.drawString("Brightness:", 4, y);
+        // Draw bar
+        int barX = 90, barW = d.width() - barX - 8;
+        d.drawRect(barX, y, barW, 10, d.color565(60,60,60));
+        int fill = (int)((long)barW * g_displayBrightness / 255);
+        if (fill > 0) d.fillRect(barX + 1, y + 1, fill, 8, d.color565(80,160,255));
+        char vbuf[8]; snprintf(vbuf, sizeof(vbuf), "%d", g_displayBrightness);
+        d.setTextColor(sel ? TFT_WHITE : d.color565(140,140,140), 0x0000);
+        d.drawString(vbuf, barX + barW + 3, y);
+        y += 22;
+    }
+
+    // Timeout row
+    {
+        bool sel = (_dispSel == 1);
+        uint16_t bg = sel ? d.color565(20, 60, 120) : (uint16_t)0x0000;
+        if (sel) d.fillRect(0, y - 2, d.width(), 14, bg);
+        d.setTextColor(sel ? TFT_WHITE : d.color565(160,160,160), bg);
+        d.drawString("Timeout:", 4, y);
+
+        // Options: 30s, 1m, 2m, 5m, 10m, never
+        static const unsigned long timeoutOpts[]  = {30000, 60000, 120000, 300000, 600000, 0};
+        static const char*         timeoutLabels[] = {"30s", "1min", "2min", "5min", "10min", "Never"};
+        static constexpr int       TIMEOUT_COUNT   = 6;
+
+        int tx = 80;
+        for (int i = 0; i < TIMEOUT_COUNT; i++) {
+            bool active = (g_screenTimeoutMs == timeoutOpts[i]);
+            uint16_t tbg = active ? d.color565(30, 90, 30) : d.color565(35,35,35);
+            uint16_t ttc = active ? TFT_GREEN : d.color565(150,150,150);
+            int tw = d.textWidth(timeoutLabels[i]) + 6;
+            d.fillRoundRect(tx, y, tw, 12, 2, tbg);
+            d.setTextColor(ttc, tbg);
+            d.drawString(timeoutLabels[i], tx + 3, y + 2);
+            tx += tw + 3;
+        }
+        y += 22;
+    }
+
+    _drawBottomBar("up/dn=row  </>=adjust  fn+</>= page");
+}
+
+void AppSettings::_handlePage14(KeyInput ki) {
+    // fn+left / fn+right = page navigation
+    if (ki.fn && ki.arrowLeft) {
+        _page = 13;
+        for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } }
+        _keymapSaved = false; _needsRedraw = true; return;
+    }
+    if (ki.fn && ki.arrowRight) {
+        _page = 0; _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; _needsRedraw = true; return;
+    }
+
+    if (ki.arrowUp || ki.arrowDown) { _dispSel = (_dispSel + 1) % 2; _needsRedraw = true; return; }
+
+    if (_dispSel == 0) {
+        if (ki.arrowLeft)  { g_displayBrightness = max(16,  g_displayBrightness - 16); }
+        if (ki.arrowRight) { g_displayBrightness = min(255, g_displayBrightness + 16); }
+        if (ki.arrowLeft || ki.arrowRight) {
+            M5Cardputer.Display.setBrightness((uint8_t)g_displayBrightness);
+            saveDisplaySettings();
+            _needsRedraw = true;
+        }
+    } else {
+        static const unsigned long opts[] = {30000, 60000, 120000, 300000, 600000, 0};
+        constexpr int N = 6;
+        int cur = 0;
+        for (int i = 0; i < N; i++) if (g_screenTimeoutMs == opts[i]) { cur = i; break; }
+        if (ki.arrowLeft)  cur = (cur - 1 + N) % N;
+        if (ki.arrowRight) cur = (cur + 1) % N;
+        if (ki.arrowLeft || ki.arrowRight) {
+            g_screenTimeoutMs = opts[cur];
+            saveDisplaySettings();
+            _needsRedraw = true;
+        }
+    }
 }
 
 } // namespace Cardputer

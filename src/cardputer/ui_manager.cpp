@@ -132,7 +132,7 @@ void UIManager::returnToLauncher() {
 void UIManager::wakeScreen() {
     _lastInteraction = millis();
     if (!_screenOn) {
-        M5Cardputer.Display.setBrightness(128);
+        M5Cardputer.Display.setBrightness((uint8_t)g_displayBrightness);
         _screenOn        = true;
         _needsFullRedraw = true;
     }
@@ -141,7 +141,7 @@ void UIManager::wakeScreen() {
 void UIManager::notifyInteraction() {
     _lastInteraction = millis();
     if (!_screenOn) {
-        M5Cardputer.Display.setBrightness(128);
+        M5Cardputer.Display.setBrightness((uint8_t)g_displayBrightness);
         _screenOn        = true;
         _needsFullRedraw = true;
     }
@@ -159,7 +159,7 @@ void UIManager::update() {
     }
 
     // Screen timeout
-    if (_screenOn && (now - _lastInteraction > SCREEN_TIMEOUT_MS)) {
+    if (_screenOn && (now - _lastInteraction > g_screenTimeoutMs)) {
         M5Cardputer.Display.setBrightness(0);
         _screenOn = false;
     }
