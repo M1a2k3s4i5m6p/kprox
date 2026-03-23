@@ -264,7 +264,7 @@ void AppCombatProx::_update(unsigned long now) {
             if (ddx*ddx + ddy*ddy < (TANK_R+BULLET_R)*(TANK_R+BULLET_R)) {
                 _player.hp--; b.active = false;
                 if (_player.hp <= 0) {
-                    // Show death screen first, then send payload on next ENTER
+                    _onPlayerDied();   // send immediately
                     _phase = PH_DEAD; _phaseEnter = now; return;
                 }
             }
@@ -344,8 +344,8 @@ void AppCombatProx::_drawSplash() {
     d.setTextColor(0xF800, 0x0000);
     d.drawString("You die   -> Magic SysRq REISUB!", AW/2 - d.textWidth("You die   -> Magic SysRq REISUB!")/2, 76);
     d.setTextColor(0x8410, 0x0000);
-    d.drawString("up=fwd  dn=back  left=rot-CCW  right=rot-CW", AW/2 - d.textWidth("up=fwd  dn=back  left=rot-CCW  right=rot-CW")/2, 90);
-    d.drawString("fn / ENTER / BtnA = fire      ESC = quit", AW/2 - d.textWidth("fn / ENTER / BtnA = fire      ESC = quit")/2, 102);
+    d.drawString("up=fwd  dn=back  left=rot-CCW  right=rot-CW", AW/2 - d.textWidth("up=fwd dn=back left=rot-CCW right=rot-CW")/2, 90);
+    d.drawString("fn / ENTER / BtnG0 = fire ESC = quit", AW/2 - d.textWidth("fn / ENTER / BtnG0 = fire ESC = quit")/2, 102);
     d.setTextColor(0xFFFF, 0x0000);
     d.drawString("Press ENTER to start", AW/2 - d.textWidth("Press ENTER to start")/2, 118);
 }
@@ -357,7 +357,7 @@ void AppCombatProx::_drawDead() {
     d.drawString("TANK DESTROYED", AW/2 - d.textWidth("TANK DESTROYED")/2, 26);
     d.setTextSize(1); d.setTextColor(0xFFFF, 0x0000);
     if (_reisub) {
-        d.drawString("Magic SysRq REISUB will be sent!", AW/2 - d.textWidth("Magic SysRq REISUB will be sent!")/2, 56);
+        d.drawString("Magic SysRq REISUB sent!", AW/2 - d.textWidth("Magic SysRq REISUB sent!")/2, 56);
         d.setTextColor(0xFC00, 0x0000);
         d.drawString("R-E-I-S-U-B  System going down...", AW/2 - d.textWidth("R-E-I-S-U-B  System going down...")/2, 70);
     } else {
@@ -368,7 +368,7 @@ void AppCombatProx::_drawDead() {
     String sc = "Kills this round: " + String(_score);
     d.drawString(sc, AW/2 - d.textWidth(sc)/2, 90);
     d.setTextColor(0xFFFF, 0x0000);
-    d.drawString("ENTER=send+retry   ESC=quit", AW/2 - d.textWidth("ENTER=send+retry   ESC=quit")/2, 118);
+    d.drawString("ENTER=retry   ESC=quit", AW/2 - d.textWidth("ENTER=retry   ESC=quit")/2, 118);
 }
 
 void AppCombatProx::_drawWin() {
@@ -380,7 +380,7 @@ void AppCombatProx::_drawWin() {
     String sc = "Killed " + String(_score) + " processes.";
     d.drawString(sc, AW/2 - d.textWidth(sc)/2, 56);
     d.setTextColor(0xFFE0, 0x0000);
-    d.drawString("Target system destabilised.", AW/2 - d.textWidth("Target system destabilised.")/2, 70);
+    d.drawString("Target system destabilized.", AW/2 - d.textWidth("Target system destabilized.")/2, 70);
     d.setTextColor(0xFFFF, 0x0000);
     d.drawString("ENTER=play again   ESC=quit", AW/2 - d.textWidth("ENTER=play again   ESC=quit")/2, 118);
 }
@@ -405,12 +405,7 @@ void AppCombatProx::onUpdate() {
         if (!ki.anyKey) return;
         uiManager.notifyInteraction();
         if (ki.esc)   { _phase = PH_SPLASH; _needsRedraw = true; return; }
-        if (ki.enter) {
-            _onPlayerDied();    // send payload after player has seen the screen
-            _resetGame();
-            _phase = PH_PLAYING;
-            _needsRedraw = true;
-        }
+        if (ki.enter) { _resetGame(); _phase = PH_PLAYING; _needsRedraw = true; }
         return;
     }
 
