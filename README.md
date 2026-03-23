@@ -171,7 +171,7 @@ app to show its help page.
 | **psCombatProx** | Combat / `ps` clone. Kill enemy: `kill -9 <pid>`. You die: REISUB. |
 | **Settings** | Device settings and configuration for WiFi, BT, USB HID, API Key, Identity, Sink, HID Timing, Startup App, Layout, CS, SD. |
 
-![psCombatProx](img/combat.png)
+![psCombatProx](img/combat_title.png)
 ![psCombatProx](img/combat2.png)
 ![psCombatProx Loss](img/combat_loss.png)
 ![psCombatProx Victory](img/combat_victory.png)
