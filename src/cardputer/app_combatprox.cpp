@@ -344,8 +344,8 @@ void AppCombatProx::_drawSplash() {
     d.setTextColor(0xF800, 0x0000);
     d.drawString("You die   -> Magic SysRq REISUB!", AW/2 - d.textWidth("You die   -> Magic SysRq REISUB!")/2, 76);
     d.setTextColor(0x8410, 0x0000);
-    d.drawString("up=fwd  dn=back  left=rot-CCW  right=rot-CW", AW/2 - d.textWidth("up=fwd  dn=back  left=rot-CCW  right=rot-CW")/2, 90);
-    d.drawString("fn / ENTER / BtnA = fire      ESC = quit", AW/2 - d.textWidth("fn / ENTER / BtnA = fire      ESC = quit")/2, 102);
+    d.drawString("up=fwd dn=back left=rot-CCW right=rot-CW", AW/2 - d.textWidth("up=fwd dn=back left=rot-CCW right=rot-CW")/2, 90);
+    d.drawString("fn / ENTER / BtnA = fire ESC = quit", AW/2 - d.textWidth("fn / ENTER / BtnA = fire ESC = quit")/2, 102);
     d.setTextColor(0xFFFF, 0x0000);
     d.drawString("Press ENTER to start", AW/2 - d.textWidth("Press ENTER to start")/2, 118);
 }
@@ -380,7 +380,7 @@ void AppCombatProx::_drawWin() {
     String sc = "Killed " + String(_score) + " processes.";
     d.drawString(sc, AW/2 - d.textWidth(sc)/2, 56);
     d.setTextColor(0xFFE0, 0x0000);
-    d.drawString("Target system destabilised.", AW/2 - d.textWidth("Target system destabilised.")/2, 70);
+    d.drawString("Target system destabilized.", AW/2 - d.textWidth("Target system destabilized.")/2, 70);
     d.setTextColor(0xFFFF, 0x0000);
     d.drawString("ENTER=play again   ESC=quit", AW/2 - d.textWidth("ENTER=play again   ESC=quit")/2, 118);
 }
