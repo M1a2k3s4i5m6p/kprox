@@ -25,6 +25,7 @@
 #define MEDIA_KEYS_ID  0x02
 #define MOUSE_ID       0x03
 #define SYSTEM_KEYS_ID 0x04
+#define EXT_KEYS_ID    0x05
 
 static const uint8_t _hidReportDescriptor[] = {
   USAGE_PAGE(1),      0x01,          // USAGE_PAGE (Generic Desktop Ctrls)
@@ -55,10 +56,10 @@ static const uint8_t _hidReportDescriptor[] = {
   REPORT_COUNT(1),    0x06,          //   REPORT_COUNT (6) ; 6 bytes (Keys)
   REPORT_SIZE(1),     0x08,          //   REPORT_SIZE(8)
   LOGICAL_MINIMUM(1), 0x00,          //   LOGICAL_MINIMUM(0)
-  LOGICAL_MAXIMUM(1), 0x65,          //   LOGICAL_MAXIMUM(0x65) ; 101 keys
+  LOGICAL_MAXIMUM(2), 0xE7, 0x00,    //   LOGICAL_MAXIMUM(231) — full keyboard page 0x00-0xE7
   USAGE_PAGE(1),      0x07,          //   USAGE_PAGE (Kbrd/Keypad)
   USAGE_MINIMUM(1),   0x00,          //   USAGE_MINIMUM (0)
-  USAGE_MAXIMUM(1),   0x65,          //   USAGE_MAXIMUM (0x65)
+  USAGE_MAXIMUM(2),   0xE7, 0x00,    //   USAGE_MAXIMUM (0xE7) — covers intl keys up to 0x94, modifiers up to 0xE7
   HIDINPUT(1),        0x00,          //   INPUT (Data,Array,Abs,No Wrap,Linear,Preferred State,No Null Position)
   END_COLLECTION(0),                 // END_COLLECTION
   // ------------------------------------------------- Media Keys
@@ -70,24 +71,28 @@ static const uint8_t _hidReportDescriptor[] = {
   LOGICAL_MINIMUM(1), 0x00,          //   LOGICAL_MINIMUM (0)
   LOGICAL_MAXIMUM(1), 0x01,          //   LOGICAL_MAXIMUM (1)
   REPORT_SIZE(1),     0x01,          //   REPORT_SIZE (1)
-  REPORT_COUNT(1),    0x10,          //   REPORT_COUNT (16)
-  USAGE(1),           0xB5,          //   USAGE (Scan Next Track)     ; bit 0: 1
-  USAGE(1),           0xB6,          //   USAGE (Scan Previous Track) ; bit 1: 2
-  USAGE(1),           0xB7,          //   USAGE (Stop)                ; bit 2: 4
-  USAGE(1),           0xCD,          //   USAGE (Play/Pause)          ; bit 3: 8
-  USAGE(1),           0xE2,          //   USAGE (Mute)                ; bit 4: 16
-  USAGE(1),           0xE9,          //   USAGE (Volume Increment)    ; bit 5: 32
-  USAGE(1),           0xEA,          //   USAGE (Volume Decrement)    ; bit 6: 64
-  USAGE(2),           0x23, 0x02,    //   Usage (WWW Home)            ; bit 7: 128
-  USAGE(2),           0x94, 0x01,    //   Usage (My Computer) ; bit 0: 1
-  USAGE(2),           0x92, 0x01,    //   Usage (Calculator)  ; bit 1: 2
-  USAGE(2),           0x2A, 0x02,    //   Usage (WWW fav)     ; bit 2: 4
-  USAGE(2),           0x21, 0x02,    //   Usage (WWW search)  ; bit 3: 8
-  USAGE(2),           0x26, 0x02,    //   Usage (WWW stop)    ; bit 4: 16
-  USAGE(2),           0x24, 0x02,    //   Usage (WWW back)    ; bit 5: 32
-  USAGE(2),           0x83, 0x01,    //   Usage (Media sel)   ; bit 6: 64
-  USAGE(2),           0x8A, 0x01,    //   Usage (Mail)        ; bit 7: 128
-  HIDINPUT(1),        0x02,          //   INPUT (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
+  REPORT_COUNT(1),    0x12,          //   REPORT_COUNT (18) — 16 original + WWWFORWARD + WWWREFRESH
+  USAGE(1),           0xB5,          //   USAGE (Scan Next Track)     ; byte0 bit0: 1
+  USAGE(1),           0xB6,          //   USAGE (Scan Previous Track) ; byte0 bit1: 2
+  USAGE(1),           0xB7,          //   USAGE (Stop)                ; byte0 bit2: 4
+  USAGE(1),           0xCD,          //   USAGE (Play/Pause)          ; byte0 bit3: 8
+  USAGE(1),           0xE2,          //   USAGE (Mute)                ; byte0 bit4: 16
+  USAGE(1),           0xE9,          //   USAGE (Volume Increment)    ; byte0 bit5: 32
+  USAGE(1),           0xEA,          //   USAGE (Volume Decrement)    ; byte0 bit6: 64
+  USAGE(2),           0x23, 0x02,    //   Usage (WWW Home)            ; byte0 bit7: 128
+  USAGE(2),           0x94, 0x01,    //   Usage (My Computer) ; byte1 bit0: 1
+  USAGE(2),           0x92, 0x01,    //   Usage (Calculator)  ; byte1 bit1: 2
+  USAGE(2),           0x2A, 0x02,    //   Usage (WWW fav)     ; byte1 bit2: 4
+  USAGE(2),           0x21, 0x02,    //   Usage (WWW search)  ; byte1 bit3: 8
+  USAGE(2),           0x26, 0x02,    //   Usage (WWW stop)    ; byte1 bit4: 16
+  USAGE(2),           0x24, 0x02,    //   Usage (WWW back)    ; byte1 bit5: 32
+  USAGE(2),           0x83, 0x01,    //   Usage (Media sel)   ; byte1 bit6: 64
+  USAGE(2),           0x8A, 0x01,    //   Usage (Mail)        ; byte1 bit7: 128
+  USAGE(2),           0x25, 0x02,    //   Usage (AC Forward)  ; byte2 bit0: 1
+  USAGE(2),           0x27, 0x02,    //   Usage (AC Refresh)  ; byte2 bit1: 2
+  HIDINPUT(1),        0x02,          //   INPUT (Data,Var,Abs) — 18 data bits
+  REPORT_COUNT(1),    0x06,          //   REPORT_COUNT (6) — padding to 3-byte boundary
+  HIDINPUT(1),        0x03,          //   INPUT (Const,Var,Abs)
   END_COLLECTION(0),                 // END_COLLECTION
 
   // ------------------------------------------------- Mouse
@@ -147,6 +152,34 @@ static const uint8_t _hidReportDescriptor[] = {
   REPORT_COUNT(1),   0x01,          //   REPORT_COUNT (1)
   REPORT_SIZE(1),    0x05,          //   REPORT_SIZE (5) — pad to byte
   HIDINPUT(1),       0x03,          //   INPUT (Const,Var,Abs)
+  END_COLLECTION(0),                // END_COLLECTION
+
+  // ---- Extended keyboard keys (International / Lang — Report ID 5) ----
+  // Keys with HID usages 0x85-0x94 that cannot be encoded as uint8_t (136+usage > 255)
+  // 11 data bits + 5 padding bits = 2 bytes
+  USAGE_PAGE(1),     0x07,          // USAGE_PAGE (Keyboard/Keypad)
+  USAGE(1),          0x01,          // USAGE (Keyboard)
+  COLLECTION(1),     0x01,          // COLLECTION (Application)
+  REPORT_ID(1),      EXT_KEYS_ID,   //   REPORT_ID (5)
+  USAGE_PAGE(1),     0x07,          //   USAGE_PAGE (Keyboard/Keypad)
+  LOGICAL_MINIMUM(1),0x00,          //   LOGICAL_MINIMUM (0)
+  LOGICAL_MAXIMUM(1),0x01,          //   LOGICAL_MAXIMUM (1)
+  REPORT_SIZE(1),    0x01,          //   REPORT_SIZE (1)
+  REPORT_COUNT(1),   0x0B,          //   REPORT_COUNT (11)
+  USAGE(1),          0x85,          //   USAGE (Keypad Comma)       ; bit 0
+  USAGE(1),          0x87,          //   USAGE (International1 RO)  ; bit 1
+  USAGE(1),          0x88,          //   USAGE (International2 KatakanaHiragana) ; bit 2
+  USAGE(1),          0x89,          //   USAGE (International3 Yen) ; bit 3
+  USAGE(1),          0x8A,          //   USAGE (International4 Henkan) ; bit 4
+  USAGE(1),          0x8B,          //   USAGE (International5 Muhenkan) ; bit 5
+  USAGE(1),          0x90,          //   USAGE (Lang1 Hanguel)      ; bit 6
+  USAGE(1),          0x91,          //   USAGE (Lang2 Hanja)        ; bit 7
+  USAGE(1),          0x92,          //   USAGE (Lang3 Katakana)     ; bit 8
+  USAGE(1),          0x93,          //   USAGE (Lang4 Hiragana)     ; bit 9
+  USAGE(1),          0x94,          //   USAGE (Lang5 Zenkaku/Hankaku) ; bit 10
+  HIDINPUT(1),       0x02,          //   INPUT (Data,Var,Abs)
+  REPORT_COUNT(1),   0x05,          //   REPORT_COUNT (5) — padding
+  HIDINPUT(1),       0x03,          //   INPUT (Const,Var,Abs)
   END_COLLECTION(0)                 // END_COLLECTION
 };
 
@@ -161,6 +194,7 @@ BleComboKeyboard::BleComboKeyboard(std::string deviceName, std::string deviceMan
   this->outputKeyboard   = nullptr;
   this->inputMediaKeys   = nullptr;
   this->inputSystemKeys  = nullptr;
+  this->inputExtKeys     = nullptr;
   this->inputMouse       = nullptr;
   this->_systemKeyReport = 0;
 }
@@ -195,6 +229,7 @@ void BleComboKeyboard::taskServer(void* pvParameter) {
   bleKeyboardInstance->outputKeyboard = bleKeyboardInstance->hid->outputReport(KEYBOARD_ID);
   bleKeyboardInstance->inputMediaKeys  = bleKeyboardInstance->hid->inputReport(MEDIA_KEYS_ID);
   bleKeyboardInstance->inputSystemKeys = bleKeyboardInstance->hid->inputReport(SYSTEM_KEYS_ID);
+  bleKeyboardInstance->inputExtKeys    = bleKeyboardInstance->hid->inputReport(EXT_KEYS_ID);
   bleKeyboardInstance->connectionStatus->inputKeyboard = bleKeyboardInstance->inputKeyboard;
   bleKeyboardInstance->connectionStatus->outputKeyboard = bleKeyboardInstance->outputKeyboard;
   
@@ -439,13 +474,9 @@ size_t BleComboKeyboard::press(uint8_t k)
 
 size_t BleComboKeyboard::press(const MediaKeyReport k)
 {
-    uint16_t k_16 = k[1] | (k[0] << 8);
-    uint16_t mediaKeyReport_16 = _mediaKeyReport[1] | (_mediaKeyReport[0] << 8);
-
-    mediaKeyReport_16 |= k_16;
-    _mediaKeyReport[0] = (uint8_t)((mediaKeyReport_16 & 0xFF00) >> 8);
-    _mediaKeyReport[1] = (uint8_t)(mediaKeyReport_16 & 0x00FF);
-
+    _mediaKeyReport[0] |= k[0];
+    _mediaKeyReport[1] |= k[1];
+    _mediaKeyReport[2] |= k[2];
 	sendReport(&_mediaKeyReport);
 	return 1;
 }
@@ -486,12 +517,9 @@ size_t BleComboKeyboard::release(uint8_t k)
 
 size_t BleComboKeyboard::release(const MediaKeyReport k)
 {
-    uint16_t k_16 = k[1] | (k[0] << 8);
-    uint16_t mediaKeyReport_16 = _mediaKeyReport[1] | (_mediaKeyReport[0] << 8);
-    mediaKeyReport_16 &= ~k_16;
-    _mediaKeyReport[0] = (uint8_t)((mediaKeyReport_16 & 0xFF00) >> 8);
-    _mediaKeyReport[1] = (uint8_t)(mediaKeyReport_16 & 0x00FF);
-
+    _mediaKeyReport[0] &= ~k[0];
+    _mediaKeyReport[1] &= ~k[1];
+    _mediaKeyReport[2] &= ~k[2];
 	sendReport(&_mediaKeyReport);
 	return 1;
 }
@@ -507,6 +535,7 @@ void BleComboKeyboard::releaseAll(void)
 	_keyReport.modifiers = 0;
     _mediaKeyReport[0] = 0;
     _mediaKeyReport[1] = 0;
+    _mediaKeyReport[2] = 0;
     _systemKeyReport   = 0;
 	sendReport(&_keyReport);
 	sendReport(&_mediaKeyReport);
@@ -546,6 +575,17 @@ size_t BleComboKeyboard::writeSystemKey(SystemKeyReport c)
     pressSystemKey(c);
     releaseSystemKey(c);
     return 1;
+}
+
+void BleComboKeyboard::writeExtKey(uint8_t b0, uint8_t b1)
+{
+    if (!isConnected() || !inputExtKeys) return;
+    uint8_t report[2] = {b0, b1};
+    inputExtKeys->setValue(report, 2);
+    inputExtKeys->notify();
+    uint8_t zero[2] = {0, 0};
+    inputExtKeys->setValue(zero, 2);
+    inputExtKeys->notify();
 }
 
 size_t BleComboKeyboard::write(const uint8_t *buffer, size_t size) {

@@ -194,7 +194,48 @@ typedef struct { uint8_t r, g, b; } LEDColor;
 #  define KEY_KP9           0xE9   // HID 0x61
 #  define KEY_KP0           0xEA   // HID 0x62
 #  define KEY_KP_DOT        0xEB   // HID 0x63
+#  define KEY_KP_EQUAL      0xEF   // HID 0x67
 #endif
+
+#ifndef KEY_102ND
+#  define KEY_102ND         0xEC   // HID 0x64 — Non-US backslash
+#endif
+
+// ---- Extended key bit constants (Report ID 5, 2-byte bitmask) ----
+// Byte 0
+#define KEY_EXT_KPCOMMA         0x01   // HID 0x85 Keypad Comma
+#define KEY_EXT_RO              0x02   // HID 0x87 International1 (RO)
+#define KEY_EXT_KATAKANAHIRAGANA 0x04  // HID 0x88 International2
+#define KEY_EXT_YEN             0x08   // HID 0x89 International3 (Yen)
+#define KEY_EXT_HENKAN          0x10   // HID 0x8A International4
+#define KEY_EXT_MUHENKAN        0x20   // HID 0x8B International5
+#define KEY_EXT_HANGUEL         0x40   // HID 0x90 Lang1
+#define KEY_EXT_HANJA           0x80   // HID 0x91 Lang2
+// Byte 1
+#define KEY_EXT_KATAKANA        0x01   // HID 0x92 Lang3
+#define KEY_EXT_HIRAGANA        0x02   // HID 0x93 Lang4
+#define KEY_EXT_ZENKAKUHANKAKU  0x04   // HID 0x94 Lang5
+
+// KEY_102ND encodes normally (HID 0x64 → 136+100 = 0xEC)
+#ifndef KEY_102ND
+#  define KEY_102ND         0xEC   // HID 0x64 — non-US backslash / pipe (ISO 102nd key)
+#endif
+
+// International keys — HID usages above 0x65 cannot use the 136+usage encoding
+// (would overflow uint8_t). These KEY_RAW_* values ARE the raw HID usage bytes,
+// sent directly via hidPressRaw(usage, 0) / sendSpecialKeyRaw().
+#define KEY_RAW_KPCOMMA          0x85   // Numpad comma (KP,) — found on DE/some ISO layouts
+#define KEY_RAW_RO               0x87   // Japanese Ro (ISO key, typically backslash)
+#define KEY_RAW_KATAKANAHIRAGANA 0x88   // Katakana / Hiragana toggle
+#define KEY_RAW_YEN              0x89   // Japanese Yen sign
+#define KEY_RAW_HENKAN           0x8A   // Japanese Henkan (Convert)
+#define KEY_RAW_MUHENKAN         0x8B   // Japanese Muhenkan (Non-convert)
+#define KEY_RAW_KPJPCOMMA        0x8C   // JP numpad comma
+#define KEY_RAW_HANGUEL          0x90   // Korean Hangul / English toggle
+#define KEY_RAW_HANJA            0x91   // Korean Hanja
+#define KEY_RAW_KATAKANA         0x92   // Katakana
+#define KEY_RAW_HIRAGANA         0x93   // Hiragana
+#define KEY_RAW_ZENKAKUHANKAKU   0x94   // Zenkaku / Hankaku (full-width/half-width toggle)
 
 // F13-F24 are already defined in BleComboKeyboard.h as 0xF0-0xFB. Do not redefine.
 

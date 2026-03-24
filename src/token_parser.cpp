@@ -520,6 +520,7 @@ static bool isKeyToken(const String& upper) {
             upper == "APPLICATION"|| upper == "MENU"      || upper == "APP"         ||
             upper == "GUI"        || upper == "MOD"       || upper == "WIN"         ||
             upper == "CMD"        || upper == "SUPER"     || upper == "WINDOWS"     ||
+            upper == "RGUI"       || upper == "RWIN"      || upper == "RMETA"       ||
             upper == "CTRL"       || upper == "LCTRL"     || upper == "RCTRL"       ||
             upper == "ALT"        || upper == "LALT"      || upper == "RALT"        ||
             upper == "ALTGR"      || upper == "SHIFT"     || upper == "LSHIFT"      ||
@@ -527,6 +528,7 @@ static bool isKeyToken(const String& upper) {
             upper == "KPENTER"    || upper == "KPPLUS"    || upper == "KPMINUS"     ||
             upper == "KPMULTIPLY" || upper == "KPSTAR"    || upper == "KPDIVIDE"    ||
             upper == "KPSLASH"    || upper == "KPDOT"     || upper == "KPDECIMAL"   ||
+            upper == "KPEQUAL"    || upper == "KPEQUALS"  ||
             upper == "KP0"        || upper == "KP1"       || upper == "KP2"         ||
             upper == "KP3"        || upper == "KP4"       || upper == "KP5"         ||
             upper == "KP6"        || upper == "KP7"       || upper == "KP8"         ||
@@ -545,6 +547,13 @@ static bool isKeyToken(const String& upper) {
             upper == "SYSTEMPOWER"|| upper == "SYSPOWER"  || upper == "POWERDOWN"   ||
             upper == "SYSTEMSLEEP"|| upper == "SYSSLEEP"  ||
             upper == "SYSTEMWAKE" || upper == "SYSWAKE"   || upper == "WAKEUP"      ||
+            // International / language keys (ext report)
+            upper == "102ND"      || upper == "KPCOMMA"   || upper == "KPJPCOMMA"   ||
+            upper == "RO"         || upper == "KATAKANAHIRAGANA"                     ||
+            upper == "YEN"        || upper == "HENKAN"    || upper == "MUHENKAN"     ||
+            upper == "HANGUEL"    || upper == "HANGEUL"   || upper == "HANJA"        ||
+            upper == "KATAKANA"   || upper == "HIRAGANA"  ||
+            upper == "ZENKAKUHANKAKU" || upper == "ZENKAKU" ||
             // F1-F24
             (upper.startsWith("F") && upper.length() <= 3 && upper.substring(1).toInt() >= 1  && upper.substring(1).toInt() <= 12) ||
             (upper.startsWith("F") && upper.length() <= 3 && upper.substring(1).toInt() >= 13 && upper.substring(1).toInt() <= 24));
@@ -565,6 +574,49 @@ int resolveRegisterArg(const String& arg) {
     return -1;
 }
 
+static int resolveMouseButton(const String& arg) {
+    if (arg.isEmpty()) return MOUSE_LEFT;
+    String u = arg; u.toUpperCase(); u.trim();
+    if (u == "LEFT"    || u == "L") return MOUSE_LEFT;
+    if (u == "RIGHT"   || u == "R") return MOUSE_RIGHT;
+    if (u == "MIDDLE"  || u == "M") return MOUSE_MIDDLE;
+    if (u == "BACK"    || u == "B") return MOUSE_BACK;
+    if (u == "FORWARD" || u == "F") return MOUSE_FORWARD;
+    return arg.toInt();
+}
+
+// Strips a trailing BLUETOOTH/BLE/USB routing word from args (in-place, already upper-cased).
+// Returns the resolved HIDRoute. BLUETOOTH/BLE → BLE_ONLY, USB → USB_ONLY, else BOTH.
+static HIDRoute parseHIDRoute(String& argsUpper) {
+    argsUpper.trim();
+    int sp = argsUpper.lastIndexOf(' ');
+    if (sp < 0) {
+        String w = argsUpper;
+        if (w == "BLUETOOTH" || w == "BLE") { argsUpper = ""; return HIDRoute::BLE_ONLY; }
+        if (w == "USB")                      { argsUpper = ""; return HIDRoute::USB_ONLY; }
+        return HIDRoute::BOTH;
+    }
+    String last = argsUpper.substring(sp + 1);
+    if (last == "BLUETOOTH" || last == "BLE") { argsUpper = argsUpper.substring(0, sp); argsUpper.trim(); return HIDRoute::BLE_ONLY; }
+    if (last == "USB")                         { argsUpper = argsUpper.substring(0, sp); argsUpper.trim(); return HIDRoute::USB_ONLY; }
+    return HIDRoute::BOTH;
+}
+
+static bool tryDispatchExtKey(const String& upper, HIDRoute r) {
+    if (upper == "KPCOMMA"  || upper == "KPJPCOMMA")  { sendExtKey(KEY_EXT_KPCOMMA, 0, r);          return true; }
+    if (upper == "RO")                                  { sendExtKey(KEY_EXT_RO, 0, r);               return true; }
+    if (upper == "KATAKANAHIRAGANA")                    { sendExtKey(KEY_EXT_KATAKANAHIRAGANA, 0, r); return true; }
+    if (upper == "YEN")                                 { sendExtKey(KEY_EXT_YEN, 0, r);              return true; }
+    if (upper == "HENKAN")                              { sendExtKey(KEY_EXT_HENKAN, 0, r);           return true; }
+    if (upper == "MUHENKAN")                            { sendExtKey(KEY_EXT_MUHENKAN, 0, r);         return true; }
+    if (upper == "HANGUEL" || upper == "HANGEUL")       { sendExtKey(KEY_EXT_HANGUEL, 0, r);          return true; }
+    if (upper == "HANJA")                               { sendExtKey(KEY_EXT_HANJA, 0, r);            return true; }
+    if (upper == "KATAKANA")                            { sendExtKey(0, KEY_EXT_KATAKANA, r);         return true; }
+    if (upper == "HIRAGANA")                            { sendExtKey(0, KEY_EXT_HIRAGANA, r);         return true; }
+    if (upper == "ZENKAKUHANKAKU" || upper == "ZENKAKU"){ sendExtKey(0, KEY_EXT_ZENKAKUHANKAKU, r);  return true; }
+    return false;
+}
+
 static bool isControlToken(const String& token) {
     String u = token;
     u.toUpperCase();
@@ -574,7 +626,7 @@ static bool isControlToken(const String& token) {
     String base = (sp >= 0) ? u.substring(0, sp) : u;
     if (isKeyToken(base)) return true;
 
-    return (u == "RELEASEALL" ||
+    return (u == "RELEASEALL" || u == "RELEASEALL_BLE" || u == "RELEASEALL_USB" ||
             u == "BLUETOOTH_ENABLE" || u == "BLUETOOTH_DISABLE" ||
             u == "USB_ENABLE"       || u == "USB_DISABLE"       ||
             u.startsWith("BLUETOOTH_HID ")      || u.startsWith("BLUETOOTH_KEYBOARD ") ||
@@ -589,6 +641,7 @@ static bool isControlToken(const String& token) {
             u.startsWith("WIFI ")       || u.startsWith("SETMOUSE ")    || u.startsWith("MOVEMOUSE ")  ||
             u.startsWith("MOUSECLICK")  || u.startsWith("MOUSEPRESS")   ||
             u.startsWith("MOUSERELEASE")|| u.startsWith("MOUSEDOUBLECLICK") ||
+            u.startsWith("MOUSESCROLL ")|| u.startsWith("MOUSEHSCROLL ") ||
             u.startsWith("LOOP")        || u.startsWith("FOR ")         || u.startsWith("WHILE ")      ||
             u.startsWith("BREAK ")      || u.startsWith("SCHEDULE ")    ||
             u.startsWith("SET ")        || u.startsWith("IF ")          || u.startsWith("KEYMAP") ||
@@ -625,6 +678,7 @@ static uint8_t resolveKeyToken(const String& upper) {
                               || upper == "APP")         return KEY_APPLICATION;
     if (upper == "GUI"  || upper == "MOD"   || upper == "WIN"
      || upper == "CMD"  || upper == "SUPER" || upper == "WINDOWS") return KEY_LEFT_GUI;
+    if (upper == "RGUI" || upper == "RWIN"  || upper == "RMETA")   return KEY_RIGHT_GUI;
     if (upper == "CTRL" || upper == "LCTRL")             return KEY_LEFT_CTRL;
     if (upper == "RCTRL")                                return KEY_RIGHT_CTRL;
     if (upper == "ALT"  || upper == "LALT")              return KEY_LEFT_ALT;
@@ -632,11 +686,13 @@ static uint8_t resolveKeyToken(const String& upper) {
     if (upper == "SHIFT"|| upper == "LSHIFT")            return KEY_LEFT_SHIFT;
     if (upper == "RSHIFT")                               return KEY_RIGHT_SHIFT;
     if (upper == "KPENTER")                              return KEY_KP_ENTER;
+    if (upper == "102ND")                                return KEY_102ND;
     if (upper == "KPPLUS")                               return KEY_KP_PLUS;
     if (upper == "KPMINUS")                              return KEY_KP_MINUS;
     if (upper == "KPMULTIPLY" || upper == "KPSTAR")      return KEY_KP_MULTIPLY;
     if (upper == "KPDIVIDE"   || upper == "KPSLASH")     return KEY_KP_DIVIDE;
     if (upper == "KPDOT"      || upper == "KPDECIMAL")   return KEY_KP_DOT;
+    if (upper == "KPEQUAL"    || upper == "KPEQUALS")    return KEY_KP_EQUAL;
     if (upper == "KP0") return KEY_KP0;
     if (upper == "KP1") return KEY_KP1;
     if (upper == "KP2") return KEY_KP2;
@@ -655,35 +711,38 @@ static uint8_t resolveKeyToken(const String& upper) {
     return 0;
 }
 
-static bool tryDispatchConsumerKey(const String& upper) {
-    if (upper == "MUTE")                                { sendConsumerKey(KEY_MEDIA_MUTE);                         return true; }
-    if (upper == "VOLUMEUP"   || upper == "VOLUP")      { sendConsumerKey(KEY_MEDIA_VOLUME_UP);                    return true; }
-    if (upper == "VOLUMEDOWN" || upper == "VOLDOWN")    { sendConsumerKey(KEY_MEDIA_VOLUME_DOWN);                   return true; }
-    if (upper == "PLAYPAUSE")                           { sendConsumerKey(KEY_MEDIA_PLAY_PAUSE);                   return true; }
-    if (upper == "NEXTTRACK"  || upper == "NEXT")       { sendConsumerKey(KEY_MEDIA_NEXT_TRACK);                   return true; }
-    if (upper == "PREVTRACK"  || upper == "PREV")       { sendConsumerKey(KEY_MEDIA_PREVIOUS_TRACK);               return true; }
-    if (upper == "STOPTRACK"  || upper == "STOP")       { sendConsumerKey(KEY_MEDIA_STOP);                         return true; }
-    if (upper == "WWWHOME"    || upper == "BROWSER")    { sendConsumerKey(KEY_MEDIA_WWW_HOME);                     return true; }
-    if (upper == "EMAIL")                               { sendConsumerKey(KEY_MEDIA_EMAIL_READER);                 return true; }
-    if (upper == "CALCULATOR" || upper == "CALC")       { sendConsumerKey(KEY_MEDIA_CALCULATOR);                   return true; }
-    if (upper == "MYCOMPUTER")                          { sendConsumerKey(KEY_MEDIA_LOCAL_MACHINE_BROWSER);        return true; }
-    if (upper == "WWWSEARCH")                           { sendConsumerKey(KEY_MEDIA_WWW_SEARCH);                   return true; }
-    if (upper == "WWWBACK")                             { sendConsumerKey(KEY_MEDIA_WWW_BACK);                     return true; }
-    if (upper == "WWWSTOP")                             { sendConsumerKey(KEY_MEDIA_WWW_STOP);                     return true; }
-    if (upper == "BOOKMARKS")                           { sendConsumerKey(KEY_MEDIA_WWW_BOOKMARKS);                return true; }
-    if (upper == "MEDIASEL")                            { sendConsumerKey(KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION); return true; }
-    // System control keys
-    if (upper == "SYSTEMPOWER"|| upper == "SYSPOWER" || upper == "POWERDOWN")  { sendSystemKey(KEY_SYSTEM_POWER); return true; }
-    if (upper == "SYSTEMSLEEP"|| upper == "SYSSLEEP")                           { sendSystemKey(KEY_SYSTEM_SLEEP); return true; }
-    if (upper == "SYSTEMWAKE" || upper == "SYSWAKE"  || upper == "WAKEUP")      { sendSystemKey(KEY_SYSTEM_WAKE);  return true; }
+static bool tryDispatchConsumerKey(const String& upper, HIDRoute r = HIDRoute::BOTH) {
+    if (upper == "MUTE")                                { sendConsumerKey(KEY_MEDIA_MUTE,                            r); return true; }
+    if (upper == "VOLUMEUP"   || upper == "VOLUP")      { sendConsumerKey(KEY_MEDIA_VOLUME_UP,                       r); return true; }
+    if (upper == "VOLUMEDOWN" || upper == "VOLDOWN")    { sendConsumerKey(KEY_MEDIA_VOLUME_DOWN,                     r); return true; }
+    if (upper == "PLAYPAUSE")                           { sendConsumerKey(KEY_MEDIA_PLAY_PAUSE,                      r); return true; }
+    if (upper == "NEXTTRACK"  || upper == "NEXT")       { sendConsumerKey(KEY_MEDIA_NEXT_TRACK,                      r); return true; }
+    if (upper == "PREVTRACK"  || upper == "PREV")       { sendConsumerKey(KEY_MEDIA_PREVIOUS_TRACK,                  r); return true; }
+    if (upper == "STOPTRACK"  || upper == "STOP")       { sendConsumerKey(KEY_MEDIA_STOP,                            r); return true; }
+    if (upper == "WWWHOME"    || upper == "BROWSER")    { sendConsumerKey(KEY_MEDIA_WWW_HOME,                        r); return true; }
+    if (upper == "EMAIL")                               { sendConsumerKey(KEY_MEDIA_EMAIL_READER,                    r); return true; }
+    if (upper == "CALCULATOR" || upper == "CALC")       { sendConsumerKey(KEY_MEDIA_CALCULATOR,                      r); return true; }
+    if (upper == "MYCOMPUTER")                          { sendConsumerKey(KEY_MEDIA_LOCAL_MACHINE_BROWSER,           r); return true; }
+    if (upper == "WWWSEARCH")                           { sendConsumerKey(KEY_MEDIA_WWW_SEARCH,                      r); return true; }
+    if (upper == "WWWBACK")                             { sendConsumerKey(KEY_MEDIA_WWW_BACK,                        r); return true; }
+    if (upper == "WWWFORWARD")                          { sendConsumerKey(KEY_MEDIA_WWW_FORWARD,                     r); return true; }
+    if (upper == "WWWSTOP")                             { sendConsumerKey(KEY_MEDIA_WWW_STOP,                        r); return true; }
+    if (upper == "WWWREFRESH")                          { sendConsumerKey(KEY_MEDIA_WWW_REFRESH,                     r); return true; }
+    if (upper == "BOOKMARKS")                           { sendConsumerKey(KEY_MEDIA_WWW_BOOKMARKS,                   r); return true; }
+    if (upper == "MEDIASEL")                            { sendConsumerKey(KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION,  r); return true; }
+    if (upper == "SYSTEMPOWER"|| upper == "SYSPOWER" || upper == "POWERDOWN") { sendSystemKey(KEY_SYSTEM_POWER, r); return true; }
+    if (upper == "SYSTEMSLEEP"|| upper == "SYSSLEEP")                          { sendSystemKey(KEY_SYSTEM_SLEEP, r); return true; }
+    if (upper == "SYSTEMWAKE" || upper == "SYSWAKE"  || upper == "WAKEUP")    { sendSystemKey(KEY_SYSTEM_WAKE,  r); return true; }
     return false;
 }
 
 // Dispatch a key token with an optional argument:
 //   {KEY}           — normal tap
 //   {KEY ms}        — hold for ms milliseconds
-//   {KEY press}     — press down only (no auto-release)
-//   {KEY release}   — release only
+//   {KEY press}             — press down only (no auto-release)
+//   {KEY release}           — release only
+//   {KEY [arg] BLUETOOTH}   — send via BLE only
+//   {KEY [arg] USB}         — send via USB only
 static void dispatchKeyToken(const String& tokenRaw, std::map<String, String>& vars) {
     String u = tokenRaw;
     u.toUpperCase();
@@ -694,25 +753,28 @@ static void dispatchKeyToken(const String& tokenRaw, std::map<String, String>& v
     String arg  = (sp >= 0) ? u.substring(sp + 1) : String("");
     arg.trim();
 
-    // Consumer / media keys — no hold/press/release variants
-    if (tryDispatchConsumerKey(base)) return;
+    // Route is always the last word; parseHIDRoute strips it from arg in-place.
+    HIDRoute route = parseHIDRoute(arg);
+
+    if (tryDispatchConsumerKey(base, route)) return;
+    if (tryDispatchExtKey(base, route)) return;
 
     uint8_t kc = resolveKeyToken(base);
     if (!kc) return;
 
     if (arg.length() == 0) {
-        sendSpecialKey(kc);
+        sendSpecialKey(kc, route);
     } else {
         String argU = arg;
         argU.toUpperCase();
         if (argU == "PRESS") {
-            pressKey(kc);
+            pressKey(kc, route);
         } else if (argU == "RELEASE") {
-            releaseKey(kc);
+            releaseKey(kc, route);
         } else {
             int holdMs = evaluateAllTokens(arg, vars).toInt();
-            if (holdMs > 0) sendSpecialKeyTimed(kc, holdMs);
-            else            sendSpecialKey(kc);
+            if (holdMs > 0) sendSpecialKeyTimed(kc, holdMs, route);
+            else            sendSpecialKey(kc, route);
         }
     }
 }
@@ -782,6 +844,12 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
         }
         else if (u == "RELEASEALL") {
             hidReleaseAll();
+        }
+        else if (u == "RELEASEALL_BLE") {
+            hidReleaseAllBLE();
+        }
+        else if (u == "RELEASEALL_USB") {
+            hidReleaseAllUSB();
         }
         else if (u == "BLUETOOTH_ENABLE")  enableBluetooth();
         else if (u == "BLUETOOTH_DISABLE") disableBluetooth();
@@ -855,17 +923,28 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
             }
         }
         else if (u.startsWith("CHORD ")) {
-            processChord(evaluateAllTokens(token.substring(6), vars));
+            String arg = evaluateAllTokens(token.substring(6), vars);
+            String argU = arg; argU.toUpperCase();
+            HIDRoute r = parseHIDRoute(argU);
+            if (r != HIDRoute::BOTH) { int s = arg.lastIndexOf(' '); arg = (s>=0)?arg.substring(0,s):String(); }
+            processChord(arg, r);
         }
         else if (u.startsWith("HID ")) {
-            String args = token.substring(4);
+            String rawArgs = token.substring(4);
+            String rawArgsU = rawArgs; rawArgsU.toUpperCase(); rawArgsU.trim();
+            HIDRoute r = parseHIDRoute(rawArgsU);
+            if (r != HIDRoute::BOTH) {
+                int lastSp = rawArgs.lastIndexOf(' ');
+                if (lastSp >= 0) rawArgs = rawArgs.substring(0, lastSp);
+                else             rawArgs = "";
+            }
             std::vector<String> parts;
             int start = 0;
-            while (start < (int)args.length()) {
-                int space = args.indexOf(' ', start);
-                if (space == -1) space = args.length();
+            while (start < (int)rawArgs.length()) {
+                int space = rawArgs.indexOf(' ', start);
+                if (space == -1) space = rawArgs.length();
                 if (start < space) {
-                    String part = args.substring(start, space);
+                    String part = rawArgs.substring(start, space);
                     part.trim();
                     if (part.length()) parts.push_back(evaluateAllTokens(part, vars));
                 }
@@ -881,7 +960,7 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
                 } else {
                     keycodes.push_back((uint8_t)strtol(parts[0].c_str(), nullptr, 16));
                 }
-                sendKeyChord(keycodes, modifiers);
+                sendKeyChord(keycodes, modifiers, r);
             }
         }
         else if (u.startsWith("WIFI ")) {
@@ -891,7 +970,13 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
         }
         else if (u.startsWith("SETMOUSE ") || u.startsWith("MOVEMOUSE ")) {
             bool isSet = u.startsWith("SETMOUSE ");
-            String args = token.substring(isSet ? 9 : 10);
+            String args = evaluateAllTokens(token.substring(isSet ? 9 : 10), vars);
+            String argsU = args; argsU.toUpperCase();
+            HIDRoute r = parseHIDRoute(argsU);
+            if (r != HIDRoute::BOTH) {
+                int lastSp = args.lastIndexOf(' ');
+                args = (lastSp >= 0) ? args.substring(0, lastSp) : args;
+            }
             int spacePos = -1, braceDepth = 0;
             for (int i = 0; i < (int)args.length(); i++) {
                 if      (args[i] == '{') braceDepth++;
@@ -899,27 +984,53 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
                 else if (args[i] == ' ' && braceDepth == 0) { spacePos = i; break; }
             }
             if (spacePos > 0) {
-                int x = evaluateAllTokens(args.substring(0, spacePos), vars).toInt();
-                int y = evaluateAllTokens(args.substring(spacePos + 1), vars).toInt();
-                if (isSet) setMousePosition(x, y);
-                else       sendMouseMovement(x, y);
+                int x = args.substring(0, spacePos).toInt();
+                int y = args.substring(spacePos + 1).toInt();
+                if (isSet) setMousePosition(x, y, r);
+                else       sendMouseMovement(x, y, r);
             }
         }
         else if (u.startsWith("MOUSEDOUBLECLICK")) {
-            int btn = (token.length() > 16) ? evaluateAllTokens(token.substring(17), vars).toInt() : MOUSE_LEFT;
-            sendMouseDoubleClick(btn);
+            String arg = (token.length() > 16) ? evaluateAllTokens(token.substring(17), vars) : String();
+            String argU = arg; argU.toUpperCase();
+            HIDRoute r = parseHIDRoute(argU);
+            if (r != HIDRoute::BOTH) { int s = arg.lastIndexOf(' '); arg = (s>=0)?arg.substring(0,s):String(); }
+            sendMouseDoubleClick(resolveMouseButton(arg), r);
         }
         else if (u.startsWith("MOUSECLICK")) {
-            int btn = (token.length() > 10) ? evaluateAllTokens(token.substring(11), vars).toInt() : MOUSE_LEFT;
-            sendMouseClick(btn);
+            String arg = (token.length() > 10) ? evaluateAllTokens(token.substring(11), vars) : String();
+            String argU = arg; argU.toUpperCase();
+            HIDRoute r = parseHIDRoute(argU);
+            if (r != HIDRoute::BOTH) { int s = arg.lastIndexOf(' '); arg = (s>=0)?arg.substring(0,s):String(); }
+            sendMouseClick(resolveMouseButton(arg), r);
         }
         else if (u.startsWith("MOUSEPRESS")) {
-            int btn = (token.length() > 10) ? evaluateAllTokens(token.substring(11), vars).toInt() : MOUSE_LEFT;
-            sendMousePress(btn);
+            String arg = (token.length() > 10) ? evaluateAllTokens(token.substring(11), vars) : String();
+            String argU = arg; argU.toUpperCase();
+            HIDRoute r = parseHIDRoute(argU);
+            if (r != HIDRoute::BOTH) { int s = arg.lastIndexOf(' '); arg = (s>=0)?arg.substring(0,s):String(); }
+            sendMousePress(resolveMouseButton(arg), r);
         }
         else if (u.startsWith("MOUSERELEASE")) {
-            int btn = (token.length() > 12) ? evaluateAllTokens(token.substring(13), vars).toInt() : MOUSE_LEFT;
-            sendMouseRelease(btn);
+            String arg = (token.length() > 12) ? evaluateAllTokens(token.substring(13), vars) : String();
+            String argU = arg; argU.toUpperCase();
+            HIDRoute r = parseHIDRoute(argU);
+            if (r != HIDRoute::BOTH) { int s = arg.lastIndexOf(' '); arg = (s>=0)?arg.substring(0,s):String(); }
+            sendMouseRelease(resolveMouseButton(arg), r);
+        }
+        else if (u.startsWith("MOUSESCROLL ")) {
+            String arg = token.substring(12);
+            String argU = arg; argU.toUpperCase();
+            HIDRoute r = parseHIDRoute(argU);
+            if (r != HIDRoute::BOTH) { int s = arg.lastIndexOf(' '); arg = (s>=0)?arg.substring(0,s):arg; }
+            sendMouseScroll(evaluateAllTokens(arg, vars).toInt(), r);
+        }
+        else if (u.startsWith("MOUSEHSCROLL ")) {
+            String arg = token.substring(13);
+            String argU = arg; argU.toUpperCase();
+            HIDRoute r = parseHIDRoute(argU);
+            if (r != HIDRoute::BOTH) { int s = arg.lastIndexOf(' '); arg = (s>=0)?arg.substring(0,s):arg; }
+            sendMouseHScroll(evaluateAllTokens(arg, vars).toInt(), r);
         }
         else if (u.startsWith("LOOP")) {
             std::vector<String> parts;

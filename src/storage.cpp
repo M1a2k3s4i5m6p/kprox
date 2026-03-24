@@ -36,18 +36,20 @@ void loadWifiEnabledSettings() {
 
 void saveBtSettings() {
     preferences.begin("kprox", false);
-    preferences.putBool("btEnabled",  bluetoothEnabled);
-    preferences.putBool("bleKbEn",    bleKeyboardEnabled);
-    preferences.putBool("bleMouseEn", bleMouseEnabled);
+    preferences.putBool("btEnabled",   bluetoothEnabled);
+    preferences.putBool("bleKbEn",     bleKeyboardEnabled);
+    preferences.putBool("bleMouseEn",  bleMouseEnabled);
+    preferences.putBool("bleIntlKbEn", bleIntlKeyboardEnabled);
     preferences.end();
     blinkLED(10, LED_COLOR_SAVE, LED_SAVE_DUTY_CYCLE);
 }
 
 void loadBtSettings() {
     preferences.begin("kprox", false);
-    bluetoothEnabled  = preferences.getBool("btEnabled",  true);
-    bleKeyboardEnabled = preferences.getBool("bleKbEn",   true);
-    bleMouseEnabled    = preferences.getBool("bleMouseEn",true);
+    bluetoothEnabled       = preferences.getBool("btEnabled",   true);
+    bleKeyboardEnabled     = preferences.getBool("bleKbEn",     true);
+    bleMouseEnabled        = preferences.getBool("bleMouseEn",  true);
+    bleIntlKeyboardEnabled = preferences.getBool("bleIntlKbEn", true);
     preferences.end();
 }
 
@@ -57,6 +59,7 @@ void saveUSBSettings() {
     preferences.putBool("usbEnabled",    usbEnabled);
     preferences.putBool("usbKbEn",       usbKeyboardEnabled);
     preferences.putBool("usbMouseEn",    usbMouseEnabled);
+    preferences.putBool("usbIntlKbEn",   usbIntlKeyboardEnabled);
     preferences.putBool("fido2En",       fido2Enabled);
     preferences.end();
     blinkLED(10, LED_COLOR_SAVE, LED_SAVE_DUTY_CYCLE);
@@ -64,10 +67,11 @@ void saveUSBSettings() {
 
 void loadUSBSettings() {
     preferences.begin("kprox", false);
-    usbEnabled         = preferences.getBool("usbEnabled",  true);
-    usbKeyboardEnabled = preferences.getBool("usbKbEn",     true);
-    usbMouseEnabled    = preferences.getBool("usbMouseEn",  true);
-    fido2Enabled       = preferences.getBool("fido2En",     false);
+    usbEnabled             = preferences.getBool("usbEnabled",  true);
+    usbKeyboardEnabled     = preferences.getBool("usbKbEn",     true);
+    usbMouseEnabled        = preferences.getBool("usbMouseEn",  true);
+    usbIntlKeyboardEnabled = preferences.getBool("usbIntlKbEn", true);
+    fido2Enabled           = preferences.getBool("fido2En",     false);
     preferences.end();
 }
 #else

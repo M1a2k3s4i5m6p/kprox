@@ -58,24 +58,26 @@ const uint8_t KEY_F22 = 0xF9;
 const uint8_t KEY_F23 = 0xFA;
 const uint8_t KEY_F24 = 0xFB;
 
-typedef uint8_t MediaKeyReport[2];
+typedef uint8_t MediaKeyReport[3];
 
-const MediaKeyReport KEY_MEDIA_NEXT_TRACK = {1, 0};
-const MediaKeyReport KEY_MEDIA_PREVIOUS_TRACK = {2, 0};
-const MediaKeyReport KEY_MEDIA_STOP = {4, 0};
-const MediaKeyReport KEY_MEDIA_PLAY_PAUSE = {8, 0};
-const MediaKeyReport KEY_MEDIA_MUTE = {16, 0};
-const MediaKeyReport KEY_MEDIA_VOLUME_UP = {32, 0};
-const MediaKeyReport KEY_MEDIA_VOLUME_DOWN = {64, 0};
-const MediaKeyReport KEY_MEDIA_WWW_HOME = {128, 0};
-const MediaKeyReport KEY_MEDIA_LOCAL_MACHINE_BROWSER = {0, 1};
-const MediaKeyReport KEY_MEDIA_CALCULATOR = {0, 2};
-const MediaKeyReport KEY_MEDIA_WWW_BOOKMARKS = {0, 4};
-const MediaKeyReport KEY_MEDIA_WWW_SEARCH = {0, 8};
-const MediaKeyReport KEY_MEDIA_WWW_STOP = {0, 16};
-const MediaKeyReport KEY_MEDIA_WWW_BACK = {0, 32};
-const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION = {0, 64};
-const MediaKeyReport KEY_MEDIA_EMAIL_READER = {0, 128};
+const MediaKeyReport KEY_MEDIA_NEXT_TRACK = {1, 0, 0};
+const MediaKeyReport KEY_MEDIA_PREVIOUS_TRACK = {2, 0, 0};
+const MediaKeyReport KEY_MEDIA_STOP = {4, 0, 0};
+const MediaKeyReport KEY_MEDIA_PLAY_PAUSE = {8, 0, 0};
+const MediaKeyReport KEY_MEDIA_MUTE = {16, 0, 0};
+const MediaKeyReport KEY_MEDIA_VOLUME_UP = {32, 0, 0};
+const MediaKeyReport KEY_MEDIA_VOLUME_DOWN = {64, 0, 0};
+const MediaKeyReport KEY_MEDIA_WWW_HOME = {128, 0, 0};
+const MediaKeyReport KEY_MEDIA_LOCAL_MACHINE_BROWSER = {0, 1, 0};
+const MediaKeyReport KEY_MEDIA_CALCULATOR = {0, 2, 0};
+const MediaKeyReport KEY_MEDIA_WWW_BOOKMARKS = {0, 4, 0};
+const MediaKeyReport KEY_MEDIA_WWW_SEARCH = {0, 8, 0};
+const MediaKeyReport KEY_MEDIA_WWW_STOP = {0, 16, 0};
+const MediaKeyReport KEY_MEDIA_WWW_BACK = {0, 32, 0};
+const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION = {0, 64, 0};
+const MediaKeyReport KEY_MEDIA_EMAIL_READER = {0, 128, 0};
+const MediaKeyReport KEY_MEDIA_WWW_FORWARD = {0, 0, 1};
+const MediaKeyReport KEY_MEDIA_WWW_REFRESH = {0, 0, 2};
 
 // System Control report — 1 byte bitmask (Generic Desktop page 0x01, System Control 0x80)
 // bit 0 = System Power Down (0x81)
@@ -136,6 +138,9 @@ public:
 
   BLECharacteristic* inputMouse;
   BLECharacteristic* inputSystemKeys;
+  BLECharacteristic* inputExtKeys;
+
+  void writeExtKey(uint8_t b0, uint8_t b1);
 
 };
 

@@ -2,36 +2,53 @@
 #include "led.h"
 #include "keymap.h"
 
+// ---- Routing helpers ----
+
+static bool bleKbOk(HIDRoute r)    { return r != HIDRoute::USB_ONLY  && isBLEConnected() && bleKeyboardEnabled; }
+static bool bleMouseOk(HIDRoute r) { return r != HIDRoute::USB_ONLY  && isBLEConnected() && bleMouseEnabled; }
+
+#ifdef BOARD_HAS_USB_HID
+static bool usbKbOk(HIDRoute r)    { return r != HIDRoute::BLE_ONLY  && isUSBConnected() && usbKeyboardEnabled; }
+static bool usbMouseOk(HIDRoute r) { return r != HIDRoute::BLE_ONLY  && isUSBConnected() && usbMouseReady; }
+#endif
+
+static bool anyRouteConnected(HIDRoute r) {
+    bool ble = r != HIDRoute::USB_ONLY  && isBLEConnected();
+#ifdef BOARD_HAS_USB_HID
+    bool usb = r != HIDRoute::BLE_ONLY  && isUSBConnected();
+    return ble || usb;
+#else
+    return ble;
+#endif
+}
+
 // ---- Internal HID dispatch ----
 
 static bool anyHIDConnected() { return isBLEConnected() || isUSBConnected(); }
 
-static bool bleKbActive()    { return isBLEConnected() && bleKeyboardEnabled; }
-static bool bleMouseActive() { return isBLEConnected() && bleMouseEnabled; }
-
 static void hidPrint(const String& text) {
-    if (bleKbActive()) BLE_KEYBOARD.print(text);
+    if (isBLEConnected() && bleKeyboardEnabled) BLE_KEYBOARD.print(text);
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected() && usbKeyboardEnabled) USBKeyboard.print(text);
 #endif
 }
 
-static void hidPress(uint8_t key) {
-    if (bleKbActive()) BLE_KEYBOARD.press(key);
+static void hidPress(uint8_t key, HIDRoute r = HIDRoute::BOTH) {
+    if (bleKbOk(r)) BLE_KEYBOARD.press(key);
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && usbKeyboardEnabled) USBKeyboard.press(key);
+    if (usbKbOk(r)) USBKeyboard.press(key);
 #endif
 }
 
-static void hidRelease(uint8_t key) {
-    if (bleKbActive()) BLE_KEYBOARD.release(key);
+static void hidRelease(uint8_t key, HIDRoute r = HIDRoute::BOTH) {
+    if (bleKbOk(r)) BLE_KEYBOARD.release(key);
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && usbKeyboardEnabled) USBKeyboard.release(key);
+    if (usbKbOk(r)) USBKeyboard.release(key);
 #endif
 }
 
 void hidReleaseAll() {
-    if (bleKbActive()) BLE_KEYBOARD.releaseAll();
+    if (isBLEConnected() && bleKeyboardEnabled) BLE_KEYBOARD.releaseAll();
 #ifdef BOARD_HAS_USB_HID
     if (isUSBConnected()) {
         if (usbKeyboardEnabled) USBKeyboard.releaseAll();
@@ -40,31 +57,58 @@ void hidReleaseAll() {
 #endif
 }
 
-static void hidMouseMoveStep(int8_t x, int8_t y) {
-    if (bleMouseActive()) BLE_MOUSE.move(x, y);
+void hidReleaseAllBLE() {
+    if (isBLEConnected() && bleKeyboardEnabled) BLE_KEYBOARD.releaseAll();
+}
+
+void hidReleaseAllUSB() {
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && usbMouseReady) USBMouse.move(x, y);
+    if (isUSBConnected()) {
+        if (usbKeyboardEnabled) USBKeyboard.releaseAll();
+        if (KProxConsumer.isReady()) { KProxConsumer.sendConsumer(0,0); KProxConsumer.sendSystem(0); }
+    }
 #endif
 }
 
-static void hidMouseClick(int button) {
-    if (bleMouseActive()) BLE_MOUSE.click(button);
+static void hidMouseMoveStep(int8_t x, int8_t y, HIDRoute r = HIDRoute::BOTH) {
+    if (bleMouseOk(r)) BLE_MOUSE.move(x, y);
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && usbMouseReady) USBMouse.click(button);
+    if (usbMouseOk(r)) USBMouse.move(x, y);
 #endif
 }
 
-static void hidMousePress(int button) {
-    if (bleMouseActive()) BLE_MOUSE.press(button);
+static void hidMouseClick(int button, HIDRoute r = HIDRoute::BOTH) {
+    if (bleMouseOk(r)) BLE_MOUSE.click(button);
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && usbMouseReady) USBMouse.press(button);
+    if (usbMouseOk(r)) USBMouse.click(button);
 #endif
 }
 
-static void hidMouseRelease(int button) {
-    if (bleMouseActive()) BLE_MOUSE.release(button);
+static void hidMousePress(int button, HIDRoute r = HIDRoute::BOTH) {
+    if (bleMouseOk(r)) BLE_MOUSE.press(button);
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && usbMouseReady) USBMouse.release(button);
+    if (usbMouseOk(r)) USBMouse.press(button);
+#endif
+}
+
+static void hidMouseRelease(int button, HIDRoute r = HIDRoute::BOTH) {
+    if (bleMouseOk(r)) BLE_MOUSE.release(button);
+#ifdef BOARD_HAS_USB_HID
+    if (usbMouseOk(r)) USBMouse.release(button);
+#endif
+}
+
+static void hidMouseScroll(int8_t wheel, int8_t hWheel, HIDRoute r = HIDRoute::BOTH) {
+    if (bleMouseOk(r)) BLE_MOUSE.move(0, 0, wheel, hWheel);
+#ifdef BOARD_HAS_USB_HID
+    if (usbMouseOk(r)) USBMouse.move(0, 0, wheel, hWheel);
+#endif
+}
+
+static void hidExtKey(uint8_t b0, uint8_t b1, HIDRoute r) {
+    if (bleKbOk(r) && bleIntlKeyboardEnabled) BLE_KEYBOARD.writeExtKey(b0, b1);
+#ifdef BOARD_HAS_USB_HID
+    if (usbKbOk(r) && usbIntlKeyboardEnabled && KProxConsumer.isReady()) KProxConsumer.sendExtKey(b0, b1);
 #endif
 }
 
@@ -86,16 +130,15 @@ bool hasAnyConnection() {
     return isBLEConnected() || isUSBConnected();
 }
 
-// ---- Raw HID report (bypasses Arduino translation table) ----
-// modifiers is the standard HID modifier bitmask: 0x01=LCtrl, 0x02=LShift, 0x04=LAlt, 0x08=LGUI, 0x40=RAlt(AltGr)
+// ---- Raw HID report (bypasses Arduino asciimap; sends HID usage byte directly) ----
 
-void hidPressRaw(uint8_t hidUsage, uint8_t modifiers) {
+void hidPressRaw(uint8_t hidUsage, uint8_t modifiers, HIDRoute r) {
     BleKeyReport report = {};
     report.modifiers = modifiers;
     report.keys[0]   = hidUsage;
-    if (bleKbActive()) BLE_KEYBOARD.sendReport(&report);
+    if (bleKbOk(r)) BLE_KEYBOARD.sendReport(&report);
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && usbKeyboardEnabled) {
+    if (usbKbOk(r)) {
         KeyReport kr = {};
         kr.modifiers = modifiers;
         kr.keys[0]   = hidUsage;
@@ -104,11 +147,11 @@ void hidPressRaw(uint8_t hidUsage, uint8_t modifiers) {
 #endif
 }
 
-void hidReleaseRaw() {
+void hidReleaseRaw(HIDRoute r) {
     BleKeyReport report = {};
-    if (bleKbActive()) BLE_KEYBOARD.sendReport(&report);
+    if (bleKbOk(r)) BLE_KEYBOARD.sendReport(&report);
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && usbKeyboardEnabled) {
+    if (usbKbOk(r)) {
         KeyReport kr = {};
         USBKeyboard.sendReport(&kr);
     }
@@ -152,7 +195,6 @@ void sendPlainText(const String& text) {
                 char buf[2] = { (char)cp, 0 };
                 hidPrint(String(buf));
             }
-            // non-ASCII codepoints with no table entry are silently skipped
         }
     }
 
@@ -160,56 +202,77 @@ void sendPlainText(const String& text) {
     delay(g_betweenSendTextDelay);
 }
 
-void sendSpecialKey(uint8_t keycode) {
-    if (isHalted || !anyHIDConnected()) return;
+void sendSpecialKey(uint8_t keycode, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
     hidReleaseAll();
     delay(g_keyReleaseDelay);
-    hidPress(keycode);
+    hidPress(keycode, r);
     delay(g_keyPressDelay);
-    hidRelease(keycode);
+    hidRelease(keycode, r);
     delay(g_keyReleaseDelay);
     flashTxIndicator();
     delay(g_specialKeyDelay);
 }
 
-void sendSpecialKeyTimed(uint8_t keycode, int holdMs) {
-    if (isHalted || !anyHIDConnected()) return;
+void sendSpecialKeyRaw(uint8_t hidUsage, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidPressRaw(hidUsage, 0, r);
+    delay(g_keyPressDelay);
+    hidReleaseRaw(r);
+    delay(g_keyReleaseDelay);
+    flashTxIndicator();
+    delay(g_specialKeyDelay);
+}
+
+void sendSpecialKeyTimed(uint8_t keycode, int holdMs, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
     hidReleaseAll();
     delay(g_keyReleaseDelay);
-    hidPress(keycode);
+    hidPress(keycode, r);
     unsigned long t0 = millis();
     while ((int)(millis() - t0) < holdMs) {
         server.handleClient();
         delay(10);
     }
-    hidRelease(keycode);
+    hidRelease(keycode, r);
     delay(g_keyReleaseDelay);
     flashTxIndicator();
     delay(g_specialKeyDelay);
 }
 
-void pressKey(uint8_t keycode) {
-    if (isHalted || !anyHIDConnected()) return;
-    hidPress(keycode);
+void pressKey(uint8_t keycode, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidPress(keycode, r);
     flashTxIndicator();
 }
 
-void releaseKey(uint8_t keycode) {
-    if (isHalted) return;
-    hidRelease(keycode);
+void pressKeyRaw(uint8_t hidUsage, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidPressRaw(hidUsage, 0, r);
+    flashTxIndicator();
 }
 
-void sendConsumerKey(const MediaKeyReport key) {
-    if (isHalted || !anyHIDConnected()) return;
-    if (bleKbActive()) {
+void releaseKey(uint8_t keycode, HIDRoute r) {
+    if (isHalted) return;
+    hidRelease(keycode, r);
+}
+
+void releaseKeyRaw(HIDRoute r) {
+    if (isHalted) return;
+    hidReleaseRaw(r);
+}
+
+void sendConsumerKey(const MediaKeyReport key, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    if (bleKbOk(r)) {
         BLE_KEYBOARD.write(key);
         delay(g_keyPressDelay + g_keyReleaseDelay);
     }
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && KProxConsumer.isReady()) {
-        KProxConsumer.sendConsumer(key[0], key[1]);
+    if (r != HIDRoute::BLE_ONLY && isUSBConnected() && KProxConsumer.isReady()) {
+        KProxConsumer.sendConsumer(key[0], key[1], key[2]);
         delay(g_keyPressDelay);
-        KProxConsumer.sendConsumer(0, 0);
+        KProxConsumer.sendConsumer(0, 0, 0);
         delay(g_keyReleaseDelay);
     }
 #endif
@@ -217,14 +280,14 @@ void sendConsumerKey(const MediaKeyReport key) {
     delay(g_specialKeyDelay);
 }
 
-void sendSystemKey(SystemKeyReport key) {
-    if (isHalted || !anyHIDConnected()) return;
-    if (bleKbActive()) {
+void sendSystemKey(SystemKeyReport key, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    if (bleKbOk(r)) {
         BLE_KEYBOARD.writeSystemKey(key);
         delay(g_keyPressDelay + g_keyReleaseDelay);
     }
 #ifdef BOARD_HAS_USB_HID
-    if (isUSBConnected() && KProxConsumer.isReady()) {
+    if (r != HIDRoute::BLE_ONLY && isUSBConnected() && KProxConsumer.isReady()) {
         KProxConsumer.sendSystem(key);
         delay(g_keyPressDelay);
         KProxConsumer.sendSystem(0);
@@ -235,17 +298,17 @@ void sendSystemKey(SystemKeyReport key) {
     delay(g_specialKeyDelay);
 }
 
-void sendKeyChord(const std::vector<uint8_t>& keycodes, uint8_t modifiers) {
-    if (isHalted || !anyHIDConnected()) return;
+void sendKeyChord(const std::vector<uint8_t>& keycodes, uint8_t modifiers, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
     hidReleaseAll();
     delay(g_keyReleaseDelay);
-    if (modifiers) { hidPress(modifiers); delay(g_keyPressDelay); }
-    for (uint8_t key : keycodes) { if (key) { hidPress(key); delay(5); } }
+    if (modifiers) { hidPress(modifiers, r); delay(g_keyPressDelay); }
+    for (uint8_t key : keycodes) { if (key) { hidPress(key, r); delay(5); } }
     delay(g_keyPressDelay);
     for (auto it = keycodes.rbegin(); it != keycodes.rend(); ++it) {
-        if (*it) { hidRelease(*it); delay(5); }
+        if (*it) { hidRelease(*it, r); delay(5); }
     }
-    if (modifiers) { hidRelease(modifiers); delay(g_keyReleaseDelay); }
+    if (modifiers) { hidRelease(modifiers, r); delay(g_keyReleaseDelay); }
     hidReleaseAll();
     flashTxIndicator();
     delay(g_specialKeyDelay);
@@ -273,12 +336,14 @@ static uint8_t resolveChordKey(const String& s) {
     if (s == "SCROLLLOCK" || s == "SCRLK") return KEY_SCROLL_LOCK;
     if (s == "PAUSE" || s == "PAUSEBREAK" || s == "BREAK") return KEY_PAUSE;
     if (s == "APPLICATION" || s == "MENU" || s == "APP")   return KEY_APPLICATION;
+    if (s == "102ND")                    return KEY_102ND;
     if (s == "KPENTER")                  return KEY_KP_ENTER;
     if (s == "KPPLUS")                   return KEY_KP_PLUS;
     if (s == "KPMINUS")                  return KEY_KP_MINUS;
     if (s == "KPMULTIPLY" || s == "KPSTAR") return KEY_KP_MULTIPLY;
     if (s == "KPDIVIDE" || s == "KPSLASH") return KEY_KP_DIVIDE;
     if (s == "KPDOT" || s == "KPDECIMAL") return KEY_KP_DOT;
+    if (s == "KPEQUAL" || s == "KPEQUALS") return KEY_KP_EQUAL;
     if (s.startsWith("KP") && s.length() == 3) {
         char d = s[2];
         if (d >= '0' && d <= '9') return (d == '0') ? KEY_KP0 : (KEY_KP1 + (d - '1'));
@@ -291,7 +356,7 @@ static uint8_t resolveChordKey(const String& s) {
     return 0;
 }
 
-void processChord(const String& chordStr) {
+void processChord(const String& chordStr, HIDRoute r) {
     String str = chordStr;
     std::vector<uint8_t> chordKeys;
     uint8_t modifiers = 0;
@@ -339,20 +404,20 @@ void processChord(const String& chordStr) {
     }
 
     if (!chordKeys.empty() || modifiers) {
-        sendKeyChord(chordKeys, modifiers);
+        sendKeyChord(chordKeys, modifiers, r);
     }
 }
 
 // ---- Mouse ----
 
-void setMousePosition(int x, int y) {
+void setMousePosition(int x, int y, HIDRoute r) {
     if (isHalted) return;
     int deltaX = x - currentMouseX;
     int deltaY = y - currentMouseY;
-    while ((deltaX != 0 || deltaY != 0) && anyHIDConnected()) {
+    while ((deltaX != 0 || deltaY != 0) && anyRouteConnected(r)) {
         int stepX = constrain(deltaX, -127, 127);
         int stepY = constrain(deltaY, -127, 127);
-        hidMouseMoveStep(stepX, stepY);
+        hidMouseMoveStep(stepX, stepY, r);
         flashTxIndicator();
         currentMouseX += stepX;
         currentMouseY += stepY;
@@ -362,36 +427,55 @@ void setMousePosition(int x, int y) {
     }
 }
 
-void sendMouseMovement(int deltaX, int deltaY) {
-    if (isHalted || !anyHIDConnected()) return;
-    hidMouseMoveStep(constrain(deltaX, -127, 127), constrain(deltaY, -127, 127));
+void sendMouseMovement(int deltaX, int deltaY, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidMouseMoveStep(constrain(deltaX, -127, 127), constrain(deltaY, -127, 127), r);
     flashTxIndicator();
 }
 
-void sendMouseClick(int button) {
-    if (isHalted || !anyHIDConnected()) return;
-    hidMouseClick(button);
+void sendMouseClick(int button, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidMouseClick(button, r);
     flashTxIndicator();
 }
 
-void sendMousePress(int button) {
-    if (isHalted || !anyHIDConnected()) return;
-    hidMousePress(button);
+void sendMousePress(int button, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidMousePress(button, r);
     flashTxIndicator();
 }
 
-void sendMouseRelease(int button) {
-    if (isHalted || !anyHIDConnected()) return;
-    hidMouseRelease(button);
+void sendMouseRelease(int button, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidMouseRelease(button, r);
     flashTxIndicator();
 }
 
-void sendMouseDoubleClick(int button) {
-    if (isHalted || !anyHIDConnected()) return;
-    hidMouseClick(button);
+void sendMouseDoubleClick(int button, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidMouseClick(button, r);
     delay(50);
-    hidMouseClick(button);
+    hidMouseClick(button, r);
     flashTxIndicator();
+}
+
+void sendMouseScroll(int wheel, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidMouseScroll((int8_t)constrain(wheel, -127, 127), 0, r);
+    flashTxIndicator();
+}
+
+void sendMouseHScroll(int hWheel, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidMouseScroll(0, (int8_t)constrain(hWheel, -127, 127), r);
+    flashTxIndicator();
+}
+
+void sendExtKey(uint8_t b0, uint8_t b1, HIDRoute r) {
+    if (isHalted || !anyRouteConnected(r)) return;
+    hidExtKey(b0, b1, r);
+    flashTxIndicator();
+    delay(g_specialKeyDelay);
 }
 
 void sendBatchedMouseMovement() {

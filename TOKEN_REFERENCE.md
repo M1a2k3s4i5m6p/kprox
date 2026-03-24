@@ -15,6 +15,32 @@ admin{TAB}{CREDSTORE admin_pass}{ENTER}
 
 ---
 
+## HID Output Routing
+
+Every token that produces HID output accepts an optional trailing transport word. When omitted, output goes to all connected transports.
+
+| Suffix | Effect |
+|--------|--------|
+| `BLUETOOTH` or `BLE` | Send via BLE only |
+| `USB` | Send via USB only |
+| *(none)* | Send to all connected transports (default) |
+
+The routing suffix is always the **last word** in the token and applies to all token forms: key taps, hold, press, release, mouse buttons, scroll, chords, and raw HID.
+
+```
+{ENTER BLE}
+{SHIFT press USB}
+{MOUSECLICK RIGHT BLUETOOTH}
+{MOUSESCROLL -3 USB}
+{CHORD ctrl+c BLE}
+{HID 00 04 USB}
+{MUTE BLE}
+```
+
+The routing suffix takes precedence over the `BLUETOOTH_HID`, `USB_HID`, `BLUETOOTH_MOUSE`, and `USB_MOUSE` enable flags — if routing says BLE but BLE is not connected, the output is silently dropped.
+
+---
+
 ## Key Token Argument Syntax
 
 Every keyboard key token accepts an optional argument controlling how the key is sent. `BLE+USB`
@@ -25,6 +51,9 @@ Every keyboard key token accepts an optional argument controlling how the key is
 | `{KEY ms}` | Hold — press, hold for *ms* milliseconds, then release |
 | `{KEY press}` | Press down only, no auto-release |
 | `{KEY release}` | Release only (use after a `press`) |
+| `{KEY BLUETOOTH}` | Tap, BLE only |
+| `{KEY press USB}` | Press down, USB only |
+| `{KEY ms BLUETOOTH}` | Hold for ms, BLE only |
 
 ```
 {ENTER}
@@ -32,6 +61,8 @@ Every keyboard key token accepts an optional argument controlling how the key is
 {ENTER press}
 {ENTER release}
 {SHIFT press}{a}{b}{c}{SHIFT release}
+{ENTER BLE}
+{SHIFT press USB}{a}{b}{c}{SHIFT release USB}
 ```
 
 The `ms` argument is evaluated so variables and math work: `{ENTER {MATH {hold} * 2}}`
@@ -49,6 +80,7 @@ The `ms` argument is evaluated so variables and math work: `{ENTER {MATH {hold} 
 | `{BACKSPACE}` | `{BKSP}` | Backspace |
 | `{DELETE}` | `{DEL}` | Delete |
 | `{INSERT}` | | Insert |
+| `{102ND}` | | Non-US backslash / extra key |
 
 ---
 
@@ -65,6 +97,7 @@ Modifier keys support all four argument forms (`press`, `release`, `ms`, tap). F
 | Token | Aliases | Description |
 |-------|---------|-------------|
 | `{GUI}` | `{MOD}` `{WIN}` `{CMD}` `{SUPER}` `{WINDOWS}` | Left GUI (Win / Cmd / Super) |
+| `{RGUI}` | `{RWIN}` `{RMETA}` | Right GUI |
 | `{CTRL}` | `{LCTRL}` | Left Ctrl |
 | `{RCTRL}` | | Right Ctrl |
 | `{ALT}` | `{LALT}` | Left Alt |
@@ -104,7 +137,28 @@ Modifier keys support all four argument forms (`press`, `release`, `ms`, tap). F
 
 ## Numpad Keys — BLE+USB
 
-`{KP0}`–`{KP9}` `{KPENTER}` `{KPPLUS}` `{KPMINUS}` `{KPMULTIPLY}` `{KPSTAR}` `{KPDIVIDE}` `{KPSLASH}` `{KPDOT}` `{KPDECIMAL}`
+`{KP0}`–`{KP9}` `{KPENTER}` `{KPPLUS}` `{KPMINUS}` `{KPMULTIPLY}` `{KPSTAR}` `{KPDIVIDE}` `{KPSLASH}` `{KPDOT}` `{KPDECIMAL}` `{KPEQUAL}` `{KPEQUALS}`
+
+
+## International / Language Keys — BLE+USB
+
+Keys with HID usages that cannot be encoded in the standard keyboard report. Sent via a dedicated extended report (Report ID 5).
+
+| Token | Aliases | Description |
+|-------|---------|-------------|
+| `{KPCOMMA}` | `{KPJPCOMMA}` | Keypad Comma (JIS) |
+| `{RO}` | | International1 — RO (JIS) |
+| `{KATAKANAHIRAGANA}` | | International2 — Katakana/Hiragana toggle |
+| `{YEN}` | | International3 — Yen sign (JIS) |
+| `{HENKAN}` | | International4 — Henkan (convert) |
+| `{MUHENKAN}` | | International5 — Muhenkan (no-convert) |
+| `{HANGUEL}` | `{HANGEUL}` | Lang1 — Hanguel/Korean toggle |
+| `{HANJA}` | | Lang2 — Hanja |
+| `{KATAKANA}` | | Lang3 — Katakana |
+| `{HIRAGANA}` | | Lang4 — Hiragana |
+| `{ZENKAKUHANKAKU}` | `{ZENKAKU}` | Lang5 — Zenkaku/Hankaku toggle |
+
+All international key tokens support the routing suffix: `{HANGUEL USB}`, `{YEN BLE}`.
 
 ---
 
@@ -127,7 +181,9 @@ Uses the HID Consumer Control report. No `press`/`release`/`ms` arguments. Produ
 | `{MYCOMPUTER}` | | Open file manager |
 | `{WWWSEARCH}` | | Browser search |
 | `{WWWBACK}` | | Browser back |
+| `{WWWFORWARD}` | | Browser forward |
 | `{WWWSTOP}` | | Browser stop |
+| `{WWWREFRESH}` | | Browser refresh |
 | `{BOOKMARKS}` | | Open bookmarks |
 | `{MEDIASEL}` | | Media selection |
 
@@ -157,12 +213,17 @@ Uses the HID Generic Desktop / System Control report. No `press`/`release`/`ms` 
 
 ---
 
-## Release All Keys — BLE+USB
+## Release All Keys
 
-`{RELEASEALL}` sends zeroed keyboard, consumer, and system HID reports simultaneously, releasing all held keys and modifiers.
+| Token | Description |
+|-------|-------------|
+| `{RELEASEALL}` | Zero all keyboard, consumer, and system reports on both BLE and USB |
+| `{RELEASEALL_BLE}` | Same, BLE only |
+| `{RELEASEALL_USB}` | Same, USB only |
 
 ```
 {CTRL press}{ALT press}{DELETE}{RELEASEALL}
+{SHIFT press BLE}{a}{b}{c}{RELEASEALL_BLE}
 ```
 
 ---
@@ -212,10 +273,43 @@ Modifier bitmask: `0x01`=LCtrl `0x02`=LShift `0x04`=LAlt `0x08`=LGUI `0x10`=RCtr
 | `{SETMOUSE x y}` | Move to absolute position |
 | `{MOVEMOUSE dx dy}` | Relative movement |
 | `{MOUSECLICK}` | Left click |
-| `{MOUSECLICK button}` | 1=left 2=right 3=middle |
+| `{MOUSECLICK button}` | Click the specified button |
 | `{MOUSEDOUBLECLICK}` | Double left click |
-| `{MOUSEPRESS button}` | Press and hold |
+| `{MOUSEDOUBLECLICK button}` | Double-click the specified button |
+| `{MOUSEPRESS button}` | Press and hold the specified button |
 | `{MOUSERELEASE button}` | Release held button |
+| `{MOUSESCROLL amount}` | Scroll vertically (positive = down, negative = up) |
+| `{MOUSEHSCROLL amount}` | Scroll horizontally (positive = right, negative = left) |
+
+All mouse tokens accept an optional trailing routing suffix. The suffix follows all other arguments.
+
+```
+{MOUSECLICK RIGHT BLE}
+{MOUSESCROLL -3 USB}
+{MOUSEPRESS BACK BLUETOOTH}
+{SETMOUSE 400 300 BLE}
+{MOVEMOUSE 10 0 USB}
+```
+
+**Button values** — named aliases and numeric bitmasks are both accepted:
+
+| Name | Aliases | Bitmask | Description |
+|------|---------|---------|-------------|
+| `LEFT` | `L` | `1` | Primary button |
+| `RIGHT` | `R` | `2` | Secondary button |
+| `MIDDLE` | `M` | `4` | Middle / scroll-wheel click |
+| `BACK` | `B` | `8` | Browser back (BTN_SIDE) |
+| `FORWARD` | `F` | `16` | Browser forward (BTN_EXTRA) |
+
+Named aliases are case-insensitive. Numeric bitmasks can be OR'd for chords (e.g. `3` = left+right simultaneously).
+
+```
+{MOUSECLICK RIGHT}
+{MOUSEPRESS BACK}{SLEEP 200}{MOUSERELEASE BACK}
+{MOUSESCROLL -5}
+{MOUSEHSCROLL 3}
+{MOUSECLICK 4}
+```
 
 ---
 

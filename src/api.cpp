@@ -231,8 +231,9 @@ void handleApiStatus() {
     btObj["enabled"]         = bluetoothEnabled;
     btObj["initialized"]     = bluetoothInitialized;
     btObj["connected"]       = bleConn;
-    btObj["keyboard_enabled"] = bleKeyboardEnabled;
-    btObj["mouse_enabled"]   = bleMouseEnabled;
+    btObj["keyboard_enabled"]      = bleKeyboardEnabled;
+    btObj["mouse_enabled"]         = bleMouseEnabled;
+    btObj["intl_keyboard_enabled"] = bleIntlKeyboardEnabled;
 
     JsonObject wifiObj = connections["wifi"].to<JsonObject>();
     wifiObj["ssid"]      = wifiSSID;
@@ -247,14 +248,16 @@ void handleApiStatus() {
     usbObj["connected"]        = usbConn;
     usbObj["keyboard_ready"]   = usbKeyboardReady;
     usbObj["mouse_ready"]      = usbMouseReady;
-    usbObj["keyboard_enabled"] = usbKeyboardEnabled;
-    usbObj["mouse_enabled"]    = usbMouseEnabled;
-    usbObj["fido2_enabled"]    = fido2Enabled;
+    usbObj["keyboard_enabled"]      = usbKeyboardEnabled;
+    usbObj["mouse_enabled"]         = usbMouseEnabled;
+    usbObj["intl_keyboard_enabled"] = usbIntlKeyboardEnabled;
+    usbObj["fido2_enabled"]         = fido2Enabled;
 #else
     usbObj["supported"] = false; usbObj["enabled"] = false;
     usbObj["initialized"] = false; usbObj["connected"] = false;
     usbObj["keyboard_ready"] = false; usbObj["mouse_ready"] = false;
     usbObj["keyboard_enabled"] = false; usbObj["mouse_enabled"] = false;
+    usbObj["intl_keyboard_enabled"] = false;
     usbObj["fido2_enabled"] = false;
 #endif
 
@@ -926,8 +929,9 @@ void handleSettings() {
         if (doc["bluetooth"].is<JsonObject>()) {
             JsonObject bt = doc["bluetooth"];
             bool changed = false;
-            if (bt.containsKey("keyboard_enabled")) { bleKeyboardEnabled = bt["keyboard_enabled"].as<bool>(); changed = true; }
-            if (bt.containsKey("mouse_enabled"))    { bleMouseEnabled    = bt["mouse_enabled"].as<bool>();    changed = true; }
+            if (bt.containsKey("keyboard_enabled"))      { bleKeyboardEnabled      = bt["keyboard_enabled"].as<bool>();      changed = true; }
+            if (bt.containsKey("mouse_enabled"))          { bleMouseEnabled          = bt["mouse_enabled"].as<bool>();          changed = true; }
+            if (bt.containsKey("intl_keyboard_enabled")) { bleIntlKeyboardEnabled   = bt["intl_keyboard_enabled"].as<bool>(); changed = true; }
             if (changed) saveBtSettings();
         }
 
@@ -1079,6 +1083,10 @@ void handleSettings() {
             if (usb.containsKey("mouse_enabled")) {
                 usbMouseEnabled = usb["mouse_enabled"].as<bool>();
                 usbMouseReady   = usbEnabled && usbInitialized && usbMouseEnabled;
+                changed = true;
+            }
+            if (usb.containsKey("intl_keyboard_enabled")) {
+                usbIntlKeyboardEnabled = usb["intl_keyboard_enabled"].as<bool>();
                 changed = true;
             }
             if (usb.containsKey("fido2_enabled")) {

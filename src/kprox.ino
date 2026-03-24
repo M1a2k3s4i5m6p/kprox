@@ -45,13 +45,15 @@ bool usbEnabled       = true;
 bool usbInitialized   = false;
 bool usbKeyboardReady = false;
 bool usbMouseReady    = false;
-bool usbKeyboardEnabled = true;
-bool usbMouseEnabled    = true;
-bool fido2Enabled       = false;
+bool usbKeyboardEnabled    = true;
+bool usbMouseEnabled       = true;
+bool usbIntlKeyboardEnabled = true;
+bool fido2Enabled          = false;
 #endif
 
-bool bleKeyboardEnabled = true;
-bool bleMouseEnabled    = true;
+bool bleKeyboardEnabled    = true;
+bool bleMouseEnabled       = true;
+bool bleIntlKeyboardEnabled = true;
 
 // maxSinkSize defined in globals.cpp
 

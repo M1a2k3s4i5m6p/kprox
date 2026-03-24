@@ -132,18 +132,19 @@ void AppSettings::_drawPage1() {
     disp.fillScreen(SETTINGS_BG);
     _drawTopBar(1);
 
-    // 3 rows: BT enable, BT Keyboard, BT Mouse
+    // 4 rows: BT enable, BT Keyboard, BT Mouse, BT Intl Keys
     bool btConn = bluetoothInitialized && BLE_KEYBOARD_VALID && BLE_KEYBOARD.isConnected();
     const char* connStr = btConn ? "connected" : (bluetoothEnabled ? "no peer" : "");
     uint16_t connCol = btConn ? disp.color565(80,220,80) : disp.color565(200,160,0);
 
-    struct { const char* label; bool* flag; } rows[3] = {
-        { "Bluetooth",    &bluetoothEnabled   },
-        { "  BT Keyboard", &bleKeyboardEnabled },
-        { "  BT Mouse",    &bleMouseEnabled    },
+    struct { const char* label; bool* flag; } rows[4] = {
+        { "Bluetooth",       &bluetoothEnabled       },
+        { "  BT Keyboard",   &bleKeyboardEnabled     },
+        { "  BT Mouse",      &bleMouseEnabled        },
+        { "  BT Intl Keys",  &bleIntlKeyboardEnabled },
     };
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         int ry = CONTENT_Y + i * 22;
         _drawToggleRow(ry, i == _toggleSel, rows[i].label, *rows[i].flag,
                        i == 0 ? connStr : nullptr, connCol);
@@ -152,14 +153,14 @@ void AppSettings::_drawPage1() {
     if (_rebootNote) {
         disp.setTextSize(1);
         disp.setTextColor(disp.color565(200,160,0), SETTINGS_BG);
-        disp.drawString("Reboot to apply BT changes", 4, CONTENT_Y + 3*22 + 4);
+        disp.drawString("Reboot to apply BT changes", 4, CONTENT_Y + 4*22 + 4);
     }
 
     _drawBottomBar("up/dn  ENTER toggle  C reconnect  </> page  ESC");
 }
 
 void AppSettings::_handlePage1(KeyInput ki) {
-    static constexpr int N = 3;
+    static constexpr int N = 4;
     if (ki.arrowLeft)  { _page = 0; _needsRedraw = true; return; }  // left of BT = WiFi
     if (ki.arrowRight) { _page = 2; _toggleSel = 0; _needsRedraw = true; return; }  // right of BT = USB
     if (ki.arrowUp)    { _toggleSel = (_toggleSel - 1 + N) % N; _needsRedraw = true; return; }
@@ -175,6 +176,9 @@ void AppSettings::_handlePage1(KeyInput ki) {
                 saveBtSettings(); break;
             case 2:
                 bleMouseEnabled = !bleMouseEnabled;
+                saveBtSettings(); break;
+            case 3:
+                bleIntlKeyboardEnabled = !bleIntlKeyboardEnabled;
                 saveBtSettings(); break;
         }
         _needsRedraw = true; return;
@@ -199,15 +203,16 @@ void AppSettings::_drawPage2() {
     disp.fillScreen(SETTINGS_BG);
     _drawTopBar(2);
 
-    // 4 rows: USB enable, USB Keyboard, USB Mouse, FIDO2
-    struct { const char* label; bool* flag; } rows[4] = {
-        { "USB HID",        &usbEnabled         },
-        { "  USB Keyboard", &usbKeyboardEnabled  },
-        { "  USB Mouse",    &usbMouseEnabled     },
-        { "  FIDO2/CTAP2",  &fido2Enabled        },
+    // 5 rows: USB enable, USB Keyboard, USB Mouse, USB Intl Keys, FIDO2
+    struct { const char* label; bool* flag; } rows[5] = {
+        { "USB HID",          &usbEnabled             },
+        { "  USB Keyboard",   &usbKeyboardEnabled     },
+        { "  USB Mouse",      &usbMouseEnabled        },
+        { "  USB Intl Keys",  &usbIntlKeyboardEnabled },
+        { "  FIDO2/CTAP2",    &fido2Enabled           },
     };
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         int ry = CONTENT_Y + i * 20;
         _drawToggleRow(ry, i == _toggleSel, rows[i].label, *rows[i].flag, nullptr, 0);
     }
@@ -215,19 +220,18 @@ void AppSettings::_drawPage2() {
     if (_rebootNote) {
         disp.setTextSize(1);
         disp.setTextColor(disp.color565(200,160,0), SETTINGS_BG);
-        disp.drawString("Reboot to apply USB changes", 4, CONTENT_Y + 4*20 + 2);
+        disp.drawString("Reboot to apply USB changes", 4, CONTENT_Y + 5*20 + 2);
     }
 
     _drawBottomBar("up/dn  ENTER toggle  </> page  ESC back");
 }
 
 void AppSettings::_handlePage2(KeyInput ki) {
-    static constexpr int N = 4;
+    static constexpr int N = 5;
     if (ki.arrowLeft)  { _page = 1; _toggleSel = 0; _needsRedraw = true; return; }  // left of USB = BT
     if (ki.arrowRight) {
         _page = 3; _idSel = 0; _editing = false; _idSaved = false; _needsRedraw = true; return;  // right of USB = API
     }
-    // dead block (was WiFi nav) - remove
     if (false) { _page = 2; _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = "";
         _needsRedraw = true; return;
     }
@@ -236,10 +240,11 @@ void AppSettings::_handlePage2(KeyInput ki) {
 
     if (ki.enter) {
         switch (_toggleSel) {
-            case 0: usbEnabled         = !usbEnabled;         saveUSBSettings(); _rebootNote = true; break;
-            case 1: usbKeyboardEnabled = !usbKeyboardEnabled; saveUSBSettings(); _rebootNote = true; break;
-            case 2: usbMouseEnabled    = !usbMouseEnabled;    saveUSBSettings(); _rebootNote = true; break;
-            case 3: fido2Enabled       = !fido2Enabled;       saveUSBSettings(); _rebootNote = true; break;
+            case 0: usbEnabled             = !usbEnabled;             saveUSBSettings(); _rebootNote = true; break;
+            case 1: usbKeyboardEnabled     = !usbKeyboardEnabled;     saveUSBSettings(); _rebootNote = true; break;
+            case 2: usbMouseEnabled        = !usbMouseEnabled;        saveUSBSettings(); _rebootNote = true; break;
+            case 3: usbIntlKeyboardEnabled = !usbIntlKeyboardEnabled; saveUSBSettings(); break;
+            case 4: fido2Enabled           = !fido2Enabled;           saveUSBSettings(); _rebootNote = true; break;
         }
         _needsRedraw = true; return;
     }
