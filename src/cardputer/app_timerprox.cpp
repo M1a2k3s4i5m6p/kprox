@@ -18,7 +18,7 @@ static void timerProxParseHook() {
     if (s_activeInstance) s_activeInstance->_pollDisplay();
 }
 
-// ---- Helpers ----
+// ---- Persist ----
 
 void AppTimerProx::_save() {
     Preferences p;
@@ -75,14 +75,18 @@ void AppTimerProx::_drawTopBar() {
     d.drawString("TimerProx", 4, 3);
     drawTabHint(4 + d.textWidth("TimerProx") + 3);
 
-    if (_state == ST_RUNNING) {
-        const char* s = _fired ? "HALTING" : (_repEndMs ? "REPEAT" : "RUNNING");
-        uint16_t sc = _fired   ? d.color565(255,80,80)
-                    : _repEndMs ? d.color565(80,150,255)
-                    :             d.color565(80,220,80);
-        int sw = d.textWidth(s);
+    if (_runState != RS_SETUP) {
+        const char* lbl;
+        uint16_t    sc;
+        switch (_runState) {
+            case RS_FIRE:   lbl = "RUNNING";  sc = d.color565(80, 220, 80);  break;
+            case RS_HALT:   lbl = "HALTING";  sc = d.color565(255, 80, 80);  break;
+            case RS_REPEAT: lbl = "REPEAT";   sc = d.color565(80, 150, 255); break;
+            default:        lbl = "";         sc = TFT_WHITE; break;
+        }
+        int sw = d.textWidth(lbl);
         d.setTextColor(sc, bc);
-        d.drawString(s, d.width() - sw - 4, 3);
+        d.drawString(lbl, d.width() - sw - 4, 3);
     } else {
         const char* hint = "BtnG0 start timer";
         int hw = d.textWidth(hint);
@@ -141,10 +145,8 @@ void AppTimerProx::_drawSetup() {
         y += 18;
     }
 
-    // Helper lambda for a H:M:S row
     auto drawHMSRow = [&](const char* label, uint16_t labelColor,
-                          Field fh, Field fm, Field fs,
-                          const char* offNote) {
+                          Field fh, Field fm, Field fs, const char* offNote) {
         d.setTextColor(labelColor, TP_BG);
         d.drawString(label, 4, y);
         int fx = 80;
@@ -156,10 +158,7 @@ void AppTimerProx::_drawSetup() {
             fx += 24;
             if (fi.sep) { d.setTextColor(d.color565(100,100,100), TP_BG); d.drawString(fi.sep, fx, y+3); fx += 7; }
         }
-        if (offNote) {
-            d.setTextColor(d.color565(70,70,70), TP_BG);
-            d.drawString(offNote, fx+2, y+3);
-        }
+        if (offNote) { d.setTextColor(d.color565(70,70,70), TP_BG); d.drawString(offNote, fx+2, y+3); }
         y += 22;
     };
 
@@ -172,14 +171,11 @@ void AppTimerProx::_drawSetup() {
     drawHMSRow("Repeat:",     repOn  ? d.color565(100,160,255) : d.color565(100,100,100),
                F_REP_H,  F_REP_M,  F_REP_S,  repOn  ? nullptr : "(0=off)");
 
-    // Start button
-    {
-        bool sel = (_sel == F_START);
-        uint16_t bbg = d.color565(20, 80, 20);
-        d.fillRoundRect(4, y, 70, 14, 3, bbg);
-        d.setTextColor(sel ? TFT_WHITE : d.color565(100,200,100), bbg);
-        d.drawString(sel ? "> START" : "  start", 8, y+3);
-    }
+    bool sel = (_sel == F_START);
+    uint16_t bbg = d.color565(20, 80, 20);
+    d.fillRoundRect(4, y, 70, 14, 3, bbg);
+    d.setTextColor(sel ? TFT_WHITE : d.color565(100,200,100), bbg);
+    d.drawString(sel ? "> START" : "  start", 8, y+3);
 
     _drawBottomBar("up/dn field  </> value  ENTER select  ESC back");
 }
@@ -207,11 +203,10 @@ void AppTimerProx::_drawRunning(bool full) {
         d.drawString(rtxt, 4, y); y += 14;
     }
 
-    if (_repEndMs && !_fired) {
-        // Waiting for repeat interval to expire before next fire
-        long repRemain = max(0L, (long)(_repEndMs - now));
-        long repTotal  = _repMs();
-        long repElapsed= repTotal - repRemain;
+    if (_runState == RS_REPEAT) {
+        long repTotal   = _repMs();
+        long repRemain  = max(0L, (long)(_repEndMs - now));
+        long repElapsed = repTotal - repRemain;
 
         d.setTextColor(d.color565(80, 150, 255), TP_BG);
         d.drawString("Next fire in:", 4, y); y += 12;
@@ -234,11 +229,10 @@ void AppTimerProx::_drawRunning(bool full) {
         String rs = "Fired " + String(_repeatCount) + " time" + (_repeatCount == 1 ? "" : "s");
         d.drawString(rs, 4, y);
 
-    } else if (!_fired) {
-        long fireMs  = _fireMs();
-        long elapsed = (long)(now - _startMs);
-        long remaining = fireMs - elapsed;
-        if (remaining < 0) remaining = 0;
+    } else if (_runState == RS_FIRE) {
+        long fireMs    = _fireMs();
+        long elapsed   = (long)(now - _startMs);
+        long remaining = max(0L, fireMs - elapsed);
 
         d.setTextColor(d.color565(100, 160, 100), TP_BG);
         d.drawString("Fires in:", 4, y); y += 12;
@@ -265,35 +259,29 @@ void AppTimerProx::_drawRunning(bool full) {
             d.setTextColor(d.color565(80,120,200), TP_BG);
             d.drawString("Repeat every: " + _fmtMs(_repMs()), 4, y);
         }
-    } else {
-        // HALTING countdown
+
+    } else if (_runState == RS_HALT) {
         long hms       = _haltMs();
         long sincefire = (long)(now - _firedMs);
-        long remaining = hms - sincefire;
-        if (remaining < 0) remaining = 0;
+        long remaining = max(0L, hms - sincefire);
 
         d.setTextColor(d.color565(200, 120, 80), TP_BG);
         d.drawString("Register fired!", 4, y); y += 14;
 
-        if (hms > 0) {
-            d.setTextColor(d.color565(200, 80, 80), TP_BG);
-            d.drawString("Halting in:", 4, y); y += 12;
+        d.setTextColor(d.color565(200, 80, 80), TP_BG);
+        d.drawString("Halting in:", 4, y); y += 12;
 
-            d.setTextSize(3);
-            d.setTextColor(d.color565(255, 80, 80), TP_BG);
-            String ct = _fmtMs(remaining);
-            int tw = d.textWidth(ct);
-            d.drawString(ct, (d.width() - tw) / 2, y); y += 34;
-            d.setTextSize(1);
+        d.setTextSize(3);
+        d.setTextColor(d.color565(255, 80, 80), TP_BG);
+        String ct = _fmtMs(remaining);
+        int tw = d.textWidth(ct);
+        d.drawString(ct, (d.width() - tw) / 2, y); y += 34;
+        d.setTextSize(1);
 
-            int barW = d.width() - 16;
-            d.drawRect(8, y, barW, 6, d.color565(40,40,40));
-            int fill = (int)((long)barW * min(sincefire, hms) / hms);
-            if (fill > 0) d.fillRect(9, y+1, fill, 4, d.color565(180,60,60));
-        } else {
-            d.setTextColor(d.color565(120,120,120), TP_BG);
-            d.drawString("No halt configured.", 4, y);
-        }
+        int barW = d.width() - 16;
+        d.drawRect(8, y, barW, 6, d.color565(40,40,40));
+        int fill = (int)((long)barW * min(sincefire, hms) / hms);
+        if (fill > 0) d.fillRect(9, y+1, fill, 4, d.color565(180,60,60));
     }
 }
 
@@ -350,22 +338,22 @@ void AppTimerProx::_handleSetup(KeyInput ki) {
 }
 
 void AppTimerProx::_startTimer() {
-    _startMs      = millis();
-    _firedMs      = 0;
-    _fired        = false;
-    _repEndMs     = 0;
-    _repeatCount  = 0;
-    _lastDrawMs   = 0;
+    _startMs     = millis();
+    _firedMs     = 0;
+    _repEndMs    = 0;
+    _repeatCount = 0;
+    _lastDrawMs  = 0;
+    _runState    = RS_FIRE;
 }
 
 void AppTimerProx::_handleRunning(KeyInput ki) {
     if (ki.esc) {
+        haltAllOperations();
         g_haltDeadlineMs     = 0;
         g_parseInterruptHook = nullptr;
         s_activeInstance     = nullptr;
-        _fired    = false;
-        _repEndMs = 0;
         _state    = ST_SETUP;
+        _runState = RS_SETUP;
         _needsRedraw = true;
     }
 }
@@ -373,9 +361,10 @@ void AppTimerProx::_handleRunning(KeyInput ki) {
 // ---- Lifecycle ----
 
 void AppTimerProx::onEnter() {
-    _state = ST_SETUP; _sel = F_REG; _needsRedraw = true;
-    _fired = false; _startMs = 0; _firedMs = 0; _lastDrawMs = 0;
-    _repEndMs = 0; _repeatCount = 0;
+    _state    = ST_SETUP;
+    _runState = RS_SETUP;
+    _sel = F_REG; _needsRedraw = true;
+    _startMs = 0; _firedMs = 0; _repEndMs = 0; _lastDrawMs = 0; _repeatCount = 0;
     _regIdx = timerProxRegIdx;
     _fireH = timerProxFireH; _fireM = timerProxFireM; _fireS = timerProxFireS;
     _haltH = timerProxHaltH; _haltM = timerProxHaltM; _haltS = timerProxHaltS;
@@ -386,7 +375,8 @@ void AppTimerProx::onExit() {
     g_haltDeadlineMs     = 0;
     g_parseInterruptHook = nullptr;
     s_activeInstance     = nullptr;
-    _state = ST_SETUP;
+    _state    = ST_SETUP;
+    _runState = RS_SETUP;
 }
 
 void AppTimerProx::onUpdate() {
@@ -394,71 +384,72 @@ void AppTimerProx::onUpdate() {
         uiManager.notifyInteraction();
         unsigned long now = millis();
 
-        // ---- Waiting for repeat interval ----
-        if (_repEndMs && !_fired) {
-            if (now >= _repEndMs) {
-                _repEndMs = 0;
-                _startMs  = now;   // reset fire countdown for next cycle
-                _needsRedraw = true;
-            }
-            if (_needsRedraw || (now - _lastDrawMs) >= 250UL) {
-                _drawRunning(_needsRedraw);
-                _lastDrawMs  = now;
-                _needsRedraw = false;
-            }
-            return;
-        }
+        switch (_runState) {
 
-        // ---- Fire countdown ----
-        if (!_fired) {
-            if ((long)(now - _startMs) >= _fireMs()) {
-                _fired           = true;
-                _firedMs         = now;
-                _repeatCount++;
-                g_haltDeadlineMs = (_haltMs() > 0)
-                                 ? (now + (unsigned long)_haltMs())
-                                 : 0UL;
-                s_activeInstance     = this;
-                g_parseInterruptHook = timerProxParseHook;
-                if (!registers.empty() && _regIdx < (int)registers.size())
-                    pendingTokenStrings.push_back(registers[_regIdx]);
-                _drawRunning(true);
-                _lastDrawMs  = now;
-                _needsRedraw = false;
-                return;
-            }
-        } else {
-            // ---- Halt / repeat logic after fire ----
-            bool haltTriggered = isHalted
-                              || (_haltMs() > 0 && (long)(now - _firedMs) >= _haltMs());
-            bool repeatNow     = !haltTriggered
-                              && (_haltMs() == 0)
-                              && (_repMs() > 0)
-                              && (long)(now - _firedMs) >= 0;  // immediate after fire
+            case RS_FIRE:
+                if ((long)(now - _startMs) >= _fireMs()) {
+                    // Fire the register
+                    _firedMs     = now;
+                    _repeatCount++;
+                    if (!registers.empty() && _regIdx < (int)registers.size())
+                        pendingTokenStrings.push_back(registers[_regIdx]);
+                    s_activeInstance = this;
+                    g_parseInterruptHook = timerProxParseHook;
 
-            if (haltTriggered) {
-                if (!isHalted) haltAllOperations();
-                g_haltDeadlineMs     = 0;
-                g_parseInterruptHook = nullptr;
-                s_activeInstance     = nullptr;
-                _fired       = false;
-                _repEndMs    = 0;
-                _state       = ST_SETUP;
-                _needsRedraw = true;
-                return;
+                    if (_haltMs() > 0) {
+                        // Transition to halt countdown
+                        g_haltDeadlineMs = now + (unsigned long)_haltMs();
+                        _runState        = RS_HALT;
+                    } else if (_repMs() > 0) {
+                        // No halt — go straight to repeat wait
+                        g_haltDeadlineMs     = 0;
+                        g_parseInterruptHook = nullptr;
+                        s_activeInstance     = nullptr;
+                        _repEndMs = now + (unsigned long)_repMs();
+                        _runState = RS_REPEAT;
+                    } else {
+                        // No halt, no repeat — back to setup
+                        g_haltDeadlineMs     = 0;
+                        g_parseInterruptHook = nullptr;
+                        s_activeInstance     = nullptr;
+                        _state    = ST_SETUP;
+                        _runState = RS_SETUP;
+                    }
+                    _needsRedraw = true;
+                }
+                break;
+
+            case RS_HALT: {
+                bool haltTriggered = isHalted
+                                  || (long)(now - _firedMs) >= _haltMs();
+                if (haltTriggered) {
+                    if (!isHalted) haltAllOperations();
+                    g_haltDeadlineMs     = 0;
+                    g_parseInterruptHook = nullptr;
+                    s_activeInstance     = nullptr;
+                    if (_repMs() > 0) {
+                        // Halt done — enter repeat wait
+                        _repEndMs = now + (unsigned long)_repMs();
+                        _runState = RS_REPEAT;
+                    } else {
+                        _state    = ST_SETUP;
+                        _runState = RS_SETUP;
+                    }
+                    _needsRedraw = true;
+                }
+                break;
             }
 
-            // After halt window (or immediately if no halt), start repeat
-            bool haltExpired = (_haltMs() > 0 && (long)(now - _firedMs) >= _haltMs());
-            bool canRepeat   = _repMs() > 0 && !_repEndMs;
-            if (canRepeat && (_haltMs() == 0 || haltExpired)) {
-                g_haltDeadlineMs     = 0;
-                g_parseInterruptHook = nullptr;
-                s_activeInstance     = nullptr;
-                _fired    = false;
-                _repEndMs = now + (unsigned long)_repMs();
-                _needsRedraw = true;
-            }
+            case RS_REPEAT:
+                if (now >= _repEndMs) {
+                    _repEndMs = 0;
+                    _startMs  = now;   // restart fire countdown
+                    _runState = RS_FIRE;
+                    _needsRedraw = true;
+                }
+                break;
+
+            default: break;
         }
 
         if (_needsRedraw || (now - _lastDrawMs) >= 250UL) {
@@ -466,28 +457,36 @@ void AppTimerProx::onUpdate() {
             _lastDrawMs  = now;
             _needsRedraw = false;
         }
-        return;
-    }
 
-    if (_needsRedraw) {
-        _drawSetup();
-        _needsRedraw = false;
-    }
-
-    if (M5Cardputer.BtnA.wasPressed()) {
-        uiManager.notifyInteraction();
-        if (_state == ST_SETUP && !registers.empty()) {
-            _save();
-            _startTimer();
-            _state       = ST_RUNNING;
-            _needsRedraw = true;
-        } else if (_state == ST_RUNNING) {
+        // Input handling inside running state
+        if (M5Cardputer.BtnA.wasPressed()) {
+            uiManager.notifyInteraction();
+            haltAllOperations();
             g_haltDeadlineMs     = 0;
             g_parseInterruptHook = nullptr;
             s_activeInstance     = nullptr;
-            _fired    = false;
-            _repEndMs = 0;
             _state    = ST_SETUP;
+            _runState = RS_SETUP;
+            _needsRedraw = true;
+            return;
+        }
+        KeyInput ki = pollKeys();
+        if (ki.anyKey) {
+            uiManager.notifyInteraction();
+            _handleRunning(ki);
+        }
+        return;
+    }
+
+    // ST_SETUP
+    if (_needsRedraw) { _drawSetup(); _needsRedraw = false; }
+
+    if (M5Cardputer.BtnA.wasPressed()) {
+        uiManager.notifyInteraction();
+        if (!registers.empty()) {
+            _save();
+            _startTimer();
+            _state       = ST_RUNNING;
             _needsRedraw = true;
         }
         return;
@@ -495,7 +494,7 @@ void AppTimerProx::onUpdate() {
     KeyInput ki = pollKeys();
     if (!ki.anyKey) return;
     uiManager.notifyInteraction();
-    (_state == ST_SETUP) ? _handleSetup(ki) : _handleRunning(ki);
+    _handleSetup(ki);
 }
 
 } // namespace Cardputer

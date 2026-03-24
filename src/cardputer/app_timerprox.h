@@ -31,13 +31,15 @@ private:
     static constexpr int TP_BAR_H = 16;
     static constexpr int TP_BOT_H = 13;
 
-    enum State { ST_SETUP, ST_RUNNING };
+    enum State    { ST_SETUP, ST_RUNNING };
+    enum RunState { RS_SETUP, RS_FIRE, RS_HALT, RS_REPEAT };
     enum Field { F_REG=0, F_FIRE_H, F_FIRE_M, F_FIRE_S,
                  F_HALT_H, F_HALT_M, F_HALT_S,
                  F_REP_H,  F_REP_M,  F_REP_S,
                  F_START, F_COUNT };
 
     State         _state      = ST_SETUP;
+    RunState      _runState   = RS_SETUP;
     bool          _needsRedraw = true;
     Field         _sel        = F_REG;
 
@@ -46,12 +48,10 @@ private:
     int    _haltH=0, _haltM=0, _haltS=0;
     int    _repH=0,  _repM=0,  _repS=0;
 
-    unsigned long _startMs    = 0;
-    unsigned long _firedMs    = 0;
-    unsigned long _haltEndMs  = 0;
-    unsigned long _repEndMs   = 0;
-    unsigned long _lastDrawMs = 0;
-    bool          _fired      = false;
+    unsigned long _startMs     = 0;
+    unsigned long _firedMs     = 0;
+    unsigned long _repEndMs    = 0;
+    unsigned long _lastDrawMs  = 0;
     int           _repeatCount = 0;
 
     void _save();

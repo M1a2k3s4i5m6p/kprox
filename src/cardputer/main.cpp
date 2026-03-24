@@ -225,6 +225,7 @@ void setup() {
     loadBootRegSettings();
     loadTimerProxSettings();
     loadDisplaySettings();
+    disp.setBrightness((uint8_t)g_displayBrightness);
     loadHostnameSettings();
     loadDefaultAppSettings();
     loadMTLSSettings();

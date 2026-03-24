@@ -16,6 +16,19 @@
 
 namespace Cardputer {
 
+static const char* s_builtinKeymapNames[] = {
+    "English (US)", "German (QWERTZ)", "French (AZERTY)", "Italian",
+    "Spanish", "Swedish", "Swiss German", "Portuguese",
+    "British (UK)", "Norwegian", "Finnish", "Danish",
+    "Dutch", "Polish", "Hungarian", "Dvorak", "Colemak"
+};
+static const char* s_builtinKeymapIds[] = {
+    "en", "de", "fr", "it", "es", "se", "ch", "pt",
+    "gb", "no", "fi", "da", "nl", "pl", "hu", "dvorak", "colemak"
+};
+static constexpr int S_BUILTIN_COUNT = 17;
+
+
 static constexpr int  SETTINGS_BG      = 0x1863;
 static constexpr int  BAR_TOP_H        = 18;
 static constexpr int  BAR_BOT_H        = 14;
@@ -112,12 +125,12 @@ void AppSettings::_drawToggleRow(int y, bool selected, const char* label,
     disp.drawString(onoff, rx + 4, y);
 }
 
-// ---- Page 0: Bluetooth ----
+// ---- Page 1: Bluetooth ----
 
 void AppSettings::_drawPage1() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SETTINGS_BG);
-    _drawTopBar(0);
+    _drawTopBar(1);
 
     // 3 rows: BT enable, BT Keyboard, BT Mouse
     bool btConn = bluetoothInitialized && BLE_KEYBOARD_VALID && BLE_KEYBOARD.isConnected();
@@ -179,10 +192,12 @@ void AppSettings::_handlePage1(KeyInput ki) {
 
 // ---- Page 1: USB HID ----
 
+// ---- Page 2: USB HID ----
+
 void AppSettings::_drawPage2() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SETTINGS_BG);
-    _drawTopBar(1);
+    _drawTopBar(2);
 
     // 4 rows: USB enable, USB Keyboard, USB Mouse, FIDO2
     struct { const char* label; bool* flag; } rows[4] = {
@@ -259,12 +274,12 @@ void AppSettings::_connectWifi() {
     _wifiState = WS_DONE;
 }
 
-// ---- Page 2: Set WiFi ----
+// ---- Page 0: WiFi Settings ----
 
 void AppSettings::_drawPage0() {
     auto& disp = M5Cardputer.Display;
     disp.fillScreen(SETTINGS_BG);
-    _drawTopBar(2);
+    _drawTopBar(0);
 
     int y = CONTENT_Y;
 
@@ -1152,7 +1167,7 @@ void AppSettings::onEnter() {
     _idSel = 0; _editing = false; _idSaved = false; _editBuf = "";
     _timingSel = 0;
     _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = "";
-    _keymapSaved = false; _dispSel = 0;
+    _keymapSaved = false; _dispSel = 0; _dispEditing = false;
     _keymapSel = 0;
     for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } }
     _needsRedraw = true;
@@ -1209,9 +1224,8 @@ void AppSettings::onUpdate() {
     uiManager.notifyInteraction();
 
     if (ki.esc) {
-        if (_editing) { _editing = false; _editBuf = ""; _needsRedraw = true; }
-        else if (_page == 0) { uiManager.returnToLauncher(); }
-        else { _page--; _toggleSel = 0; _needsRedraw = true; }
+        if (_editing) { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
+        uiManager.returnToLauncher();
         return;
     }
 
@@ -1529,19 +1543,6 @@ void AppSettings::_handlePage12(KeyInput ki) {
 // Page 13: Keymap Selection
 // ============================================================
 
-static const char* s_builtinKeymapNames[] = {
-    "English (US)", "German (QWERTZ)", "French (AZERTY)", "Italian",
-    "Spanish", "Swedish", "Swiss German", "Portuguese",
-    "British (UK)", "Norwegian", "Finnish", "Danish",
-    "Dutch", "Polish", "Hungarian", "Dvorak", "Colemak"
-};
-
-static const char* s_builtinKeymapIds[] = {
-    "en", "de", "fr", "it", "es", "se", "ch", "pt",
-    "gb", "no", "fi", "da", "nl", "pl", "hu", "dvorak", "colemak"
-};
-static constexpr int S_BUILTIN_COUNT = 17;
-
 void AppSettings::_drawPage13() {
     auto& d = M5Cardputer.Display;
     _drawTopBar(13);
@@ -1574,8 +1575,8 @@ void AppSettings::_drawPage13() {
 }
 
 void AppSettings::_handlePage13(KeyInput ki) {
-    if (ki.fn && ki.arrowLeft)  { _page = 12; _backupSel = 0; _backupScroll = 0; _backupStatus = ""; _backupRefresh(); _needsRedraw = true; return; }
-    if (ki.fn && ki.arrowRight) { _page = 14; _dispSel = 0; _needsRedraw = true; return; }
+    if (ki.arrowLeft)  { _page = 12; _backupSel = 0; _backupScroll = 0; _backupStatus = ""; _backupRefresh(); _needsRedraw = true; return; }
+    if (ki.arrowRight) { _page = 14; _dispSel = 0; _needsRedraw = true; return; }
 
     if (ki.arrowUp)   { if (_keymapSel > 0) _keymapSel--; _keymapSaved = false; _needsRedraw = true; return; }
     if (ki.arrowDown) { if (_keymapSel < S_BUILTIN_COUNT - 1) _keymapSel++; _keymapSaved = false; _needsRedraw = true; return; }
@@ -1626,10 +1627,9 @@ void AppSettings::_drawPage14() {
         d.setTextColor(sel ? TFT_WHITE : d.color565(160,160,160), bg);
         d.drawString("Timeout:", 4, y);
 
-        // Options: 30s, 1m, 2m, 5m, 10m, never
-        static const unsigned long timeoutOpts[]  = {30000, 60000, 120000, 300000, 600000, 0};
-        static const char*         timeoutLabels[] = {"30s", "1min", "2min", "5min", "10min", "Never"};
-        static constexpr int       TIMEOUT_COUNT   = 6;
+        static const unsigned long timeoutOpts[]  = {5000, 10000, 30000, 60000};
+        static const char*         timeoutLabels[] = {"5s", "10s", "30s", "1min"};
+        static constexpr int       TIMEOUT_COUNT   = 4;
 
         int tx = 80;
         for (int i = 0; i < TIMEOUT_COUNT; i++) {
@@ -1645,42 +1645,46 @@ void AppSettings::_drawPage14() {
         y += 22;
     }
 
-    _drawBottomBar("up/dn=row  </>=adjust  fn+</>= page");
+    _drawBottomBar("up/dn=row  ENTER=edit  </>=adjust  </>=page");
 }
 
 void AppSettings::_handlePage14(KeyInput ki) {
-    // fn+left / fn+right = page navigation
-    if (ki.fn && ki.arrowLeft) {
-        _page = 13;
-        for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } }
-        _keymapSaved = false; _needsRedraw = true; return;
-    }
-    if (ki.fn && ki.arrowRight) {
-        _page = 0; _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; _needsRedraw = true; return;
+    if (ki.arrowUp || ki.arrowDown) {
+        _dispSel = (_dispSel + 1) % 2;
+        _dispEditing = false;
+        _needsRedraw = true;
+        return;
     }
 
-    if (ki.arrowUp || ki.arrowDown) { _dispSel = (_dispSel + 1) % 2; _needsRedraw = true; return; }
+    // ENTER toggles edit mode on any row
+    if (ki.enter) { _dispEditing = !_dispEditing; _needsRedraw = true; return; }
 
-    if (_dispSel == 0) {
-        if (ki.arrowLeft)  { g_displayBrightness = max(16,  g_displayBrightness - 16); }
-        if (ki.arrowRight) { g_displayBrightness = min(255, g_displayBrightness + 16); }
-        if (ki.arrowLeft || ki.arrowRight) {
-            M5Cardputer.Display.setBrightness((uint8_t)g_displayBrightness);
-            saveDisplaySettings();
-            _needsRedraw = true;
+    if (_dispEditing) {
+        if (_dispSel == 0) {
+            if (ki.arrowLeft)  { g_displayBrightness = max(16,  g_displayBrightness - 16); }
+            if (ki.arrowRight) { g_displayBrightness = min(255, g_displayBrightness + 16); }
+            if (ki.arrowLeft || ki.arrowRight) {
+                M5Cardputer.Display.setBrightness((uint8_t)g_displayBrightness);
+                saveDisplaySettings();
+                _needsRedraw = true;
+            }
+        } else {
+            static const unsigned long opts[] = {5000, 10000, 30000, 60000};
+            constexpr int N = 4;
+            int cur = 0;
+            for (int i = 0; i < N; i++) if (g_screenTimeoutMs == opts[i]) { cur = i; break; }
+            if (ki.arrowLeft)  cur = (cur - 1 + N) % N;
+            if (ki.arrowRight) cur = (cur + 1) % N;
+            if (ki.arrowLeft || ki.arrowRight) {
+                g_screenTimeoutMs = opts[cur];
+                saveDisplaySettings();
+                _needsRedraw = true;
+            }
         }
     } else {
-        static const unsigned long opts[] = {30000, 60000, 120000, 300000, 600000, 0};
-        constexpr int N = 6;
-        int cur = 0;
-        for (int i = 0; i < N; i++) if (g_screenTimeoutMs == opts[i]) { cur = i; break; }
-        if (ki.arrowLeft)  cur = (cur - 1 + N) % N;
-        if (ki.arrowRight) cur = (cur + 1) % N;
-        if (ki.arrowLeft || ki.arrowRight) {
-            g_screenTimeoutMs = opts[cur];
-            saveDisplaySettings();
-            _needsRedraw = true;
-        }
+        // Not editing — left/right navigates pages
+        if (ki.arrowLeft)  { _page = 13; for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } } _keymapSaved = false; _needsRedraw = true; return; }
+        if (ki.arrowRight) { _page = 0; _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; _needsRedraw = true; return; }
     }
 }
 

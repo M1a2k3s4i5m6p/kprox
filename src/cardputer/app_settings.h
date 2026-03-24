@@ -80,6 +80,7 @@ private:
 
     // Display page state
     int  _dispSel     = 0;
+    bool _dispEditing = false;
 
     // Backup page state
     int             _backupSel   = 0;  // 0=create 1..N=restore entries

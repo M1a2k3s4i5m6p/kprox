@@ -159,7 +159,7 @@ void UIManager::update() {
     }
 
     // Screen timeout
-    if (_screenOn && (now - _lastInteraction > g_screenTimeoutMs)) {
+    if (_screenOn && g_screenTimeoutMs > 0 && (now - _lastInteraction > g_screenTimeoutMs)) {
         M5Cardputer.Display.setBrightness(0);
         _screenOn = false;
     }

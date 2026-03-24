@@ -389,5 +389,10 @@ void loadDisplaySettings() {
     g_displayBrightness = preferences.getInt("dispBright",    128);
     g_screenTimeoutMs   = preferences.getULong("dispTimeout", 60000);
     preferences.end();
+    // Clamp brightness to a usable range
+    if (g_displayBrightness < 16)  g_displayBrightness = 128;
+    if (g_displayBrightness > 255) g_displayBrightness = 255;
+    // Valid values: 5000, 10000, 30000, 60000. Reject anything outside that range.
+    if (g_screenTimeoutMs < 5000 || g_screenTimeoutMs > 60000) g_screenTimeoutMs = 60000;
 }
 

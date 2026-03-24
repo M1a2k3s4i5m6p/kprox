@@ -60,7 +60,7 @@ private:
     static constexpr int   ENEMY_COUNT         = 3;
     static constexpr int   AI_TICK             = 80;       // ms between AI steps
     static constexpr float AGGRO_DIST          = 150.f;
-    static constexpr float MIN_DIST            = 55.f;
+    static constexpr float MIN_DIST            = 30.f;
     static constexpr float RETREAT_DIST        = 28.f;
     static constexpr float AI_SPEED_SCALE      = 0.6f;    // nurfed movement
 
