@@ -264,7 +264,7 @@ void AppCombatProx::_update(unsigned long now) {
             if (ddx*ddx + ddy*ddy < (TANK_R+BULLET_R)*(TANK_R+BULLET_R)) {
                 _player.hp--; b.active = false;
                 if (_player.hp <= 0) {
-                    _onPlayerDied();   // send immediately
+                    _pendingReisub = true;  // send after death screen draws
                     _phase = PH_DEAD; _phaseEnter = now; return;
                 }
             }
@@ -400,7 +400,11 @@ void AppCombatProx::onUpdate() {
     }
 
     if (_phase == PH_DEAD) {
-        if (_needsRedraw) { _drawDead(); _needsRedraw = false; }
+        if (_needsRedraw) {
+            _drawDead();
+            _needsRedraw = false;
+            if (_pendingReisub) { _onPlayerDied(); _pendingReisub = false; }
+        }
         KeyInput ki = pollKeys();
         if (!ki.anyKey) return;
         uiManager.notifyInteraction();

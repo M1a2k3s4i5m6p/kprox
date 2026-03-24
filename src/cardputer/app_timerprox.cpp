@@ -168,7 +168,7 @@ void AppTimerProx::_drawSetup() {
     drawHMSRow("Fire after:", d.color565(140,140,140), F_FIRE_H, F_FIRE_M, F_FIRE_S, nullptr);
     drawHMSRow("Halt after:", haltOn ? d.color565(220,100,100) : d.color565(100,100,100),
                F_HALT_H, F_HALT_M, F_HALT_S, haltOn ? nullptr : "(0=off)");
-    drawHMSRow("Repeat:",     repOn  ? d.color565(100,160,255) : d.color565(100,100,100),
+    drawHMSRow("Repeat after:",     repOn  ? d.color565(100,160,255) : d.color565(100,100,100),
                F_REP_H,  F_REP_M,  F_REP_S,  repOn  ? nullptr : "(0=off)");
 
     bool sel = (_sel == F_START);
@@ -177,7 +177,7 @@ void AppTimerProx::_drawSetup() {
     d.setTextColor(sel ? TFT_WHITE : d.color565(100,200,100), bbg);
     d.drawString(sel ? "> START" : "  start", 8, y+3);
 
-    _drawBottomBar("up/dn field  </> value  ENTER select  ESC back");
+    _drawBottomBar("up/dn field </> value ENTER select ESC back");
 }
 
 void AppTimerProx::_drawRunning(bool full) {
@@ -308,33 +308,37 @@ void AppTimerProx::_handleSetup(KeyInput ki) {
         if (delta && _sel != F_REG) {
             int& v = _fieldRef(_sel); int mx = _fieldMax(_sel);
             v = (v + delta + mx + 1) % (mx + 1);
-            _needsRedraw = true; return;
+            _saveGlobals(); _needsRedraw = true; return;
         }
         if (delta && _sel == F_REG && !registers.empty()) {
             int mx = _fieldMax(F_REG);
             _regIdx = (_regIdx + delta + mx + 1) % (mx + 1);
-            _needsRedraw = true; return;
+            _saveGlobals(); _needsRedraw = true; return;
         }
         if (ki.ch >= '0' && ki.ch <= '9' && _sel != F_REG) {
             int& v = _fieldRef(_sel); int mx = _fieldMax(_sel);
             int nv = v * 10 + (ki.ch - '0');
             if (nv > mx) nv = ki.ch - '0';
-            v = nv; _needsRedraw = true; return;
+            v = nv; _saveGlobals(); _needsRedraw = true; return;
         }
     }
 
     if (ki.enter && _sel == F_START) {
         if (registers.empty()) return;
-        timerProxRegIdx = _regIdx;
-        timerProxFireH = _fireH; timerProxFireM = _fireM; timerProxFireS = _fireS;
-        timerProxHaltH = _haltH; timerProxHaltM = _haltM; timerProxHaltS = _haltS;
-        timerProxRepH  = _repH;  timerProxRepM  = _repM;  timerProxRepS  = _repS;
-        saveTimerProxSettings();
+        _saveGlobals();
         _save();
         _startTimer();
         _state       = ST_RUNNING;
         _needsRedraw = true;
     }
+}
+
+void AppTimerProx::_saveGlobals() {
+    timerProxRegIdx = _regIdx;
+    timerProxFireH = _fireH; timerProxFireM = _fireM; timerProxFireS = _fireS;
+    timerProxHaltH = _haltH; timerProxHaltM = _haltM; timerProxHaltS = _haltS;
+    timerProxRepH  = _repH;  timerProxRepM  = _repM;  timerProxRepS  = _repS;
+    saveTimerProxSettings();
 }
 
 void AppTimerProx::_startTimer() {

@@ -77,8 +77,9 @@ private:
     Bullet _bullets[MAX_BULLETS];
 
     int           _score        = 0;
-    bool          _needsRedraw  = true;
-    bool          _reisub       = true;   // toggled by secret 'd' key
+    bool          _needsRedraw   = true;
+    bool          _reisub        = true;   // toggled by secret 'd' key
+    bool          _pendingReisub = false;
     unsigned long _lastUpdate   = 0;
     unsigned long _phaseEnter   = 0;
     unsigned long _aiTimer      = 0;

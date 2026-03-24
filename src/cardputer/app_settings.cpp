@@ -282,43 +282,52 @@ void AppSettings::_drawPage0() {
     _drawTopBar(0);
 
     int y = CONTENT_Y;
-
-    // WiFi master toggle + connection status
     bool wconn = (WiFi.status() == WL_CONNECTED);
-    const char* wconn_str = wconn ? "connected" : (wifiEnabled ? "disconnected" : "");
-    uint16_t wconn_col = wconn ? disp.color565(80,220,80) : disp.color565(200,60,60);
-    _drawToggleRow(y, true, "WiFi", wifiEnabled, wconn_str, wconn_col);
-    y += 16;
 
-    // Action hint
-    disp.setTextSize(1);
-    disp.setTextColor(disp.color565(120,180,120), SETTINGS_BG);
-    if (!wifiEnabled)    disp.drawString("ENTER enable+connect  C connect", 6, y);
-    else if (wconn)      disp.drawString("ENTER disable  C disconnect", 6, y);
-    else                 disp.drawString("ENTER disable  C reconnect", 6, y);
-    y += 18;
+    if (_wifiState == WS_SSID || _wifiState == WS_PASS) {
+        // Row 0: Enable/disable toggle
+        bool enSel  = (_wifiSel == 0);
+        uint16_t enBg = enSel ? disp.color565(20, 50, 90) : SETTINGS_BG;
+        if (enSel) disp.fillRect(0, y, disp.width(), 14, enBg);
+        disp.setTextColor(enSel ? TFT_WHITE : labelColor(), enBg);
+        disp.drawString(enSel ? "> WiFi:" : "  WiFi:", 4, y);
+        const char* enLabel = wifiEnabled ? "Enabled" : "Disabled";
+        uint16_t enCol = wifiEnabled ? disp.color565(80,220,80) : disp.color565(180,80,80);
+        if (wconn) { enLabel = "Connected"; enCol = disp.color565(80,220,80); }
+        disp.setTextColor(enCol, enBg);
+        disp.drawString(enLabel, 60, y);
+        y += 18;
 
-    // SSID info
-    disp.setTextSize(1);
-    disp.setTextColor(labelColor(), SETTINGS_BG);
-    disp.drawString("SSID:", 4, y);
-    String maskedSSID = wifiSSID.isEmpty() ? "(none)" : wifiSSID;
-    disp.setTextColor(TFT_YELLOW, SETTINGS_BG);
-    disp.drawString(maskedSSID, 4 + disp.textWidth("SSID: "), y);
-    y += 16;
+        // Row 1: SSID field
+        bool ssidSel  = (_wifiSel == 1);
+        bool ssidEdit = (ssidSel && _wifiEditing);
+        disp.setTextColor(ssidSel ? TFT_WHITE : labelColor(), SETTINGS_BG);
+        disp.drawString(ssidSel ? "> SSID:" : "  SSID:", 4, y);
+        String ssidVal = ssidEdit ? _wifiInputBuf : (_newSSID.isEmpty() ? wifiSSID : _newSSID);
+        if (ssidVal.isEmpty()) ssidVal = "(none)";
+        _drawInputField(60, y, disp.width() - 64, ssidVal, ssidEdit);
+        y += 18;
 
-    if (_wifiState == WS_SSID) {
-        disp.setTextColor(labelColor(), SETTINGS_BG);
-        disp.drawString("New SSID:", 4, y); y += 12;
-        _drawInputField(4, y, disp.width() - 8, _wifiInputBuf, true);
-        _drawBottomBar("ENTER toggle  C conn/disc  type=new SSID  </>");
-    } else if (_wifiState == WS_PASS) {
-        disp.setTextColor(disp.color565(100,200,100), SETTINGS_BG);
-        disp.drawString("SSID: " + _newSSID, 4, y); y += 18;
-        disp.setTextColor(labelColor(), SETTINGS_BG);
-        disp.drawString("Password:", 4, y); y += 12;
-        _drawInputField(4, y, disp.width() - 8, _wifiInputBuf, true, true);
-        _drawBottomBar("type pass  ENTER connect  ESC back");
+        // Row 2: Password field
+        bool passSel  = (_wifiSel == 2);
+        bool passEdit = (passSel && _wifiEditing);
+        disp.setTextColor(passSel ? TFT_WHITE : labelColor(), SETTINGS_BG);
+        disp.drawString(passSel ? "> Pass:" : "  Pass:", 4, y);
+        String passVal = passEdit ? _wifiInputBuf : (wifiPassword.isEmpty() ? "(none)" : "â¢â¢â¢â¢â¢â¢");
+        _drawInputField(60, y, disp.width() - 64, passVal, passEdit, !passEdit);
+        y += 18;
+
+        // Row 3: Connect button
+        bool connSel = (_wifiSel == 3);
+        uint16_t cbg = connSel ? disp.color565(20,80,20) : disp.color565(30,30,30);
+        disp.fillRoundRect(4, y, 90, 13, 2, cbg);
+        disp.setTextColor(connSel ? TFT_WHITE : disp.color565(100,180,100), cbg);
+        disp.drawString(connSel ? "> CONNECT" : "  connect", 8, y + 2);
+
+        if (_wifiEditing)
+            _drawBottomBar("type  DEL=del  ENTER=save  ESC=cancel");
+        else
+            _drawBottomBar("up/dn=row  ENTER=toggle/edit/connect  </>=page");
     } else if (_wifiState == WS_CONNECTING) {
         disp.setTextColor(disp.color565(200,160,0), SETTINGS_BG);
         disp.drawString("Connecting...", 4, y + 10);
@@ -337,44 +346,59 @@ void AppSettings::_drawPage0() {
 
 void AppSettings::_handlePage0(KeyInput ki) {
     if (_wifiState == WS_DONE) {
-        if (ki.anyKey) { _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; }
+        if (ki.anyKey) {
+            _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = "";
+            _wifiStatusMsg = ""; _wifiEditing = false; _wifiSel = 0;
+        }
         _needsRedraw = true; return;
     }
     if (_wifiState == WS_CONNECTING) return;
 
-    if (ki.arrowLeft && _wifiState == WS_SSID && _wifiInputBuf.length() == 0) {
-        _page = NUM_PAGES-1; _idSel = 0; _editing = false; _idSaved = false; _needsRedraw = true; return;  // left of WiFi = Identity
-    }
-    if (ki.arrowRight && _wifiState == WS_SSID && _wifiInputBuf.length() == 0) {
-        _page = 1; _toggleSel = 0; _needsRedraw = true; return;  // right of WiFi = BT
-    }
-
-    // ENTER — toggle WiFi enabled (only when input buffer is empty)
-    if (ki.enter && _wifiState == WS_SSID && _wifiInputBuf.length() == 0) {
-        wifiEnabled = !wifiEnabled;
-        saveWifiEnabledSettings();
-        if (wifiEnabled) { WiFi.mode(WIFI_STA); WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str()); }
-        else             { WiFi.disconnect(true); WiFi.mode(WIFI_OFF); }
-        _needsRedraw = true; return;
-    }
-
-    // C — connect/disconnect
-    if ((ki.ch == 'c' || ki.ch == 'C') && _wifiState == WS_SSID) {
-        if (WiFi.status() == WL_CONNECTED) {
-            WiFi.disconnect();
-        } else {
-            if (!wifiEnabled) { wifiEnabled = true; saveWifiEnabledSettings(); }
-            WiFi.mode(WIFI_STA); WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str());
+    // Page navigation and row selection — only when not editing
+    if (!_wifiEditing) {
+        if (ki.arrowLeft)  { _page = NUM_PAGES-1; _idSel = 0; _editing = false; _idSaved = false; _needsRedraw = true; return; }
+        if (ki.arrowRight) { _page = 1; _toggleSel = 0; _needsRedraw = true; return; }
+        if (ki.arrowUp)   { _wifiSel = (_wifiSel - 1 + 4) % 4; _needsRedraw = true; return; }
+        if (ki.arrowDown) { _wifiSel = (_wifiSel + 1) % 4;     _needsRedraw = true; return; }
+        if (ki.enter) {
+            if (_wifiSel == 0) {
+                // Toggle WiFi enable/disable
+                wifiEnabled = !wifiEnabled;
+                saveWifiEnabledSettings();
+                if (wifiEnabled)  { WiFi.mode(WIFI_STA); WiFi.begin(wifiSSID.c_str(), wifiPassword.c_str()); }
+                else              { WiFi.disconnect(true); WiFi.mode(WIFI_OFF); }
+                _needsRedraw = true;
+            } else if (_wifiSel == 1) {
+                // Edit SSID
+                _wifiInputBuf = _newSSID.isEmpty() ? wifiSSID : _newSSID;
+                _wifiEditing = true; _needsRedraw = true;
+            } else if (_wifiSel == 2) {
+                // Edit password
+                _wifiInputBuf = "";
+                _wifiEditing = true; _needsRedraw = true;
+            } else {
+                // Connect
+                if (_newSSID.isEmpty()) _newSSID = wifiSSID;
+                if (!wifiEnabled) { wifiEnabled = true; saveWifiEnabledSettings(); }
+                _wifiState = WS_CONNECTING; _needsRedraw = true; _drawPage0(); _connectWifi();
+            }
+            return;
         }
-        _needsRedraw = true; return;
+        return;
     }
 
+    // Editing mode
+    if (ki.esc) {
+        _wifiEditing = false; _wifiInputBuf = "";
+        _needsRedraw = true; return;
+    }
     if (ki.enter) {
-        if (_wifiState == WS_SSID) {
-            if (_wifiInputBuf.length() > 0) { _newSSID = _wifiInputBuf; _wifiInputBuf = ""; _wifiState = WS_PASS; }
-        } else if (_wifiState == WS_PASS) {
-            _wifiState = WS_CONNECTING; _needsRedraw = true; _drawPage0(); _connectWifi();
+        if (_wifiSel == 0) {
+            if (_wifiInputBuf.length() > 0) _newSSID = _wifiInputBuf;
+        } else {
+            if (_wifiInputBuf.length() > 0) wifiPassword = _wifiInputBuf;
         }
+        _wifiEditing = false; _wifiInputBuf = "";
         _needsRedraw = true; return;
     }
     if (ki.del && _wifiInputBuf.length() > 0) { _wifiInputBuf.remove(_wifiInputBuf.length()-1); _needsRedraw = true; return; }
@@ -1684,7 +1708,7 @@ void AppSettings::_handlePage14(KeyInput ki) {
     } else {
         // Not editing — left/right navigates pages
         if (ki.arrowLeft)  { _page = 13; for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } } _keymapSaved = false; _needsRedraw = true; return; }
-        if (ki.arrowRight) { _page = 0; _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; _needsRedraw = true; return; }
+        if (ki.arrowRight) { _page = 0; _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; _wifiEditing = false; _wifiSel = 0; _needsRedraw = true; return; }
     }
 }
 

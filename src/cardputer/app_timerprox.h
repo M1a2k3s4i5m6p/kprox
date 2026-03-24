@@ -56,6 +56,7 @@ private:
 
     void _save();
     void _load();
+    void _saveGlobals();
     void _startTimer();
 
     void _drawTopBar();

@@ -31,7 +31,9 @@ private:
     String         _wifiInputBuf;
     String         _newSSID;
     String         _wifiStatusMsg;
-    bool           _wifiSuccess = false;
+    bool           _wifiSuccess  = false;
+    int            _wifiSel      = 0;   // 0=SSID 1=Pass
+    bool           _wifiEditing  = false;
 
     int    _idSel   = 0;
     bool   _editing = false;
