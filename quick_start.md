@@ -17,7 +17,9 @@ To find the web interface URL:
 - **mDNS (most devices):** open `http://kprox.local` in a browser.
 - **By IP:** find the device IP in your router or hotspot client list.
 
-Once you are in, go to **Settings -> WiFi** and switch to your real network.
+Once you are in, go to **Settings -> WiFi** and switch to your preferred AP settings.
+> It is NOT recommended that you connect KProx device to a shared network. It
+> is intended for use on PRIVATE personal access points only!
 
 ---
 
