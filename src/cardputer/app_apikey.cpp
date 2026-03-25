@@ -70,7 +70,7 @@ void AppApiKey::onExit() {
 }
 
 void AppApiKey::onUpdate() {
-    KeyInput ki = pollKeys();
+    KeyInput ki = pollKeys(true);
     if (!ki.anyKey) return;
 
     uiManager.notifyInteraction();

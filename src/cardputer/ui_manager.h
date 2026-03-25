@@ -19,9 +19,10 @@ struct KeyInput {
     bool nextPage  = false;
     char ch        = 0;
     bool anyKey    = false;
+    bool isRepeat  = false;
 };
 
-KeyInput pollKeys();
+KeyInput pollKeys(bool editMode = false);
 void     drawTabHint(int afterX); // draw small ? badge after title text
 
 class UIManager {

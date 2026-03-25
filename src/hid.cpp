@@ -270,9 +270,9 @@ void sendConsumerKey(const MediaKeyReport key, HIDRoute r) {
     }
 #ifdef BOARD_HAS_USB_HID
     if (r != HIDRoute::BLE_ONLY && isUSBConnected() && KProxConsumer.isReady()) {
-        KProxConsumer.sendConsumer(key[0], key[1], key[2]);
+        KProxConsumer.sendConsumer(key[0], key[1], key[2], key[3]);
         delay(g_keyPressDelay);
-        KProxConsumer.sendConsumer(0, 0, 0);
+        KProxConsumer.sendConsumer(0, 0, 0, 0);
         delay(g_keyReleaseDelay);
     }
 #endif

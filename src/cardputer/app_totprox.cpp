@@ -590,7 +590,9 @@ void AppTOTProx::onUpdate() {
         return;
     }
 
-    KeyInput ki = pollKeys();
+    bool textActive = (_state == ST_ADD_NAME || _state == ST_ADD_SECRET ||
+                       _state == ST_GATE_SECRET || _state == ST_GATE_KEY);
+    KeyInput ki = pollKeys(textActive);
     if (!ki.anyKey) return;
     uiManager.notifyInteraction();
 

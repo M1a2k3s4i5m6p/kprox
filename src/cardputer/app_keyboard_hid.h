@@ -14,7 +14,7 @@ public:
     void onUpdate() override;
     void onExit() override;
     const char* appName() const override { return "Keyboard"; }
-    const char* appHelp()  const override { return "Direct keyboard forwarding to paired host.\nType on Cardputer to send HID input.\nESC returns to launcher."; }
+    const char* appHelp()  const override { return "Direct keyboard forwarding to paired host.\nType on Cardputer to send HID input.\nAll keys including ;.,/` are forwarded.\nBtnG0 returns to launcher."; }
     bool handlesGlobalBtnA() const override { return true; }
     const uint16_t* appIcon() const override { return fa_keyboard_48; }  // ~rgb(80,80,80)
 

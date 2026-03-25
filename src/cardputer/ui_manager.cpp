@@ -11,58 +11,86 @@ UIManager uiManager;
 // ---- Key input ----
 // Called after M5Cardputer.update() has already been invoked this frame.
 
-KeyInput pollKeys() {
+// Repeat state
+static KeyInput  s_lastKey;
+static uint32_t  s_repeatDeadline = 0;
+
+KeyInput pollKeys(bool editMode) {
     KeyInput ki;
+    bool pressed = M5Cardputer.Keyboard.isPressed();
+    bool changed = M5Cardputer.Keyboard.isChange();
 
-    if (!M5Cardputer.Keyboard.isChange()) return ki;
-    if (!M5Cardputer.Keyboard.isPressed()) return ki;
-
-    Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
-    ki.anyKey = true;
-    ki.fn     = ks.fn;
-    ki.enter  = ks.enter;
-    ki.del    = ks.del;
-    ki.tab    = ks.tab;
-
-    // fn+enter = next page in multi-page apps
-    if (ks.fn && ks.enter) {
-        ki.nextPage = true;
+    if (!pressed) {
+        s_lastKey = KeyInput{};
         return ki;
     }
 
-    for (uint8_t hk : ks.hid_keys) {
-        switch (hk) {
-            case 0x29: ki.esc       = true; break; // HID ESC
-            case 0x52: ki.arrowUp   = true; break;
-            case 0x51: ki.arrowDown = true; break;
-            case 0x50: ki.arrowLeft = true; break;
-            case 0x4F: ki.arrowRight= true; break;
+    // New keypress event — always parse fresh, reset repeat timer
+    if (changed) {
+        Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
+        ki.anyKey = true;
+        ki.fn     = ks.fn;
+        ki.enter  = ks.enter;
+        ki.del    = ks.del;
+        ki.tab    = ks.tab;
+
+        if (ks.fn && ks.enter) {
+            ki.nextPage = true;
+            s_lastKey = ki;
+            s_repeatDeadline = millis() + KEY_REPEAT_INITIAL_MS;
+            return ki;
         }
-    }
 
-    for (char c : ks.word) {
-        if (c == 0x1B) { ki.esc = true; continue; }
-
-        if (ks.fn) {
-            switch (c) {
-                case ';': ki.arrowUp    = true; continue;
-                case '.': ki.arrowDown  = true; continue;
-                case ',': ki.arrowLeft  = true; continue;
-                case '/': ki.arrowRight = true; continue;
-                case '`': ki.esc        = true; continue;  // fn+` = ESC
+        for (uint8_t hk : ks.hid_keys) {
+            switch (hk) {
+                case 0x29: ki.esc        = true; break;
+                case 0x52: ki.arrowUp    = true; break;
+                case 0x51: ki.arrowDown  = true; break;
+                case 0x50: ki.arrowLeft  = true; break;
+                case 0x4F: ki.arrowRight = true; break;
             }
         }
 
-        // Navigation aliases (no fn required)
-        switch (c) {
-            case ',': ki.arrowLeft  = true; continue;
-            case '.': ki.arrowDown  = true; continue;
-            case ';': ki.arrowUp    = true; continue;
-            case '/': ki.arrowRight = true; continue;
-            case '`': ki.esc        = true; continue;  // plain ` = ESC
+        for (char c : ks.word) {
+            if (c == 0x1B) { ki.esc = true; continue; }
+
+            if (ks.fn) {
+                switch (c) {
+                    case ';': ki.arrowUp    = true; continue;
+                    case '.': ki.arrowDown  = true; continue;
+                    case ',': ki.arrowLeft  = true; continue;
+                    case '/': ki.arrowRight = true; continue;
+                    case '`': ki.esc        = true; continue;
+                }
+            }
+
+            if (!editMode) {
+                switch (c) {
+                    case ',': ki.arrowLeft  = true; continue;
+                    case '.': ki.arrowDown  = true; continue;
+                    case ';': ki.arrowUp    = true; continue;
+                    case '/': ki.arrowRight = true; continue;
+                    case '`': ki.esc        = true; continue;
+                }
+            }
+
+            if (c >= 0x20 && c < 0x7F) ki.ch = c;
         }
 
-        if (c >= 0x20 && c < 0x7F) ki.ch = c;
+        s_lastKey = ki;
+        s_repeatDeadline = millis() + KEY_REPEAT_INITIAL_MS;
+        return ki;
+    }
+
+    // Key held, no new event — fire repeat if deadline reached
+    if (s_lastKey.anyKey) {
+        uint32_t now = millis();
+        if (now >= s_repeatDeadline) {
+            ki = s_lastKey;
+            ki.isRepeat = true;
+            s_repeatDeadline = now + KEY_REPEAT_RATE_MS;
+            return ki;
+        }
     }
 
     return ki;
@@ -121,6 +149,11 @@ void UIManager::launchApp(int index) {
     if (index < 0 || index >= (int)_apps.size()) return;
     if (_currentApp < (int)_apps.size()) _apps[_currentApp]->onExit();
     _currentApp = index;
+    // Clear repeat state so a held key from the previous app doesn't fire in the new one
+    extern KeyInput s_lastKey;
+    extern uint32_t s_repeatDeadline;
+    s_lastKey        = KeyInput{};
+    s_repeatDeadline = 0;
     wakeScreen();
     _apps[_currentApp]->onEnter();
 }

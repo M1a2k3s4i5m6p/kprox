@@ -320,7 +320,9 @@ void handleApiStatus() {
     doc["cpuFreq"]             = ESP.getCpuFreqMHz();
     doc["flashSize"]           = ESP.getFlashChipSize();
     doc["mac"]                 = WiFi.macAddress();
-#ifdef BOARD_HAS_USB_HID
+#ifdef BOARD_M5STACK_CARDPUTER
+    doc["boardType"] = "M5Stack Cardputer Adv";
+#elif defined(BOARD_HAS_USB_HID)
     doc["boardType"] = "M5Stack ATOM S3";
 #else
     doc["boardType"] = "M5Stack ATOM Lite";

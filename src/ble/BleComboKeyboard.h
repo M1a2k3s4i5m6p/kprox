@@ -58,26 +58,37 @@ const uint8_t KEY_F22 = 0xF9;
 const uint8_t KEY_F23 = 0xFA;
 const uint8_t KEY_F24 = 0xFB;
 
-typedef uint8_t MediaKeyReport[3];
+typedef uint8_t MediaKeyReport[4];
 
-const MediaKeyReport KEY_MEDIA_NEXT_TRACK = {1, 0, 0};
-const MediaKeyReport KEY_MEDIA_PREVIOUS_TRACK = {2, 0, 0};
-const MediaKeyReport KEY_MEDIA_STOP = {4, 0, 0};
-const MediaKeyReport KEY_MEDIA_PLAY_PAUSE = {8, 0, 0};
-const MediaKeyReport KEY_MEDIA_MUTE = {16, 0, 0};
-const MediaKeyReport KEY_MEDIA_VOLUME_UP = {32, 0, 0};
-const MediaKeyReport KEY_MEDIA_VOLUME_DOWN = {64, 0, 0};
-const MediaKeyReport KEY_MEDIA_WWW_HOME = {128, 0, 0};
-const MediaKeyReport KEY_MEDIA_LOCAL_MACHINE_BROWSER = {0, 1, 0};
-const MediaKeyReport KEY_MEDIA_CALCULATOR = {0, 2, 0};
-const MediaKeyReport KEY_MEDIA_WWW_BOOKMARKS = {0, 4, 0};
-const MediaKeyReport KEY_MEDIA_WWW_SEARCH = {0, 8, 0};
-const MediaKeyReport KEY_MEDIA_WWW_STOP = {0, 16, 0};
-const MediaKeyReport KEY_MEDIA_WWW_BACK = {0, 32, 0};
-const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION = {0, 64, 0};
-const MediaKeyReport KEY_MEDIA_EMAIL_READER = {0, 128, 0};
-const MediaKeyReport KEY_MEDIA_WWW_FORWARD = {0, 0, 1};
-const MediaKeyReport KEY_MEDIA_WWW_REFRESH = {0, 0, 2};
+// byte 0
+const MediaKeyReport KEY_MEDIA_NEXT_TRACK                    = {  1,   0,   0, 0};
+const MediaKeyReport KEY_MEDIA_PREVIOUS_TRACK                = {  2,   0,   0, 0};
+const MediaKeyReport KEY_MEDIA_STOP                          = {  4,   0,   0, 0};
+const MediaKeyReport KEY_MEDIA_PLAY_PAUSE                    = {  8,   0,   0, 0};
+const MediaKeyReport KEY_MEDIA_MUTE                          = { 16,   0,   0, 0};
+const MediaKeyReport KEY_MEDIA_VOLUME_UP                     = { 32,   0,   0, 0};
+const MediaKeyReport KEY_MEDIA_VOLUME_DOWN                   = { 64,   0,   0, 0};
+const MediaKeyReport KEY_MEDIA_WWW_HOME                      = {128,   0,   0, 0};
+// byte 1
+const MediaKeyReport KEY_MEDIA_LOCAL_MACHINE_BROWSER         = {  0,   1,   0, 0};
+const MediaKeyReport KEY_MEDIA_CALCULATOR                    = {  0,   2,   0, 0};
+const MediaKeyReport KEY_MEDIA_WWW_BOOKMARKS                 = {  0,   4,   0, 0};
+const MediaKeyReport KEY_MEDIA_WWW_SEARCH                    = {  0,   8,   0, 0};
+const MediaKeyReport KEY_MEDIA_WWW_STOP                      = {  0,  16,   0, 0};
+const MediaKeyReport KEY_MEDIA_WWW_BACK                      = {  0,  32,   0, 0};
+const MediaKeyReport KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION= {  0,  64,   0, 0};
+const MediaKeyReport KEY_MEDIA_EMAIL_READER                  = {  0, 128,   0, 0};
+// byte 2
+const MediaKeyReport KEY_MEDIA_WWW_FORWARD                   = {  0,   0,   1, 0};
+const MediaKeyReport KEY_MEDIA_WWW_REFRESH                   = {  0,   0,   2, 0};
+const MediaKeyReport KEY_MEDIA_BRIGHTNESS_UP                 = {  0,   0,   4, 0}; // Consumer 0x006F
+const MediaKeyReport KEY_MEDIA_BRIGHTNESS_DOWN               = {  0,   0,   8, 0}; // Consumer 0x0070
+const MediaKeyReport KEY_MEDIA_KBD_ILLUM_TOGGLE              = {  0,   0,  16, 0}; // Consumer 0x0077
+const MediaKeyReport KEY_MEDIA_KBD_ILLUM_DOWN                = {  0,   0,  32, 0}; // Consumer 0x0078
+const MediaKeyReport KEY_MEDIA_KBD_ILLUM_UP                  = {  0,   0,  64, 0}; // Consumer 0x0079
+const MediaKeyReport KEY_MEDIA_EJECT                         = {  0,   0, 128, 0}; // Consumer 0x00B8
+// byte 3
+const MediaKeyReport KEY_MEDIA_SCREEN_LOCK                   = {  0,   0,   0, 1}; // Consumer 0x019E AL Terminal Lock
 
 // System Control report — 1 byte bitmask (Generic Desktop page 0x01, System Control 0x80)
 // bit 0 = System Power Down (0x81)

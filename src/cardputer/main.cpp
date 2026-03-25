@@ -201,6 +201,7 @@ void setup() {
     delay(1000);
 
     M5Cardputer.begin(true);
+    M5Cardputer.Speaker.setVolume(160);
 
     auto& disp = M5Cardputer.Display;
     disp.setBrightness(g_displayBrightness);

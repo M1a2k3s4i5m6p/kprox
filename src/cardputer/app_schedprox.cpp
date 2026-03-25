@@ -603,7 +603,8 @@ void AppSchedProx::onUpdate() {
         uiManager.returnToLauncher(); return;
     }
 
-    KeyInput ki = pollKeys();
+    bool textActive = (_state == ST_ADD_P1 || _state == ST_ADD_P2) && (_labelActive || _payloadActive);
+    KeyInput ki = pollKeys(textActive);
     if (!ki.anyKey) return;
     uiManager.notifyInteraction();
 

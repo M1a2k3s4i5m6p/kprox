@@ -67,7 +67,7 @@ void AppKeyboardHID::onUpdate() {
 
     if (M5Cardputer.BtnA.wasPressed()) { uiManager.returnToLauncher(); return; }
 
-    KeyInput ki = pollKeys();
+    KeyInput ki = pollKeys(true);
     if (!ki.anyKey) return;
     uiManager.notifyInteraction();
 

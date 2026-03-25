@@ -43,8 +43,9 @@ private:
 
     // Page 0 — status / unlock
     String _keyBuf;
-    String _totpBuf;           // 6-digit TOTP input buffer
-    bool   _totpStep    = false; // true = waiting for TOTP code after PIN
+    String _totpBuf;
+    bool   _totpStep       = false;
+    bool   _keyFieldEditing = false;  // true only after ENTER activates the key/totp input field
     bool   _unlockFailed   = false;
     bool   _confirmingLock = false;
 

@@ -81,7 +81,8 @@ void AppSetWifi::onUpdate() {
         return;
     }
 
-    KeyInput ki = pollKeys();
+    bool textActive = (_state == S_SSID || _state == S_PASS);
+    KeyInput ki = pollKeys(textActive);
     if (!ki.anyKey) return;
 
     uiManager.notifyInteraction();

@@ -33,7 +33,7 @@ struct REKey {
     bool any    = false;
 };
 
-static REKey pollREKey() {
+static REKey pollREKey(bool editing = false) {
     REKey k;
     if (!M5Cardputer.Keyboard.isChange()) return k;
     if (!M5Cardputer.Keyboard.isPressed()) return k;
@@ -44,8 +44,6 @@ static REKey pollREKey() {
     k.enter = ks.enter;
     k.fn    = ks.fn;
 
-    // ESC = fn + backtick. fnEsc (exit edit mode) = fn + backtick.
-    // Tab is tab — not treated as ESC.
     for (uint8_t hk : ks.hid_keys) {
         switch (hk) {
             case 0x52: k.up    = true; break;
@@ -56,9 +54,10 @@ static REKey pollREKey() {
     }
 
     for (char c : ks.word) {
-        if (c == 0x1B) continue;  // ignore raw ESC byte — fn+` is the only ESC source
-        if (c == '`' && ks.fn)  { k.fnEsc = true; continue; }  // fn+` = exit edit mode
-        if (c == '`' && !ks.fn) { k.esc   = true; continue; }  // plain ` = ESC (back/menu)
+        if (c == 0x1B) continue;
+        if (c == '`' && ks.fn)              { k.fnEsc = true; continue; }
+        if (c == '`' && !ks.fn && !editing) { k.esc   = true; continue; }
+        if (c == '`' && !ks.fn &&  editing) { k.ch    = '`'; continue; }
         if (ks.fn) {
             switch (c) {
                 case ';': k.up    = true; continue;
@@ -317,7 +316,7 @@ void AppRegEdit::_handleBrowse() {
     uiManager.notifyInteraction();
 
     int total = (int)registers.size();
-    if (k.esc) { uiManager.returnToLauncher(); return; }
+    if (k.esc || k.fnEsc) { uiManager.returnToLauncher(); return; }
 
     // Navigation via HID arrows or keyboard aliases
     bool goLeft  = k.left  || k.ch == ',';
@@ -384,7 +383,7 @@ void AppRegEdit::_drawEditName() {
 }
 
 void AppRegEdit::_handleEditName() {
-    REKey k = pollREKey();
+    REKey k = pollREKey(true);
     if (!k.any) return;
     uiManager.notifyInteraction();
     if (k.esc) { _mode=M_BROWSE; _needsRedraw=true; return; }
@@ -418,7 +417,7 @@ void AppRegEdit::_drawEditContent() {
 }
 
 void AppRegEdit::_handleEditContent() {
-    REKey k = pollREKey();
+    REKey k = pollREKey(true);
     if (!k.any) return;
     uiManager.notifyInteraction();
 

@@ -31,10 +31,15 @@ private:
     enum Phase { PH_SPLASH, PH_PLAYING, PH_DEAD, PH_WIN };
     Phase _phase = PH_SPLASH;
 
+    // Display area (physical screen)
     static constexpr int   AW     = 240;
     static constexpr int   AH     = 135;
     static constexpr int   BAR_H  = 13;
     static constexpr int   PLAY_H = AH - BAR_H;
+
+    // Virtual arena (2× the display)
+    static constexpr int   VAW    = 480;
+    static constexpr int   VPLAY_H= 240;
 
     struct Tank {
         float x, y;
@@ -45,24 +50,35 @@ private:
         int   patrolTimer;
         float patrolTarget;
         int   stuckTicks;
+        // A* path following
+        int8_t pathX[32];
+        int8_t pathY[32];
+        int    pathLen;
+        int    pathIdx;
+        unsigned long pathTimer;
+        uint8_t wanderBias;   // 0-100: % chance of random detour each waypoint
     };
 
     static constexpr float SPEED               = 1.4f;
     static constexpr float BSPEED              = 3.8f;
-    static constexpr float MAX_BULLET_DIST     = 130.f;
+    static constexpr float MAX_BULLET_DIST     = 200.f;
     static constexpr float ROTATE_SPEED        = 0.07f;
-    static constexpr float AI_TURN_SPEED       = 0.20f;   // ~11 deg per tick
+    static constexpr float AI_TURN_SPEED       = 0.35f;   // sharper turns
     static constexpr int   TANK_R              = 5;
     static constexpr int   BULLET_R            = 2;
     static constexpr int   FIRE_COOLDOWN       = 350;
-    static constexpr int   ENEMY_FIRE_COOLDOWN = 2200;    // nurfed fire rate
+    static constexpr int   ENEMY_FIRE_COOLDOWN = 600;     // faster fire
     static constexpr int   PLAYER_HP           = 3;
     static constexpr int   ENEMY_COUNT         = 3;
-    static constexpr int   AI_TICK             = 80;       // ms between AI steps
-    static constexpr float AGGRO_DIST          = 150.f;
+    static constexpr int   AI_TICK             = 60;      // faster AI ticks
+    static constexpr int   PATH_REPLAN_MS      = 700;     // replan more often
+    static constexpr float AGGRO_DIST          = 9999.f;  // always aggressive
     static constexpr float MIN_DIST            = 30.f;
-    static constexpr float RETREAT_DIST        = 28.f;
-    static constexpr float AI_SPEED_SCALE      = 0.6f;    // nurfed movement
+    static constexpr float RETREAT_DIST        = 22.f;
+    static constexpr float AI_SPEED_SCALE      = 0.95f;   // near full speed
+    static constexpr float WAYPOINT_RADIUS     = 8.f;
+    static constexpr float REPULSE_DIST        = 20.f;
+    static constexpr float REPULSE_STRENGTH    = 0.8f;
 
     Tank  _player;
     Tank  _enemies[ENEMY_COUNT];
@@ -85,10 +101,13 @@ private:
     unsigned long _aiTimer      = 0;
     int           _lastFirer    = -1;     // which enemy last fired
 
-    static constexpr int CELL = 24;
-    static constexpr int COLS = AW / CELL;
-    static constexpr int ROWS = PLAY_H / CELL;
-    static const uint8_t _wallMap[5][10];
+    static constexpr int CELL = 12;
+    static constexpr int COLS = VAW    / CELL;   // 40
+    static constexpr int ROWS = VPLAY_H / CELL;  // 20
+    static const uint8_t _wallMap[ROWS][COLS];
+
+    // Scrolling camera — top-left of viewport in virtual coords
+    int _camX = 0, _camY = 0;
 
     void _resetGame();
     void _spawnEnemies();
@@ -98,6 +117,8 @@ private:
     void _drawBullet(const Bullet& b);
     void _fireBullet(Tank& shooter, bool fromPlayer);
     void _aiStep(unsigned long now);
+    bool _astar(int sx, int sy, int gx, int gy, Tank& e);
+    void _pathStep(Tank& e, int enemyIdx, unsigned long now);
     bool _wallAt(float cx, float cy);
     bool _circleWall(float cx, float cy, float r);
     void _drawSplash();

@@ -32,7 +32,6 @@ static CSRawKey pollRaw() {
     rk.tab   = ks.tab;
     rk.fn    = ks.fn;
 
-    // ESC = fn + backtick only. Tab is tab.
     for (uint8_t hk : ks.hid_keys) {
         switch (hk) {
             case 0x29: rk.esc  = true; break;
@@ -42,8 +41,8 @@ static CSRawKey pollRaw() {
     }
 
     for (char c : ks.word) {
-        if (c == 0x1B)            { rk.esc = true; continue; }
-        if (c == '`')             { rk.esc = true; continue; }  // ` = ESC (fn+` or plain)
+        if (c == 0x1B)  { rk.esc = true; continue; }
+        if (c == '`')   { rk.esc = true; continue; }   // ` always ESC — handlers gate based on _keyFieldEditing
         if (ks.fn) {
             if (c == ';') { rk.up   = true; continue; }
             if (c == '.') { rk.down = true; continue; }
@@ -194,7 +193,7 @@ void AppCredStore::_drawPage0() {
             if (!totpOnly) {
                 disp.setTextColor(disp.color565(180,180,180), CS_BG);
                 disp.drawString("Store key:", 4, y); y += 12;
-                _drawInputField(4, y, disp.width() - 8, _keyBuf, true, false);
+                _drawInputField(4, y, disp.width() - 8, _keyBuf, _keyFieldEditing, false);
                 y += 18;
             } else {
                 disp.setTextColor(disp.color565(220,180,255), CS_BG);
@@ -204,7 +203,7 @@ void AppCredStore::_drawPage0() {
                     disp.drawString("No NTP sync — unavailable", 4, y);
                     y += 14;
                 } else {
-                    _drawInputField(4, y, disp.width() - 8, _totpBuf, true, false);
+                    _drawInputField(4, y, disp.width() - 8, _totpBuf, _keyFieldEditing, false);
                     y += 18;
                 }
             }
@@ -247,10 +246,14 @@ void AppCredStore::_drawPage0() {
     uint16_t bb = disp.color565(16,16,16);
     disp.fillRect(0, disp.height()-CS_BOT_H, disp.width(), CS_BOT_H, bb);
     disp.setTextColor(disp.color565(100,100,100), bb);
-    if (locked)
-        disp.drawString("type  ENTER unlock  </> page  ESC back", 2, disp.height()-CS_BOT_H+2);
-    else
+    if (locked) {
+        if (_keyFieldEditing)
+            disp.drawString("type  ENTER unlock  ESC cancel", 2, disp.height()-CS_BOT_H+2);
+        else
+            disp.drawString("ENTER edit  </> page  `/ESC exit", 2, disp.height()-CS_BOT_H+2);
+    } else {
         disp.drawString("ENTER=lock  </> page  ESC back", 2, disp.height()-CS_BOT_H+2);
+    }
 }
 
 void AppCredStore::_drawConfirmLock() {
@@ -283,67 +286,82 @@ void AppCredStore::_handlePage0(CSRawKey rk) {
     CSGateMode gate = csGateGetMode();
     bool totpOnly = (gate == CSGateMode::TOTP_ONLY);
 
-    if (_keyBuf.isEmpty() && _totpBuf.isEmpty() && !_totpStep) {
-        if (rk.ch==',') { _page=NUM_PAGES-1; _needsRedraw=true; return; }
-        if (rk.ch=='/') { _page=1;           _needsRedraw=true; return; }
+    if (!locked) {
+        // Unlocked: ENTER to confirm lock, ESC to exit
+        if (rk.esc)   { uiManager.returnToLauncher(); return; }
+        if (rk.enter) { _confirmingLock=true; _needsRedraw=true; }
+        return;
     }
 
-    if (locked) {
+    // Locked — two sub-modes: browsing (field not active) and editing (field active)
+    if (!_keyFieldEditing) {
+        // Navigation and page-switching only; no text capture
+        if (!_keyBuf.isEmpty() && !_totpBuf.isEmpty() && !_totpStep) {
+            if (rk.ch==',') { _page=NUM_PAGES-1; _needsRedraw=true; return; }
+            if (rk.ch=='/') { _page=1;           _needsRedraw=true; return; }
+        }
+        if (_keyBuf.isEmpty() && _totpBuf.isEmpty() && !_totpStep) {
+            if (rk.ch==',') { _page=NUM_PAGES-1; _needsRedraw=true; return; }
+            if (rk.ch=='/') { _page=1;           _needsRedraw=true; return; }
+        }
+        if (rk.esc) { uiManager.returnToLauncher(); return; }
+        if (rk.enter) {
+            _keyFieldEditing=true;
+            _keyBuf=""; _totpBuf=""; _unlockFailed=false;
+            _needsRedraw=true;
+        }
+        return;
+    }
+
+    // Field is active — collect input
+    if (_totpStep || totpOnly) {
         if (rk.esc) {
             if (_totpStep) {
-                // Go back to key entry
-                _totpStep=false; _totpBuf=""; _unlockFailed=false; _needsRedraw=true;
-            } else if (_keyBuf.isEmpty() && _totpBuf.isEmpty()) {
-                uiManager.returnToLauncher();
+                _totpStep=false; _totpBuf=""; _unlockFailed=false;
+                _keyFieldEditing=false;
             } else {
-                _keyBuf=""; _totpBuf=""; _unlockFailed=false; _needsRedraw=true;
+                _keyFieldEditing=false; _keyBuf=""; _totpBuf=""; _unlockFailed=false;
             }
-            return;
+            _needsRedraw=true; return;
         }
-
-        if (_totpStep || totpOnly) {
-            // Collecting TOTP code — only digits, 6 chars max
-            if (rk.del && _totpBuf.length()>0) { _totpBuf.remove(_totpBuf.length()-1); _unlockFailed=false; _needsRedraw=true; return; }
-            if (rk.enter) {
-                if (!totpTimeReady()) { _unlockFailed=true; _needsRedraw=true; return; }
-                bool ok = totpOnly
-                    ? credStoreUnlockWithTOTP("", _totpBuf)
-                    : credStoreUnlockWithTOTP(_keyBuf, _totpBuf);
-                if (ok) {
-                    _unlockFailed=false; _totpStep=false; _keyBuf=""; _totpBuf="";
-                    _snapLocked=false; _snapCount=credStoreCount();
-                } else {
-                    _unlockFailed=true; _totpBuf="";
-                }
-                _needsRedraw=true; return;
+        if (rk.del && _totpBuf.length()>0) { _totpBuf.remove(_totpBuf.length()-1); _unlockFailed=false; _needsRedraw=true; return; }
+        if (rk.enter) {
+            if (!totpTimeReady()) { _unlockFailed=true; _needsRedraw=true; return; }
+            bool ok = totpOnly
+                ? credStoreUnlockWithTOTP("", _totpBuf)
+                : credStoreUnlockWithTOTP(_keyBuf, _totpBuf);
+            if (ok) {
+                _unlockFailed=false; _totpStep=false; _keyBuf=""; _totpBuf="";
+                _snapLocked=false; _snapCount=credStoreCount();
+                _keyFieldEditing=false;
+            } else {
+                _unlockFailed=true; _totpBuf="";
             }
-            if (rk.ch>='0' && rk.ch<='9' && (int)_totpBuf.length()<6) {
-                _totpBuf+=rk.ch; _unlockFailed=false; _needsRedraw=true;
-            }
-        } else {
-            // Key entry
-            if (rk.enter && _keyBuf.length()>0) {
-                if (gate == CSGateMode::TOTP) {
-                    // Verify key first, then ask for TOTP
-                    // Peek: try unlock with empty TOTP — it will fail at TOTP check
-                    // Use a temp check: decrypt keycheck directly
-                    // Instead: gate == TOTP means we do two-step; check key validity first
-                    _totpStep = true; _totpBuf = ""; _unlockFailed=false;
-                    _needsRedraw=true; return;
-                }
-                if (credStoreUnlock(_keyBuf)) {
-                    _unlockFailed=false; _snapLocked=false; _snapCount=credStoreCount();
-                } else {
-                    _unlockFailed=true;
-                }
-                _keyBuf=""; _needsRedraw=true; return;
-            }
-            if (rk.del && _keyBuf.length()>0) { _keyBuf.remove(_keyBuf.length()-1); _unlockFailed=false; _needsRedraw=true; return; }
-            if (rk.ch) { _keyBuf+=rk.ch; _unlockFailed=false; _needsRedraw=true; }
+            _needsRedraw=true; return;
+        }
+        if (rk.ch>='0' && rk.ch<='9' && (int)_totpBuf.length()<6) {
+            _totpBuf+=rk.ch; _unlockFailed=false; _needsRedraw=true;
         }
     } else {
-        if (rk.enter) { _confirmingLock=true; _needsRedraw=true; }
-        if (rk.esc)   { uiManager.returnToLauncher(); }
+        if (rk.esc) {
+            _keyFieldEditing=false; _keyBuf=""; _unlockFailed=false;
+            _needsRedraw=true; return;
+        }
+        if (rk.enter && _keyBuf.length()>0) {
+            if (gate == CSGateMode::TOTP) {
+                _totpStep=true; _totpBuf=""; _unlockFailed=false;
+                _needsRedraw=true; return;
+            }
+            if (credStoreUnlock(_keyBuf)) {
+                _unlockFailed=false; _snapLocked=false; _snapCount=credStoreCount();
+                _keyFieldEditing=false;
+            } else {
+                _unlockFailed=true;
+            }
+            _keyBuf=""; _needsRedraw=true; return;
+        }
+        if (rk.del && _keyBuf.length()>0) { _keyBuf.remove(_keyBuf.length()-1); _unlockFailed=false; _needsRedraw=true; return; }
+        if (rk.ch) { _keyBuf+=rk.ch; _unlockFailed=false; _needsRedraw=true; }
     }
 }
 
@@ -903,7 +921,8 @@ void AppCredStore::_pollState() {
 
 void AppCredStore::onEnter() {
     _page=0; _needsRedraw=true;
-    _confirmingLock=false; _keyBuf=""; _totpBuf=""; _totpStep=false; _unlockFailed=false;
+    _confirmingLock=false; _keyBuf=""; _totpBuf=""; _totpStep=false;
+    _keyFieldEditing=false; _unlockFailed=false;
     _resetCredFields();
     _rkField=RK_OLD; _rkOld=""; _rkNew=""; _rkConfirm=""; _rkStatus="";
     _p2Mode=P2_REKEY; _p2TotpSec=""; _p2NewKey=""; _p2NewKeyConf="";
@@ -913,7 +932,8 @@ void AppCredStore::onEnter() {
 }
 
 void AppCredStore::onExit() {
-    _confirmingLock=false; _keyBuf=""; _totpBuf=""; _totpStep=false; _wipePrompted=false;
+    _confirmingLock=false; _keyBuf=""; _totpBuf=""; _totpStep=false;
+    _keyFieldEditing=false; _wipePrompted=false;
     _resetCredFields();
     _rkOld=""; _rkNew=""; _rkConfirm="";
     _p2Mode=P2_REKEY; _p2TotpSec=""; _p2NewKey=""; _p2NewKeyConf="";

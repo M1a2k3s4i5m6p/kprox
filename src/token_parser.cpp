@@ -543,6 +543,13 @@ static bool isKeyToken(const String& upper) {
             upper == "WWWSEARCH"  || upper == "WWWBACK"   || upper == "WWWFORWARD"  ||
             upper == "WWWSTOP"    || upper == "WWWREFRESH"|| upper == "BOOKMARKS"   ||
             upper == "MEDIASEL"   ||
+            upper == "BRIGHTNESSUP"   || upper == "BRIGHTNESSDOWN"  ||
+            upper == "MICMUTE"        ||
+            upper == "KBDILLUMUP"     || upper == "KBDILLUMDOWN"    || upper == "KBDILLUMTOGGLE" ||
+            upper == "SCREENLOCK"     || upper == "EJECTCD"          ||
+            // AC (Application Control) keys — keyboard page 0x07
+            upper == "UNDO"  || upper == "REDO"  || upper == "CUT"   ||
+            upper == "COPY"  || upper == "PASTE" || upper == "FIND"  || upper == "HELP" ||
             // System control keys
             upper == "SYSTEMPOWER"|| upper == "SYSPOWER"  || upper == "POWERDOWN"   ||
             upper == "SYSTEMSLEEP"|| upper == "SYSSLEEP"  ||
@@ -712,7 +719,7 @@ static uint8_t resolveKeyToken(const String& upper) {
 }
 
 static bool tryDispatchConsumerKey(const String& upper, HIDRoute r = HIDRoute::BOTH) {
-    if (upper == "MUTE")                                { sendConsumerKey(KEY_MEDIA_MUTE,                            r); return true; }
+    if (upper == "MUTE"   || upper == "MICMUTE")            { sendConsumerKey(KEY_MEDIA_MUTE,                            r); return true; }
     if (upper == "VOLUMEUP"   || upper == "VOLUP")      { sendConsumerKey(KEY_MEDIA_VOLUME_UP,                       r); return true; }
     if (upper == "VOLUMEDOWN" || upper == "VOLDOWN")    { sendConsumerKey(KEY_MEDIA_VOLUME_DOWN,                     r); return true; }
     if (upper == "PLAYPAUSE")                           { sendConsumerKey(KEY_MEDIA_PLAY_PAUSE,                      r); return true; }
@@ -730,6 +737,21 @@ static bool tryDispatchConsumerKey(const String& upper, HIDRoute r = HIDRoute::B
     if (upper == "WWWREFRESH")                          { sendConsumerKey(KEY_MEDIA_WWW_REFRESH,                     r); return true; }
     if (upper == "BOOKMARKS")                           { sendConsumerKey(KEY_MEDIA_WWW_BOOKMARKS,                   r); return true; }
     if (upper == "MEDIASEL")                            { sendConsumerKey(KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION,  r); return true; }
+    if (upper == "BRIGHTNESSUP")                        { sendConsumerKey(KEY_MEDIA_BRIGHTNESS_UP,                   r); return true; }
+    if (upper == "BRIGHTNESSDOWN")                      { sendConsumerKey(KEY_MEDIA_BRIGHTNESS_DOWN,                 r); return true; }
+    if (upper == "KBDILLUMTOGGLE")                      { sendConsumerKey(KEY_MEDIA_KBD_ILLUM_TOGGLE,                r); return true; }
+    if (upper == "KBDILLUMDOWN")                        { sendConsumerKey(KEY_MEDIA_KBD_ILLUM_DOWN,                  r); return true; }
+    if (upper == "KBDILLUMUP")                          { sendConsumerKey(KEY_MEDIA_KBD_ILLUM_UP,                    r); return true; }
+    if (upper == "EJECTCD")                             { sendConsumerKey(KEY_MEDIA_EJECT,                           r); return true; }
+    if (upper == "SCREENLOCK")                          { sendConsumerKey(KEY_MEDIA_SCREEN_LOCK,                     r); return true; }
+    // AC (Application Control) — keyboard page 0x07, sent as raw HID usage
+    if (upper == "HELP")                                { sendSpecialKeyRaw(0x75, r); return true; }
+    if (upper == "UNDO")                                { sendSpecialKeyRaw(0x7A, r); return true; }
+    if (upper == "REDO")                                { sendSpecialKeyRaw(0x79, r); return true; }
+    if (upper == "CUT")                                 { sendSpecialKeyRaw(0x7B, r); return true; }
+    if (upper == "COPY")                                { sendSpecialKeyRaw(0x7C, r); return true; }
+    if (upper == "PASTE")                               { sendSpecialKeyRaw(0x7D, r); return true; }
+    if (upper == "FIND")                                { sendSpecialKeyRaw(0x7E, r); return true; }
     if (upper == "SYSTEMPOWER"|| upper == "SYSPOWER" || upper == "POWERDOWN") { sendSystemKey(KEY_SYSTEM_POWER, r); return true; }
     if (upper == "SYSTEMSLEEP"|| upper == "SYSSLEEP")                          { sendSystemKey(KEY_SYSTEM_SLEEP, r); return true; }
     if (upper == "SYSTEMWAKE" || upper == "SYSWAKE"  || upper == "WAKEUP")    { sendSystemKey(KEY_SYSTEM_WAKE,  r); return true; }

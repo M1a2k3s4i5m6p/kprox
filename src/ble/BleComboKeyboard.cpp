@@ -71,27 +71,34 @@ static const uint8_t _hidReportDescriptor[] = {
   LOGICAL_MINIMUM(1), 0x00,          //   LOGICAL_MINIMUM (0)
   LOGICAL_MAXIMUM(1), 0x01,          //   LOGICAL_MAXIMUM (1)
   REPORT_SIZE(1),     0x01,          //   REPORT_SIZE (1)
-  REPORT_COUNT(1),    0x12,          //   REPORT_COUNT (18) — 16 original + WWWFORWARD + WWWREFRESH
-  USAGE(1),           0xB5,          //   USAGE (Scan Next Track)     ; byte0 bit0: 1
-  USAGE(1),           0xB6,          //   USAGE (Scan Previous Track) ; byte0 bit1: 2
-  USAGE(1),           0xB7,          //   USAGE (Stop)                ; byte0 bit2: 4
-  USAGE(1),           0xCD,          //   USAGE (Play/Pause)          ; byte0 bit3: 8
-  USAGE(1),           0xE2,          //   USAGE (Mute)                ; byte0 bit4: 16
-  USAGE(1),           0xE9,          //   USAGE (Volume Increment)    ; byte0 bit5: 32
-  USAGE(1),           0xEA,          //   USAGE (Volume Decrement)    ; byte0 bit6: 64
-  USAGE(2),           0x23, 0x02,    //   Usage (WWW Home)            ; byte0 bit7: 128
-  USAGE(2),           0x94, 0x01,    //   Usage (My Computer) ; byte1 bit0: 1
-  USAGE(2),           0x92, 0x01,    //   Usage (Calculator)  ; byte1 bit1: 2
-  USAGE(2),           0x2A, 0x02,    //   Usage (WWW fav)     ; byte1 bit2: 4
-  USAGE(2),           0x21, 0x02,    //   Usage (WWW search)  ; byte1 bit3: 8
-  USAGE(2),           0x26, 0x02,    //   Usage (WWW stop)    ; byte1 bit4: 16
-  USAGE(2),           0x24, 0x02,    //   Usage (WWW back)    ; byte1 bit5: 32
-  USAGE(2),           0x83, 0x01,    //   Usage (Media sel)   ; byte1 bit6: 64
-  USAGE(2),           0x8A, 0x01,    //   Usage (Mail)        ; byte1 bit7: 128
-  USAGE(2),           0x25, 0x02,    //   Usage (AC Forward)  ; byte2 bit0: 1
-  USAGE(2),           0x27, 0x02,    //   Usage (AC Refresh)  ; byte2 bit1: 2
-  HIDINPUT(1),        0x02,          //   INPUT (Data,Var,Abs) — 18 data bits
-  REPORT_COUNT(1),    0x06,          //   REPORT_COUNT (6) — padding to 3-byte boundary
+  REPORT_COUNT(1),    0x19,          //   REPORT_COUNT (25) — 18 original + 7 new
+  USAGE(1),           0xB5,          //   USAGE (Scan Next Track)      ; byte0 bit0: 1
+  USAGE(1),           0xB6,          //   USAGE (Scan Previous Track)  ; byte0 bit1: 2
+  USAGE(1),           0xB7,          //   USAGE (Stop)                 ; byte0 bit2: 4
+  USAGE(1),           0xCD,          //   USAGE (Play/Pause)           ; byte0 bit3: 8
+  USAGE(1),           0xE2,          //   USAGE (Mute)                 ; byte0 bit4: 16
+  USAGE(1),           0xE9,          //   USAGE (Volume Increment)     ; byte0 bit5: 32
+  USAGE(1),           0xEA,          //   USAGE (Volume Decrement)     ; byte0 bit6: 64
+  USAGE(2),           0x23, 0x02,    //   Usage (WWW Home)             ; byte0 bit7: 128
+  USAGE(2),           0x94, 0x01,    //   Usage (My Computer)  ; byte1 bit0: 1
+  USAGE(2),           0x92, 0x01,    //   Usage (Calculator)   ; byte1 bit1: 2
+  USAGE(2),           0x2A, 0x02,    //   Usage (WWW fav)      ; byte1 bit2: 4
+  USAGE(2),           0x21, 0x02,    //   Usage (WWW search)   ; byte1 bit3: 8
+  USAGE(2),           0x26, 0x02,    //   Usage (WWW stop)     ; byte1 bit4: 16
+  USAGE(2),           0x24, 0x02,    //   Usage (WWW back)     ; byte1 bit5: 32
+  USAGE(2),           0x83, 0x01,    //   Usage (Media sel)    ; byte1 bit6: 64
+  USAGE(2),           0x8A, 0x01,    //   Usage (Mail)         ; byte1 bit7: 128
+  USAGE(2),           0x25, 0x02,    //   Usage (AC Forward)   ; byte2 bit0: 1
+  USAGE(2),           0x27, 0x02,    //   Usage (AC Refresh)   ; byte2 bit1: 2
+  USAGE(1),           0x6F,          //   Usage (Brightness++)  ; byte2 bit2: 4
+  USAGE(1),           0x70,          //   Usage (Brightness--)  ; byte2 bit3: 8
+  USAGE(1),           0x77,          //   Usage (KbdIllumToggle); byte2 bit4: 16
+  USAGE(1),           0x78,          //   Usage (KbdIllum--)    ; byte2 bit5: 32
+  USAGE(1),           0x79,          //   Usage (KbdIllum++)    ; byte2 bit6: 64
+  USAGE(1),           0xB8,          //   Usage (Eject)         ; byte2 bit7: 128
+  USAGE(2),           0x9E, 0x01,    //   Usage (ScreenLock)    ; byte3 bit0: 1
+  HIDINPUT(1),        0x02,          //   INPUT (Data,Var,Abs) — 25 data bits
+  REPORT_COUNT(1),    0x07,          //   REPORT_COUNT (7) — padding to 4-byte boundary
   HIDINPUT(1),        0x03,          //   INPUT (Const,Var,Abs)
   END_COLLECTION(0),                 // END_COLLECTION
 
@@ -477,6 +484,7 @@ size_t BleComboKeyboard::press(const MediaKeyReport k)
     _mediaKeyReport[0] |= k[0];
     _mediaKeyReport[1] |= k[1];
     _mediaKeyReport[2] |= k[2];
+    _mediaKeyReport[3] |= k[3];
 	sendReport(&_mediaKeyReport);
 	return 1;
 }
@@ -520,6 +528,7 @@ size_t BleComboKeyboard::release(const MediaKeyReport k)
     _mediaKeyReport[0] &= ~k[0];
     _mediaKeyReport[1] &= ~k[1];
     _mediaKeyReport[2] &= ~k[2];
+    _mediaKeyReport[3] &= ~k[3];
 	sendReport(&_mediaKeyReport);
 	return 1;
 }
@@ -536,6 +545,7 @@ void BleComboKeyboard::releaseAll(void)
     _mediaKeyReport[0] = 0;
     _mediaKeyReport[1] = 0;
     _mediaKeyReport[2] = 0;
+    _mediaKeyReport[3] = 0;
     _systemKeyReport   = 0;
 	sendReport(&_keyReport);
 	sendReport(&_mediaKeyReport);

@@ -394,17 +394,18 @@
 
                     <div class="section settings-section">
                         <h3>WiFi</h3>
-                        <div class="settings-grid">
+                        <div class="settings-grid" style="grid-template-columns: 1fr;">
                             <div class="settings-field">
                                 <label class="settings-label">Network SSID</label>
                                 <input type="text" id="newWifiSSID" placeholder="Network SSID" />
                             </div>
                             <div class="settings-field">
                                 <label class="settings-label">Password</label>
-                                <input type="password" id="newWifiPassword" placeholder="Password" />
+                                <input type="text" id="newWifiPassword" placeholder="Password" autocomplete="off" />
                             </div>
                         </div>
-                        <button onclick="connectToWiFi()" style="margin-top:8px;">Connect to Network</button>
+                        <button onclick="connectToWiFi()" style="margin-top:8px;">Save WiFi Settings</button>
+                        <p style="font-size:11px;color:#888;margin-top:6px;">Reboot required for changes to take effect.</p>
                     </div>
 
                     <div class="section settings-section">

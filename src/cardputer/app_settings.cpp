@@ -317,8 +317,8 @@ void AppSettings::_drawPage0() {
         bool passEdit = (passSel && _wifiEditing);
         disp.setTextColor(passSel ? TFT_WHITE : labelColor(), SETTINGS_BG);
         disp.drawString(passSel ? "> Pass:" : "  Pass:", 4, y);
-        String passVal = passEdit ? _wifiInputBuf : (wifiPassword.isEmpty() ? "(none)" : "â�¢â�¢â�¢â�¢â�¢â�¢");
-        _drawInputField(60, y, disp.width() - 64, passVal, passEdit, !passEdit);
+        String passVal = passEdit ? _wifiInputBuf : "********";
+        _drawInputField(60, y, disp.width() - 64, passVal, passEdit);
         y += 18;
 
         // Row 3: Connect button
@@ -329,7 +329,7 @@ void AppSettings::_drawPage0() {
         disp.drawString(connSel ? "> CONNECT" : "  connect", 8, y + 2);
 
         if (_wifiEditing)
-            _drawBottomBar("type  DEL=del  ENTER=save  ESC=cancel");
+            _drawBottomBar("type  DEL=del  ENTER=save  fn+`=cancel");
         else
             _drawBottomBar("up/dn=row  ENTER=toggle/edit/connect  </>=page");
     } else if (_wifiState == WS_CONNECTING) {
@@ -392,10 +392,6 @@ void AppSettings::_handlePage0(KeyInput ki) {
     }
 
     // Editing mode
-    if (ki.esc) {
-        _wifiEditing = false; _wifiInputBuf = "";
-        _needsRedraw = true; return;
-    }
     if (ki.enter) {
         if (_wifiSel == 1) {
             if (_wifiInputBuf.length() > 0) _newSSID = _wifiInputBuf;
@@ -1247,12 +1243,14 @@ void AppSettings::onUpdate() {
         _needsRedraw = false;
     }
 
-    KeyInput ki = pollKeys();
+    bool isEditing = _wifiEditing || _editing || _dispEditing;
+    KeyInput ki = pollKeys(isEditing);
     if (!ki.anyKey) return;
     uiManager.notifyInteraction();
 
     if (ki.esc) {
-        if (_editing) { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
+        if (_wifiEditing) { _wifiEditing = false; _wifiInputBuf = ""; _needsRedraw = true; return; }
+        if (_editing)     { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
         uiManager.returnToLauncher();
         return;
     }

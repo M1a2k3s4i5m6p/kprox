@@ -169,6 +169,7 @@ Uses the HID Consumer Control report. No `press`/`release`/`ms` arguments. Produ
 | Token | Aliases | Description |
 |-------|---------|-------------|
 | `{MUTE}` | | Toggle mute |
+| `{MICMUTE}` | | Mic mute (same Consumer 0xE2 usage as `{MUTE}`; OS determines which device is affected) |
 | `{VOLUMEUP}` | `{VOLUP}` | Volume up |
 | `{VOLUMEDOWN}` | `{VOLDOWN}` | Volume down |
 | `{PLAYPAUSE}` | | Play / Pause |
@@ -186,12 +187,43 @@ Uses the HID Consumer Control report. No `press`/`release`/`ms` arguments. Produ
 | `{WWWREFRESH}` | | Browser refresh |
 | `{BOOKMARKS}` | | Open bookmarks |
 | `{MEDIASEL}` | | Media selection |
+| `{BRIGHTNESSUP}` | | Display brightness increase — Consumer 0x006F — `KEY_BRIGHTNESSUP` |
+| `{BRIGHTNESSDOWN}` | | Display brightness decrease — Consumer 0x0070 — `KEY_BRIGHTNESSDOWN` |
+| `{KBDILLUMUP}` | | Keyboard backlight increase — Consumer 0x0079 — `KEY_KBDILLUMUP` |
+| `{KBDILLUMDOWN}` | | Keyboard backlight decrease — Consumer 0x0078 — `KEY_KBDILLUMDOWN` |
+| `{KBDILLUMTOGGLE}` | | Keyboard backlight toggle — Consumer 0x0077 — `KEY_KBDILLUMTOGGLE` |
+| `{SCREENLOCK}` | | AL Terminal Lock / Screensaver — Consumer 0x019E — `KEY_SCREENLOCK` |
+| `{EJECTCD}` | | Eject — Consumer 0x00B8 — `KEY_EJECTCD` |
 
 ```
 {MUTE}
 {VOLUP}{SLEEP 100}{VOLUP}
 {PLAYPAUSE}
 {CALC}{SLEEP 800}123+456={ENTER}
+```
+
+---
+
+## AC Keys (Application Control) — BLE+USB
+
+Sent via the keyboard report (HID Usage Page 0x07). These are native key codes recognised by Linux, macOS, and Windows without any modifier combination.
+
+| Token | HID Usage | `evtest` event |
+|-------|-----------|----------------|
+| `{UNDO}` | 0x7A | `KEY_UNDO` |
+| `{REDO}` | 0x79 | `KEY_REDO` |
+| `{CUT}` | 0x7B | `KEY_CUT` |
+| `{COPY}` | 0x7C | `KEY_COPY` |
+| `{PASTE}` | 0x7D | `KEY_PASTE` |
+| `{FIND}` | 0x7E | `KEY_FIND` |
+| `{HELP}` | 0x75 | `KEY_HELP` |
+
+All AC key tokens accept the optional routing suffix and `press`/`release`/`ms` argument:
+
+```
+{COPY}
+{PASTE USB}
+{UNDO press}{SLEEP 500}{UNDO release}
 ```
 
 ---
@@ -894,7 +926,7 @@ Used internally by media key tokens. For reference when using `{HID}` directly (
 | Scan Previous Track | 0xB6 | `{PREVTRACK}` |
 | Stop | 0xB7 | `{STOPTRACK}` |
 | Play/Pause | 0xCD | `{PLAYPAUSE}` |
-| Mute | 0xE2 | `{MUTE}` |
+| Mute | 0xE2 | `{MUTE}` / `{MICMUTE}` |
 | Volume Increment | 0xE9 | `{VOLUMEUP}` |
 | Volume Decrement | 0xEA | `{VOLUMEDOWN}` |
 | WWW Home | 0x0223 | `{WWWHOME}` |
@@ -906,6 +938,13 @@ Used internally by media key tokens. For reference when using `{HID}` directly (
 | WWW Back | 0x0224 | `{WWWBACK}` |
 | Media Select | 0x0183 | `{MEDIASEL}` |
 | Mail | 0x018A | `{EMAIL}` |
+| Display Brightness++ | 0x006F | `{BRIGHTNESSUP}` |
+| Display Brightness-- | 0x0070 | `{BRIGHTNESSDOWN}` |
+| Keyboard Illum Toggle | 0x0077 | `{KBDILLUMTOGGLE}` |
+| Keyboard Illum-- | 0x0078 | `{KBDILLUMDOWN}` |
+| Keyboard Illum++ | 0x0079 | `{KBDILLUMUP}` |
+| Eject | 0x00B8 | `{EJECTCD}` |
+| AL Terminal Lock | 0x019E | `{SCREENLOCK}` |
 
 ---
 
