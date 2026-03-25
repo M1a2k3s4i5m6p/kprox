@@ -56,9 +56,11 @@ KProx supports the following development devices out-of-the-box:
 - [Node.js](https://nodejs.org/) (for build step)
 
 
-Install the necessary dependencies with:
+Development workflow is tested in ubuntu. Development on other OSs will work but installation procedures 
+for the prerequisits will change.
+Install the necessary dependencies in ubuntu with:
 ```
-sudo apt update && sudo apt install -y platformio make nodejs npm bc
+sudo apt-get update && sudo apt-get install -y platformio make nodejs npm bc
 ```
 
 ### First Flash (USB)
