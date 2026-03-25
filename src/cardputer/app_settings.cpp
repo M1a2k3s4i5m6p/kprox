@@ -255,7 +255,7 @@ void AppSettings::_connectWifi() {
     delay(200);
     WiFi.setHostname(hostname);
     WiFi.mode(WIFI_STA);
-    WiFi.begin(_newSSID.c_str(), _wifiInputBuf.c_str());
+    WiFi.begin(_newSSID.c_str(), wifiPassword.c_str());
 
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {
@@ -266,7 +266,6 @@ void AppSettings::_connectWifi() {
 
     if (WiFi.status() == WL_CONNECTED) {
         wifiSSID     = _newSSID;
-        wifiPassword = _wifiInputBuf;
         wifiEnabled  = true;
         saveWiFiSettings();
         saveWifiEnabledSettings();
@@ -318,7 +317,7 @@ void AppSettings::_drawPage0() {
         bool passEdit = (passSel && _wifiEditing);
         disp.setTextColor(passSel ? TFT_WHITE : labelColor(), SETTINGS_BG);
         disp.drawString(passSel ? "> Pass:" : "  Pass:", 4, y);
-        String passVal = passEdit ? _wifiInputBuf : (wifiPassword.isEmpty() ? "(none)" : "â¢â¢â¢â¢â¢â¢");
+        String passVal = passEdit ? _wifiInputBuf : (wifiPassword.isEmpty() ? "(none)" : "â�¢â�¢â�¢â�¢â�¢â�¢");
         _drawInputField(60, y, disp.width() - 64, passVal, passEdit, !passEdit);
         y += 18;
 
@@ -398,9 +397,9 @@ void AppSettings::_handlePage0(KeyInput ki) {
         _needsRedraw = true; return;
     }
     if (ki.enter) {
-        if (_wifiSel == 0) {
+        if (_wifiSel == 1) {
             if (_wifiInputBuf.length() > 0) _newSSID = _wifiInputBuf;
-        } else {
+        } else if (_wifiSel == 2) {
             if (_wifiInputBuf.length() > 0) wifiPassword = _wifiInputBuf;
         }
         _wifiEditing = false; _wifiInputBuf = "";
