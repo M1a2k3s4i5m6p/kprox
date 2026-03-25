@@ -55,6 +55,14 @@ KProx supports the following development devices out-of-the-box:
 - [PlatformIO](https://platformio.org/)
 - [Node.js](https://nodejs.org/) (for build step)
 
+
+Development workflow is tested in ubuntu. Development on other OSs will work but installation procedures 
+for the prerequisits will change.
+Install the necessary dependencies in ubuntu with:
+```
+sudo apt-get update && sudo apt-get install -y platformio make nodejs npm bc
+```
+
 ### First Flash (USB)
 
 1. Connect via USB-C and enter DFU mode:
