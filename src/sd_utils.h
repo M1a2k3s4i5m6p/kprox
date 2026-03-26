@@ -22,3 +22,7 @@ bool sdMkdir(const String& path);
 // List directory contents as a JSON array string.
 // Each element: {"name":"foo","type":"file","size":1234} or {"name":"bar","type":"dir"}
 String sdListDir(const String& path);
+
+// Returns a newline-delimited list of filenames in path.
+// Directories are suffixed with /. Empty string if path does not exist.
+String sdLsText(const String& path);

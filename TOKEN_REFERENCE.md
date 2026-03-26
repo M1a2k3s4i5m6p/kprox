@@ -452,6 +452,131 @@ All random output uses `mbedtls_ctr_drbg_random` seeded from the hardware entrop
 
 ---
 
+## Quoted Arguments
+
+Multi-argument tokens accept both bare words and double-quoted strings. Quotes are only needed when
+an argument contains spaces; simple values work without them.
+
+```
+{STR_REPLACE hello world earth}           ← three bare words
+{STR_REPLACE "hello world" world earth}   ← first arg quoted (contains a space)
+{STR_CONTAINS "hello world" "lo wo"}      ← both args quoted
+{SD_WRITE /log.txt "line one here"}       ← content quoted
+{PAD_LEFT 10 " " {CREDSTORE username x}}  ← pad char is a quoted space
+```
+
+Escape sequences inside quoted strings:
+
+| Escape | Meaning |
+|--------|---------|
+| `\"` | Literal double-quote |
+| `\n` | Newline |
+| `\t` | Tab |
+| `\\` | Literal backslash |
+
+Tokens that take a **single** argument (e.g. `{STR_UPPER text}`, `{SHA256 text}`, `{URL_ENCODE text}`,
+`{BASE64 text}`) do not need quotes because their entire argument is treated as one string. Quoting
+still works and is useful if the value contains leading/trailing spaces you want to preserve.
+
+The following tokens support quoted arguments:
+
+`{STR_SLICE}`, `{STR_REPLACE}`, `{STR_CONTAINS}`, `{STR_STARTS}`, `{STR_ENDS}`, `{STR_INDEX}`,
+`{STR_REPEAT}`, `{PAD_LEFT}`, `{PAD_RIGHT}`, `{REPEAT}`, `{SD_WRITE}`, `{SD_APPEND}`
+
+---
+
+## String Functions — BLE+USB
+
+All string function arguments are token-evaluated before the function runs, so `{CREDSTORE}`, `{SD_READ}`, variables, and other tokens can be composed freely.
+
+| Token | Description |
+|-------|-------------|
+| `{STR_UPPER text}` | Convert to upper case |
+| `{STR_LOWER text}` | Convert to lower case |
+| `{STR_LEN text}` | Length in characters |
+| `{STR_TRIM text}` | Strip leading and trailing whitespace |
+| `{STR_SLICE text start end}` | Substring; indices are 0-based and exclusive at `end`; negative values count from the end |
+| `{STR_REPLACE text find replacement}` | Replace every occurrence of `find` with `replacement` |
+| `{STR_CONTAINS text substring}` | `1` if `substring` is found, `0` otherwise |
+| `{STR_STARTS text prefix}` | `1` if `text` starts with `prefix` |
+| `{STR_ENDS text suffix}` | `1` if `text` ends with `suffix` |
+| `{STR_INDEX text substring}` | 0-based index of first occurrence; `-1` if not found |
+| `{STR_REVERSE text}` | Reverse the string character by character |
+| `{STR_REPEAT text n}` | Repeat `text` n times (max 200) |
+
+```
+{STR_UPPER {CREDSTORE username github}}
+{STR_LEN {CREDSTORE password github}}
+{STR_SLICE mystring 0 4}
+{STR_REPLACE {SD_READ /config/template.txt} __IP__ {KPROX_IP}}
+{STR_CONTAINS {WIFI_SSID} Office}
+{STR_REPEAT - 40}
+```
+
+---
+
+## REPEAT — BLE+USB
+
+`{REPEAT n text}` — evaluates `text` n times and concatenates the results (max 200 iterations). Unlike `{STR_REPEAT}`, `text` is token-evaluated on each iteration, so tokens with side-effects (e.g. `{RAND}`) produce a different value each time.
+
+```
+{REPEAT 3 -{ENTER}}
+{REPEAT 5 {RAND 1 9}}
+```
+
+---
+
+## Padding — BLE+USB
+
+`{PAD_LEFT width char text}` — left-pad `text` with `char` until total length reaches `width`. No-op if text is already at or beyond `width`.
+
+`{PAD_RIGHT width char text}` — same, padding on the right.
+
+```
+{PAD_LEFT 6 0 {REGISTER_COUNT}}
+{PAD_RIGHT 20 . {CREDSTORE username github}}
+{PAD_LEFT 8 0 {MATH {UPTIME} mod 100000}}
+```
+
+---
+
+## URL Encoding — BLE+USB
+
+`{URL_ENCODE text}` — percent-encodes `text` per RFC 3986. Unreserved characters (`A–Z a–z 0–9 - _ . ~`) are passed through unchanged; all other bytes become `%XX`.
+
+```
+{URL_ENCODE {CREDSTORE password github}}
+http://{KPROX_IP}/api?key={URL_ENCODE {apiKey}}
+```
+
+---
+
+## Base64 — BLE+USB
+
+`{BASE64 text}` — encodes `text` as standard Base64 (RFC 4648, alphabet `A–Z a–z 0–9 + /`, `=` padding). Uses `mbedtls_base64_encode` internally.
+
+`{BASE64_DECODE text}` — decodes a Base64 string back to its original bytes. Invalid input resolves to an empty string.
+
+```
+{BASE64 hello world}
+{SET encoded {BASE64 {CREDSTORE password github}}}
+{BASE64_DECODE SGVsbG8gV29ybGQ=}
+```
+
+---
+
+## SHA-256 — BLE+USB
+
+`{SHA256 text}` — resolves to the lower-case hex-encoded SHA-256 digest of `text` (64 hex characters). Uses `mbedtls_sha256` internally — the same library already linked for API authentication.
+
+```
+{SHA256 hello}
+{SET fingerprint {SHA256 {CREDSTORE password corp}}}{fingerprint}{ENTER}
+{SHA256 {SD_READ /keys/token.txt}}
+```
+
+---
+
 ## Device Info — BLE+USB
 
 | Token | Description |
@@ -465,12 +590,15 @@ All random output uses `mbedtls_ctr_drbg_random` seeded from the hardware entrop
 | `{FREE_HEAP}` | Free heap memory in bytes |
 | `{UPTIME}` | Seconds since last boot |
 | `{BATTERY}` | Battery level 0-100 (Cardputer only) |
+| `{REGISTER_COUNT}` | Number of registers currently loaded |
+| `{REGISTER_NAME n}` | Name of register n (1-based); empty string if unnamed or out of range |
+| `{ACTIVE_REGISTER}` | Index of the currently active register (1-based) |
 
 ```
 http://{KPROX_IP}
 SSID: {WIFI_SSID}  RSSI: {WIFI_RSSI} dBm
 WiFi: {WIFI_STATE}  NTP: {NTP_STATE}  CredStore: {CREDSTORE_STATE}
-Heap: {FREE_HEAP} bytes  Uptime: {UPTIME}s
+Heap: {FREE_HEAP} bytes  Uptime: {UPTIME}s  Registers: {REGISTER_COUNT}
 Battery: {BATTERY}%
 ```
 
@@ -608,6 +736,18 @@ Bool settings accept `1`/`0` or `true`/`false`. `usb.*` settings are only presen
 
 ---
 
+## QR Code — Cardputer only
+
+`{QR text}` — renders a QR code for `text` on the Cardputer display and blocks until any key or BtnG0 is pressed, then restores the screen. The text is token-evaluated before rendering. QR version is auto-selected (3–10, ECC Low) to fit the content. Silently no-ops on non-Cardputer builds.
+
+```
+{QR http://{KPROX_IP}}
+{QR {CREDSTORE password github}}
+{SET otp {TOTP mysite}}{QR {otp}}
+```
+
+---
+
 ## TOTP — BLE+USB
 
 `{TOTP name}` — resolves to the current 6-digit RFC 6238 TOTP code for the named account stored in TOTProx. Resolves to an empty string if the account does not exist or if NTP time is not yet synced. The `name` is case-insensitive.
@@ -630,6 +770,16 @@ Add accounts via the **TOTProx** app (see [CARDPUTER_APPS.md](CARDPUTER_APPS.md)
 
 `{SET_ACTIVE_REGISTER arg}` — sets the active register by name/description or 1-based index. The `arg` is matched case-insensitively against register names; if `arg` is a plain integer it is treated as a 1-based index. If no matching register is found the token is a no-op.
 
+`{REGISTER_COUNT}` — resolves to the number of registers currently loaded.
+
+`{REGISTER_NAME n}` — resolves to the name of register n (1-based). Returns an empty string if the register is unnamed or n is out of range.
+
+```
+Registers: {REGISTER_COUNT}
+{REGISTER_NAME 1}
+{FOR i 1 {REGISTER_COUNT}}{REGISTER_NAME {i}}{ENTER}{ENDFOR}
+```
+
 `{PLAY_REGISTER arg}` — immediately executes the token string stored in the matched register. Uses the same name/index matching as `SET_ACTIVE_REGISTER`. No-op if no match.
 
 `{EXEC arg}` — like `PLAY_REGISTER` but passes the **current variable scope** into the register, making it behave as a sub-routine. Variables set inside the register persist in the caller's scope after it returns.
@@ -651,6 +801,8 @@ Requires an SD card inserted. All paths are absolute from the SD root (e.g. `/sc
 
 | Token | Description |
 |-------|-------------|
+| `{SD_LS}` | Newline-delimited filenames in the SD root; dirs suffixed with `/` |
+| `{SD_LS path}` | Same, for the named directory |
 | `{SD_READ path}` | Resolves to the full text content of the file |
 | `{SD_WRITE path content}` | Create or overwrite a file with `content` (no output) |
 | `{SD_APPEND path content}` | Append `content` to a file, creating it if absent (no output) |
@@ -659,6 +811,9 @@ Requires an SD card inserted. All paths are absolute from the SD root (e.g. `/sc
 Paths can be quoted or bare. Content can be a quoted string or a token expression.
 
 ```
+{SD_LS}
+{SD_LS /scripts}
+{SET files {SD_LS /logs}}
 {SD_READ /config/hostname.txt}
 {SET ip {SD_READ /config/ip.txt}}{ip}{ENTER}
 {SD_WRITE "/logs/access.log" "Login attempt from {KPROX_IP}"}

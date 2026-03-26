@@ -208,6 +208,12 @@ void UIManager::update() {
         }
     }
 
+    if (g_needsDisplayRedraw) {
+        g_needsDisplayRedraw = false;
+        if (_currentApp < (int)_apps.size())
+            _apps[_currentApp]->requestRedraw();
+    }
+
     // Global BtnA: play current register from any app that doesn't handle it itself
     if (M5Cardputer.BtnA.wasPressed()) {
         AppBase* app = _apps[_currentApp];

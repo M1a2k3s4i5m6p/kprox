@@ -11,9 +11,12 @@
 #include "totp.h"
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
+#include <mbedtls/sha256.h>
+#include <mbedtls/base64.h>
 
 #ifdef BOARD_M5STACK_CARDPUTER
 #include <M5Cardputer.h>
+#include <qrcode.h>
 #endif
 
 // ---- Interrupt check ----
@@ -323,6 +326,45 @@ static bool evaluateCondition(const String& condition, std::map<String, String>&
     return false;
 }
 
+// ---- Quoted argument splitter ----
+// Splits a raw argument string into positional args, honouring double-quoted
+// strings (backslash escapes \", \n, \t, \\) and bare words.
+// Each arg is returned as a raw string (quotes stripped, escapes resolved)
+// but NOT yet token-evaluated — callers must call evaluateAllTokens() on each
+// arg as needed so that {TOKEN} expansions happen in the right context.
+//
+// Examples (all yield 3 args):
+//   hello world foo            → ["hello", "world", "foo"]
+//   "hello world" foo bar      → ["hello world", "foo", "bar"]
+//   hello "to the" world       → ["hello", "to the", "world"]
+static std::vector<String> tokenArgs(const String& s) {
+    std::vector<String> out;
+    int i = 0, n = (int)s.length();
+    while (i < n) {
+        while (i < n && s[i] == ' ') i++;
+        if (i >= n) break;
+        String tok;
+        if (s[i] == '"') {
+            i++;
+            while (i < n && s[i] != '"') {
+                if (s[i] == '\\' && i + 1 < n) {
+                    char nx = s[i + 1];
+                    if      (nx == '"')  { tok += '"';  i += 2; }
+                    else if (nx == 'n')  { tok += '\n'; i += 2; }
+                    else if (nx == 't')  { tok += '\t'; i += 2; }
+                    else if (nx == '\\') { tok += '\\'; i += 2; }
+                    else                  { tok += s[i++]; }
+                } else { tok += s[i++]; }
+            }
+            if (i < n) i++; // consume closing quote
+        } else {
+            while (i < n && s[i] != ' ') tok += s[i++];
+        }
+        out.push_back(tok);
+    }
+    return out;
+}
+
 String evaluateAllTokens(const String& text, std::map<String, String>& vars) {
     String input = text;
     bool changed = true;
@@ -505,6 +547,223 @@ String evaluateAllTokens(const String& text, std::map<String, String>& vars) {
             // 1 when the credential store is unlocked, 0 when locked
             replacement = credStoreLocked ? "0" : "1";
             resolved = true;
+        } else if (upperToken == "REGISTER_COUNT") {
+            replacement = String((int)registers.size());
+            resolved = true;
+        } else if (upperToken.startsWith("REGISTER_NAME ")) {
+            // {REGISTER_NAME n} — name of register n (1-based); empty string if unnamed or out of range
+            int idx = token.substring(14).toInt() - 1;
+            if (idx >= 0 && idx < (int)registerNames.size())
+                replacement = registerNames[idx];
+            resolved = true;
+        } else if (upperToken.startsWith("SD_LS") && (upperToken == "SD_LS" || upperToken[5] == ' ')) {
+            // {SD_LS}          — list root directory
+            // {SD_LS path}     — list named directory; newline-delimited names, dirs suffixed with /
+            String path = upperToken == "SD_LS" ? "/" : token.substring(6);
+            path.trim();
+            if (path.startsWith(""") && path.endsWith("""))
+                path = path.substring(1, path.length() - 1);
+            if (path.isEmpty()) path = "/";
+            replacement = sdLsText(path);
+            resolved = true;
+
+        // ── Active register ───────────────────────────────────────────────────
+        } else if (upperToken == "ACTIVE_REGISTER") {
+            replacement = String(activeRegister + 1);  // 1-based
+            resolved = true;
+
+        // ── String functions ──────────────────────────────────────────────────
+        } else if (upperToken.startsWith("STR_UPPER ")) {
+            replacement = evaluateAllTokens(token.substring(10), vars);
+            replacement.toUpperCase();
+            resolved = true;
+        } else if (upperToken.startsWith("STR_LOWER ")) {
+            replacement = evaluateAllTokens(token.substring(10), vars);
+            replacement.toLowerCase();
+            resolved = true;
+        } else if (upperToken.startsWith("STR_LEN ")) {
+            replacement = String((int)evaluateAllTokens(token.substring(8), vars).length());
+            resolved = true;
+        } else if (upperToken.startsWith("STR_TRIM ")) {
+            replacement = evaluateAllTokens(token.substring(9), vars);
+            replacement.trim();
+            resolved = true;
+        } else if (upperToken.startsWith("STR_SLICE ")) {
+            // {STR_SLICE text start end}
+            auto a = tokenArgs(token.substring(10));
+            if (a.size() >= 3) {
+                String textArg = evaluateAllTokens(a[0], vars);
+                int startIdx   = evaluateAllTokens(a[1], vars).toInt();
+                int endIdx     = evaluateAllTokens(a[2], vars).toInt();
+                int len = (int)textArg.length();
+                if (startIdx < 0) startIdx = max(0, len + startIdx);
+                if (endIdx   < 0) endIdx   = max(0, len + endIdx);
+                startIdx = constrain(startIdx, 0, len);
+                endIdx   = constrain(endIdx,   0, len);
+                replacement = startIdx < endIdx ? textArg.substring(startIdx, endIdx) : String("");
+            }
+            resolved = true;
+        } else if (upperToken.startsWith("STR_REPLACE ")) {
+            // {STR_REPLACE text find replacement}
+            auto a = tokenArgs(token.substring(12));
+            if (a.size() >= 3) {
+                String textArg = evaluateAllTokens(a[0], vars);
+                String findArg = evaluateAllTokens(a[1], vars);
+                String replArg = evaluateAllTokens(a[2], vars);
+                textArg.replace(findArg, replArg);
+                replacement = textArg;
+            }
+            resolved = true;
+        } else if (upperToken.startsWith("STR_CONTAINS ")) {
+            // {STR_CONTAINS text substring}
+            auto a = tokenArgs(token.substring(13));
+            if (a.size() >= 2) {
+                String haystack = evaluateAllTokens(a[0], vars);
+                String needle   = evaluateAllTokens(a[1], vars);
+                replacement = haystack.indexOf(needle) >= 0 ? "1" : "0";
+            } else { replacement = "0"; }
+            resolved = true;
+        } else if (upperToken.startsWith("STR_STARTS ")) {
+            // {STR_STARTS text prefix}
+            auto a = tokenArgs(token.substring(11));
+            if (a.size() >= 2) {
+                String text   = evaluateAllTokens(a[0], vars);
+                String prefix = evaluateAllTokens(a[1], vars);
+                replacement = text.startsWith(prefix) ? "1" : "0";
+            } else { replacement = "0"; }
+            resolved = true;
+        } else if (upperToken.startsWith("STR_ENDS ")) {
+            // {STR_ENDS text suffix}
+            auto a = tokenArgs(token.substring(9));
+            if (a.size() >= 2) {
+                String text   = evaluateAllTokens(a[0], vars);
+                String suffix = evaluateAllTokens(a[1], vars);
+                replacement = text.endsWith(suffix) ? "1" : "0";
+            } else { replacement = "0"; }
+            resolved = true;
+        } else if (upperToken.startsWith("STR_INDEX ")) {
+            // {STR_INDEX text substring}
+            auto a = tokenArgs(token.substring(10));
+            if (a.size() >= 2) {
+                String text   = evaluateAllTokens(a[0], vars);
+                String needle = evaluateAllTokens(a[1], vars);
+                replacement = String(text.indexOf(needle));
+            } else { replacement = "-1"; }
+            resolved = true;
+        } else if (upperToken.startsWith("STR_REVERSE ")) {
+            String s = evaluateAllTokens(token.substring(12), vars);
+            String rev; rev.reserve(s.length());
+            for (int i = (int)s.length() - 1; i >= 0; i--) rev += s[i];
+            replacement = rev;
+            resolved = true;
+        } else if (upperToken.startsWith("STR_REPEAT ")) {
+            // {STR_REPEAT text n}
+            auto a = tokenArgs(token.substring(11));
+            if (a.size() >= 2) {
+                String text = evaluateAllTokens(a[0], vars);
+                int n = evaluateAllTokens(a[1], vars).toInt();
+                n = constrain(n, 0, 200);
+                for (int i = 0; i < n; i++) replacement += text;
+            }
+            resolved = true;
+
+        // ── Padding ───────────────────────────────────────────────────────────
+        } else if (upperToken.startsWith("PAD_LEFT ") || upperToken.startsWith("PAD_RIGHT ")) {
+            // {PAD_LEFT  width char text}
+            // {PAD_RIGHT width char text}
+            bool padLeft = upperToken.startsWith("PAD_LEFT ");
+            auto a = tokenArgs(token.substring(padLeft ? 9 : 10));
+            if (a.size() >= 3) {
+                int width    = evaluateAllTokens(a[0], vars).toInt();
+                char padChar = a[1].length() > 0 ? a[1][0] : ' ';
+                String text  = evaluateAllTokens(a[2], vars);
+                int needed = width - (int)text.length();
+                if (needed > 0) {
+                    String padding;
+                    for (int i = 0; i < needed; i++) padding += padChar;
+                    replacement = padLeft ? padding + text : text + padding;
+                } else {
+                    replacement = text;
+                }
+            }
+            resolved = true;
+
+        // ── Repeat token ──────────────────────────────────────────────────────
+        } else if (upperToken.startsWith("REPEAT ")) {
+            // {REPEAT n text} — re-evaluates text on each iteration
+            auto a = tokenArgs(token.substring(7));
+            if (a.size() >= 2) {
+                int n = evaluateAllTokens(a[0], vars).toInt();
+                n = constrain(n, 0, 200);
+                // Remaining args after n are rejoined as the text to repeat
+                String text = a[1];
+                for (size_t ai = 2; ai < a.size(); ai++) text += " " + a[ai];
+                for (int i = 0; i < n; i++)
+                    replacement += evaluateAllTokens(text, vars);
+            }
+            resolved = true;
+
+        // ── URL encoding ──────────────────────────────────────────────────────
+        } else if (upperToken.startsWith("URL_ENCODE ")) {
+            String text = evaluateAllTokens(token.substring(11), vars);
+            for (int i = 0; i < (int)text.length(); i++) {
+                unsigned char c = (unsigned char)text[i];
+                if (isAlphaNumeric(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+                    replacement += (char)c;
+                } else {
+                    char buf[4];
+                    snprintf(buf, sizeof(buf), "%%%02X", c);
+                    replacement += buf;
+                }
+            }
+            resolved = true;
+
+        // ── Base64 ────────────────────────────────────────────────────────────
+        } else if (upperToken.startsWith("BASE64 ")) {
+            String text = evaluateAllTokens(token.substring(7), vars);
+            size_t outLen = 0;
+            mbedtls_base64_encode(nullptr, 0, &outLen,
+                (const uint8_t*)text.c_str(), text.length());
+            uint8_t* buf = (uint8_t*)malloc(outLen + 1);
+            if (buf) {
+                mbedtls_base64_encode(buf, outLen + 1, &outLen,
+                    (const uint8_t*)text.c_str(), text.length());
+                buf[outLen] = '\0';
+                replacement = String((char*)buf);
+                free(buf);
+            }
+            resolved = true;
+        } else if (upperToken.startsWith("BASE64_DECODE ")) {
+            String text = evaluateAllTokens(token.substring(14), vars);
+            size_t outLen = 0;
+            mbedtls_base64_decode(nullptr, 0, &outLen,
+                (const uint8_t*)text.c_str(), text.length());
+            uint8_t* buf = (uint8_t*)malloc(outLen + 1);
+            if (buf) {
+                mbedtls_base64_decode(buf, outLen + 1, &outLen,
+                    (const uint8_t*)text.c_str(), text.length());
+                buf[outLen] = '\0';
+                replacement = String((char*)buf);
+                free(buf);
+            }
+            resolved = true;
+
+        // ── SHA-256 ───────────────────────────────────────────────────────────
+        } else if (upperToken.startsWith("SHA256 ")) {
+            String text = evaluateAllTokens(token.substring(7), vars);
+            uint8_t hash[32];
+            mbedtls_sha256_context ctx;
+            mbedtls_sha256_init(&ctx);
+            mbedtls_sha256_starts(&ctx, 0);
+            mbedtls_sha256_update(&ctx, (const uint8_t*)text.c_str(), text.length());
+            mbedtls_sha256_finish(&ctx, hash);
+            mbedtls_sha256_free(&ctx);
+            char hexBuf[65];
+            for (int i = 0; i < 32; i++)
+                snprintf(hexBuf + i * 2, 3, "%02x", hash[i]);
+            hexBuf[64] = '\0';
+            replacement = String(hexBuf);
+            resolved = true;
         }
 
         if (resolved) {
@@ -658,6 +917,7 @@ static bool isControlToken(const String& token) {
             u == "ELSE"     || u == "ENDIF"   || u == "BREAK"     ||
             u.startsWith("SLEEP ")      || u.startsWith("CHORD ")       || u.startsWith("HID ")        ||
             u == "WIFI_WAIT"            || u == "WAIT_WIFI"           || u == "NTP_WAIT"           || u == "CREDSTORE_WAIT"      || u == "DEVICE_REBOOT"        || u == "DEVICE_SETTINGS_REPORT" ||
+            u.startsWith("QR ")              || u == "QR"                    ||
             u.startsWith("DEVICE_SETTINGS ")                  || u == "TIME"                  ||
             u.startsWith("WIFI ")       || u.startsWith("SETMOUSE ")    || u.startsWith("MOVEMOUSE ")  ||
             u.startsWith("MOUSECLICK")  || u.startsWith("MOUSEPRESS")   ||
@@ -965,6 +1225,75 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
             delay(100);
             ESP.restart();
         }
+#ifdef BOARD_M5STACK_CARDPUTER
+        else if (u.startsWith("QR ") || u == "QR") {
+            // {QR text} — render a QR code on the Cardputer screen and block until
+            // any key or BtnG0 is pressed, then restore the screen.
+            String text = token.length() > 2 ? token.substring(3) : String("");
+            text = evaluateAllTokens(text, vars);
+            text.trim();
+            if (!text.isEmpty()) {
+                auto& disp = M5Cardputer.Display;
+                disp.fillScreen(TFT_BLACK);
+
+                // Header
+                uint16_t barBg = disp.color565(0, 80, 100);
+                disp.fillRect(0, 0, disp.width(), 16, barBg);
+                disp.setTextSize(1);
+                disp.setTextColor(TFT_WHITE, barBg);
+                disp.drawString("QR", 4, 4);
+                disp.setTextColor(disp.color565(160, 160, 160), barBg);
+                int maxH = (disp.width() - disp.textWidth("QR") - 12) / 6;
+                String preview = text.length() > (size_t)maxH ? text.substring(0, maxH - 1) + "~" : text;
+                disp.drawString(preview.c_str(), 4 + disp.textWidth("QR") + 4, 4);
+
+                // QR — try versions 3-10 until the text fits
+                QRCode qr;
+                uint8_t* qrBuf = nullptr;
+                int ver = 3;
+                for (; ver <= 10; ver++) {
+                    size_t bufSz = qrcode_getBufferSize(ver);
+                    qrBuf = (uint8_t*)malloc(bufSz);
+                    if (!qrBuf) break;
+                    if (qrcode_initText(&qr, qrBuf, ver, ECC_LOW, text.c_str()) == 0) break;
+                    free(qrBuf); qrBuf = nullptr;
+                }
+
+                if (qrBuf) {
+                    int avW = disp.width() - 4, avH = disp.height() - 16 - 14 - 4;
+                    int px  = min(avW / qr.size, avH / qr.size);
+                    if (px < 1) px = 1;
+                    int qrPx = qr.size * px;
+                    int qrX  = 2 + (avW - qrPx) / 2;
+                    int qrY  = 18 + (avH - qrPx) / 2;
+                    disp.fillRect(qrX - 2, qrY - 2, qrPx + 4, qrPx + 4, TFT_WHITE);
+                    for (int row = 0; row < qr.size; row++)
+                        for (int col = 0; col < qr.size; col++)
+                            if (qrcode_getModule(&qr, col, row))
+                                disp.fillRect(qrX + col*px, qrY + row*px, px, px, TFT_BLACK);
+                    free(qrBuf);
+                }
+
+                // Bottom hint
+                int botY = disp.height() - 14;
+                disp.fillRect(0, botY, disp.width(), 14, disp.color565(16, 16, 16));
+                disp.setTextSize(1);
+                disp.setTextColor(disp.color565(110, 110, 110), disp.color565(16, 16, 16));
+                disp.drawString("any key to continue", 3, botY + 2);
+
+                // Block until key or BtnG0
+                while (!g_parserAbort) {
+                    M5Cardputer.update();
+                    if (M5Cardputer.BtnA.wasPressed()) break;
+                    if (M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) break;
+                    server.handleClient();
+                    delay(20);
+                    checkParseInterrupt();
+                }
+                g_needsDisplayRedraw = true;
+            }
+        }
+#endif
         else if (u.startsWith("DEVICE_SETTINGS ") || u == "DEVICE_SETTINGS_REPORT") {
             // ── Settings table ────────────────────────────────────────────────
             // Each entry: { label, getter lambda, setter lambda (empty = read-only) }
@@ -1398,32 +1727,15 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
         }
         else if (u.startsWith("SD_WRITE ") || u.startsWith("SD_APPEND ")) {
             int prefixLen = u.startsWith("SD_WRITE ") ? 9 : 10;
-            String sdRest = evaluateAllTokens(token.substring(prefixLen), vars);
-            sdRest.trim();
-            String sdPath, sdContent;
-            if (!sdRest.isEmpty() && sdRest[0] == '"') {
-                int closeQ = sdRest.indexOf('"', 1);
-                if (closeQ > 0) {
-                    sdPath    = sdRest.substring(1, closeQ);
-                    sdContent = sdRest.substring(closeQ + 1);
-                    sdContent.trim();
+            // Parse args before token-evaluation so quotes are structural, not content
+            auto a = tokenArgs(token.substring(prefixLen));
+            if (a.size() >= 1) {
+                String sdPath    = evaluateAllTokens(a[0], vars);
+                String sdContent = a.size() >= 2 ? evaluateAllTokens(a[1], vars) : String("");
+                if (!sdPath.isEmpty()) {
+                    if (u.startsWith("SD_WRITE ")) sdWriteFile(sdPath, sdContent);
+                    else                           sdAppendFile(sdPath, sdContent);
                 }
-            } else {
-                int sp2 = sdRest.indexOf(' ');
-                if (sp2 > 0) {
-                    sdPath    = sdRest.substring(0, sp2);
-                    sdContent = sdRest.substring(sp2 + 1);
-                    sdContent.trim();
-                } else {
-                    sdPath = sdRest;
-                }
-            }
-            if (!sdContent.isEmpty() && sdContent[0] == '"' &&
-                sdContent[sdContent.length()-1] == '"' && sdContent.length() > 1)
-                sdContent = sdContent.substring(1, sdContent.length() - 1);
-            if (!sdPath.isEmpty()) {
-                if (u.startsWith("SD_WRITE ")) sdWriteFile(sdPath, sdContent);
-                else                           sdAppendFile(sdPath, sdContent);
             }
         }
         else if (u.startsWith("SD_EXEC ")) {

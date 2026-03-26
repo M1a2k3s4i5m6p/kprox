@@ -92,3 +92,23 @@ String sdListDir(const String& path) {
     json += "]";
     return json;
 }
+
+String sdLsText(const String& path) {
+    if (!sdMount()) return "";
+    File dir = SD.open(path.isEmpty() ? "/" : path);
+    if (!dir || !dir.isDirectory()) return "";
+    String out;
+    File entry = dir.openNextFile();
+    while (entry) {
+        String name = String(entry.name());
+        int lastSlash = name.lastIndexOf('/');
+        if (lastSlash >= 0) name = name.substring(lastSlash + 1);
+        if (entry.isDirectory()) name += "/";
+        if (!out.isEmpty()) out += "\n";
+        out += name;
+        entry.close();
+        entry = dir.openNextFile();
+    }
+    dir.close();
+    return out;
+}

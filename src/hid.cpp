@@ -503,6 +503,7 @@ void accumulateMouseMovement(int16_t deltaX, int16_t deltaY) {
 
 bool          g_parserAbort        = false;
 bool          g_btnAHaltedPlayback = false;
+bool          g_needsDisplayRedraw = false;
 unsigned long g_haltDeadlineMs     = 0;
 void        (*g_parseInterruptHook)() = nullptr;
 

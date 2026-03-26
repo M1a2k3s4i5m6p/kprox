@@ -36,27 +36,3 @@ help page. Apps can be reordered and hidden via **Settings → App Layout**.
 | BtnG0 (double press) | Cycle to next register |
 | TAB | Show app help overlay |
 | FN + ENTER | Next page (multi-page apps) |
-
-### Device Settings
-
-Device configuration across 15 pages. Left/right arrows change page; settings are persisted to NVS
-immediately on change. Pages cover:
-
-- WiFi (SSID, password, enable/disable)
-- Bluetooth (enable, keyboard, mouse, international keyboard sub-reports)
-- USB HID (enable, keyboard, mouse, international keyboard, FIDO2)
-- API Key
-- Device Identity (hostname, USB manufacturer, USB product name, USB serial)
-- Sink Config (max buffer size)
-- HID Timing (key press delay, release delay, between-keys, between-send, special key, token delay) — two pages
-- Startup App (default app on boot)
-- App Layout (reorder and hide/show apps)
-- Credential Store Security (auto-lock timeout, auto-wipe attempts)
-- CS Storage (NVS or SD card backend)
-- Display (brightness, screen timeout) — Cardputer only
-- OTA Firmware Update
-- Wipe All Settings
-
----
-
-

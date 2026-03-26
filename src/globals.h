@@ -240,6 +240,7 @@ extern void (*g_parseInterruptHook)();
 // Set by checkParseInterrupt() when BtnA specifically triggered the abort.
 // KProx reads and clears this to skip the corresponding wasReleased event.
 extern bool g_btnAHaltedPlayback;
+extern bool g_needsDisplayRedraw; // set by token_parser to request current app repaint
 void feedWatchdog();
 void initWatchdog();
 
