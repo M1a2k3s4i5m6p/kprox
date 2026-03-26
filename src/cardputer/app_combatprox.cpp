@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include "combatprox_arena.h"
+
 namespace Cardputer {
 
 static const char* REISUB_TOKEN =
@@ -17,7 +19,6 @@ static const char* REISUB_TOKEN =
     "{CHORD ALT+SYSRQ+U}{SLEEP 2000}"
     "{CHORD ALT+SYSRQ+B}";
 
-#include "combatprox_arena.h"
 
 static float fclamp(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
@@ -54,25 +55,36 @@ void AppCombatProx::onEnter() {
 void AppCombatProx::onExit() { _phase = PH_SPLASH; }
 
 void AppCombatProx::_resetGame() {
-    _score = 0;
+    _score     = 0;
     _lastFirer = -1;
     memset(_bullets, 0, sizeof(_bullets));
-    _player = { ARENA_PLAYER_X, ARENA_PLAYER_Y, 0.f, PLAYER_HP, 0, 0, 0, 0.f };
+    _arenaIdx = (int)(esp_random() % ARENA_COUNT);
+    _wallMap  = ARENAS[_arenaIdx].walls;
+    _player = { ARENAS[_arenaIdx].playerX, ARENAS[_arenaIdx].playerY,
+                0.f, PLAYER_HP, 0, 0, 0, 0.f };
     _camX = (int)_player.x - AW/2;
     _camY = (int)_player.y - PLAY_H/2;
     _camX = (int)fclamp((float)_camX, 0, VAW    - AW);
     _camY = (int)fclamp((float)_camY, 0, VPLAY_H - PLAY_H);
+    _initialWaveCleared = false;
+    _reinforceSent      = false;
+    _kamikazeSent       = false;
+    _kamikazeIdx        = -1;
+    _exploding          = false;
+    _previewLastSec     = -1;
     _spawnEnemies();
     _lastUpdate = millis();
     _aiTimer    = millis();
+    _activeEnemies = ARENA_ENEMY_COUNT;
 }
 
 void AppCombatProx::_spawnEnemies() {
-    const uint8_t wanderBiases[3] = { 5, 12, 20 };  // low wander — enemies hunt aggressively
+    const uint8_t wanderBiases[3] = { 5, 12, 20 };
+    const CombatArena& arena = ARENAS[_arenaIdx];
     for (int i = 0; i < ENEMY_COUNT && i < ARENA_ENEMY_COUNT; i++) {
         _enemies[i] = {};
-        _enemies[i].x           = arenaEnemySpawns[i][0];
-        _enemies[i].y           = arenaEnemySpawns[i][1];
+        _enemies[i].x           = arena.enemyX[i];
+        _enemies[i].y           = arena.enemyY[i];
         _enemies[i].angle       = (float)M_PI;
         _enemies[i].hp          = 1;
         _enemies[i].aiState     = 0;
@@ -85,11 +97,7 @@ void AppCombatProx::_spawnEnemies() {
     }
     for (int i = ARENA_ENEMY_COUNT; i < ENEMY_COUNT; i++) {
         _enemies[i] = {};
-        _enemies[i].x          = 210.f;
-        _enemies[i].y          = 30.f + i * 30.f;
-        _enemies[i].angle      = (float)M_PI;
-        _enemies[i].hp         = 1;
-        _enemies[i].wanderBias = 25;
+        _enemies[i].hp = 0;  // inactive until spawned
     }
 }
 
@@ -519,9 +527,81 @@ void AppCombatProx::_update(unsigned long now) {
         }
     }
 
-    bool anyAlive = false;
-    for (int e = 0; e < ENEMY_COUNT; e++) if (_enemies[e].hp > 0) anyAlive = true;
-    if (!anyAlive) { _phase = PH_WIN; _phaseEnter = now; return; }
+    // Kamikaze contact explosion
+    if (_kamikazeIdx >= 0 && _enemies[_kamikazeIdx].hp > 0) {
+        float kdx = _enemies[_kamikazeIdx].x - _player.x;
+        float kdy = _enemies[_kamikazeIdx].y - _player.y;
+        if (kdx*kdx + kdy*kdy < (TANK_R*2)*(TANK_R*2)) {
+            _enemies[_kamikazeIdx].hp = 0;
+            _score++;
+            _exploding     = true;
+            _explodeStart  = now;
+            _explodeX      = (int)_enemies[_kamikazeIdx].x - _camX;
+            _explodeY      = (int)_enemies[_kamikazeIdx].y - _camY;
+            // Explosion sound: low rumble burst
+            {
+                static constexpr int SR = 8000, NS = 400;
+                static int8_t ebuf[NS];
+                for (int s = 0; s < NS; s++) {
+                    float t = (float)s / NS;
+                    float env = (1.f - t) * (1.f - t);
+                    ebuf[s] = (int8_t)(((esp_random() & 0xFF) - 128) * env * 0.8f);
+                }
+                M5Cardputer.Speaker.playRaw(ebuf, NS, SR, false, 1, 0);
+            }
+            _player.hp = 0;
+            _pendingReisub = true;
+            _phase = PH_DEAD; _phaseEnter = now; return;
+        }
+    }
+
+    // Wave management
+    {
+        int aliveInitial = 0;
+        for (int e = 0; e < ARENA_ENEMY_COUNT; e++) if (_enemies[e].hp > 0) aliveInitial++;
+
+        if (!_initialWaveCleared && aliveInitial == 0) {
+            _initialWaveCleared = true;
+        }
+
+        if (_initialWaveCleared && !_reinforceSent) {
+            _reinforceSent = true;
+            _spawnReinforcements();
+        }
+
+        bool anyAlive = false;
+        for (int e = 0; e < ENEMY_COUNT; e++) if (_enemies[e].hp > 0) anyAlive = true;
+
+        if (!anyAlive && _reinforceSent && !_kamikazeSent) {
+            _kamikazeSent = true;
+            if ((esp_random() % 3) == 0) {
+                _spawnKamikaze();
+                anyAlive = true;
+            }
+        }
+
+        if (!anyAlive && _reinforceSent && _kamikazeSent) {
+            _phase = PH_WIN; _phaseEnter = now; return;
+        }
+    }
+
+    // Kamikaze AI: always charge directly at player
+    if (_kamikazeIdx >= 0 && _enemies[_kamikazeIdx].hp > 0) {
+        Tank& k = _enemies[_kamikazeIdx];
+        float dx = _player.x - k.x, dy = _player.y - k.y;
+        float dist = sqrtf(dx*dx + dy*dy);
+        if (dist > 1.f) {
+            float target = atan2f(dy, dx);
+            float diff = wrapAngle(target - k.angle);
+            k.angle = wrapAngle(k.angle + fclamp(diff, -AI_TURN_SPEED*2, AI_TURN_SPEED*2));
+            float nx = k.x + cosf(k.angle) * KAMIKAZE_SPEED;
+            float ny = k.y + sinf(k.angle) * KAMIKAZE_SPEED;
+            if (!_circleWall(nx, ny, TANK_R)) {
+                k.x = fclamp(nx, TANK_R, VAW - TANK_R);
+                k.y = fclamp(ny, TANK_R, VPLAY_H - TANK_R);
+            }
+        }
+    }
 
     _aiStep(now);
 
@@ -554,55 +634,61 @@ void AppCombatProx::_drawHUD() {
     d.drawString(ec, AW/2 - d.textWidth(ec)/2, PLAY_H + 3);
 }
 
+// Fill a rotated rectangle. Forward axis: (ca,sa). Perpendicular: (-sa,ca).
+// hl = half-length along forward; hw = half-width along perpendicular.
+static void combatFillRotRect(M5GFX& d, int cx, int cy, float ca, float sa,
+                               float hl, float hw, uint16_t col) {
+    int x0 = (int)(cx - fabsf(ca)*hl - fabsf(sa)*hw);
+    int x1 = (int)(cx + fabsf(ca)*hl + fabsf(sa)*hw) + 1;
+    int y0 = (int)(cy - fabsf(sa)*hl - fabsf(ca)*hw);
+    int y1 = (int)(cy + fabsf(sa)*hl + fabsf(ca)*hw) + 1;
+    for (int py = y0; py <= y1; py++) {
+        for (int px = x0; px <= x1; px++) {
+            float dx = px - cx, dy = py - cy;
+            float lx =  dx*ca + dy*sa;  // along forward
+            float ly = -dx*sa + dy*ca;  // along perpendicular
+            if (lx >= -hl && lx <= hl && ly >= -hw && ly <= hw)
+                d.drawPixel(px, py, col);
+        }
+    }
+}
+
 void AppCombatProx::_drawTank(const Tank& t, uint16_t col) {
     if (t.hp <= 0) return;
 
     int sx = (int)t.x - _camX;
     int sy = (int)t.y - _camY;
-    if (sx < -12 || sx > AW+12 || sy < -12 || sy > PLAY_H+12) return;
+    if (sx < -14 || sx > AW+14 || sy < -14 || sy > PLAY_H+14) return;
 
     auto& d = M5Cardputer.Display;
     float ca = cosf(t.angle), sa = sinf(t.angle);
-    float pa = -sa, pb = ca;  // perpendicular
 
-    static constexpr int TRACK_LEN  = 8;
-    static constexpr int TRACK_W    = 2;
-    static constexpr int TRACK_OFFS = 4;
-    static constexpr int BODY_HALF  = 3;
-    static constexpr int BARREL_LEN = 6;
+    // Perpendicular (left = -sa, ca)
+    float lx = -sa * 5.f, ly = ca * 5.f;   // left-track offset
+    float rx =  sa * 5.f, ry = -ca * 5.f;  // right-track offset
 
-    uint16_t trackCol = (col == C_PLAYER) ? 0x0380 : 0x7800;
+    uint16_t trackCol  = (col == C_PLAYER) ? 0x0300 : 0x6000;
+    uint16_t hullCol   = col;
+    uint16_t turretCol = (col == C_PLAYER) ? 0x3FE0 : 0xFB00;
 
-    // Left track
-    float tlx = sx - pa * TRACK_OFFS, tly = sy - pb * TRACK_OFFS;
-    for (int i = -TRACK_LEN/2; i <= TRACK_LEN/2; i++) {
-        int tx = (int)(tlx + ca * i);
-        int ty = (int)(tly + sa * i);
-        d.fillRect(tx - (int)(pa * TRACK_W/2), ty - (int)(pb * TRACK_W/2),
-                   TRACK_W, TRACK_W, trackCol);
+    // Tracks: half-length 5.5, half-width 1.5, offset ±5 perpendicular
+    combatFillRotRect(d, (int)(sx+lx), (int)(sy+ly), ca, sa, 5.5f, 1.5f, trackCol);
+    combatFillRotRect(d, (int)(sx+rx), (int)(sy+ry), ca, sa, 5.5f, 1.5f, trackCol);
+
+    // Hull: half-length 4, half-width 2.5 (fits between tracks)
+    combatFillRotRect(d, sx, sy, ca, sa, 4.f, 2.5f, hullCol);
+
+    // Kamikaze: no turret or barrel; show X marking instead
+    bool isKamikaze = (col == C_KAMIKAZE);
+    if (!isKamikaze) {
+        d.fillCircle(sx, sy, 2, turretCol);
+        for (int i = 3; i <= 7; i++)
+            d.drawPixel(sx + (int)(ca*i), sy + (int)(sa*i), 0xFFFF);
+    } else {
+        d.drawLine(sx-3, sy-3, sx+3, sy+3, 0xFFFF);
+        d.drawLine(sx+3, sy-3, sx-3, sy+3, 0xFFFF);
     }
-    // Right track
-    float trx = sx + pa * TRACK_OFFS, try_ = sy + pb * TRACK_OFFS;
-    for (int i = -TRACK_LEN/2; i <= TRACK_LEN/2; i++) {
-        int tx = (int)(trx + ca * i);
-        int ty = (int)(try_ + sa * i);
-        d.fillRect(tx - (int)(pa * TRACK_W/2), ty - (int)(pb * TRACK_W/2),
-                   TRACK_W, TRACK_W, trackCol);
-    }
-
-    // Body
-    d.fillRect(sx - BODY_HALF, sy - BODY_HALF, BODY_HALF*2+1, BODY_HALF*2+1, col);
-
-    // Barrel (two parallel lines for width)
-    int bx1 = sx + (int)(ca * BODY_HALF);
-    int by1 = sy + (int)(sa * BODY_HALF);
-    int bx2 = sx + (int)(ca * (BODY_HALF + BARREL_LEN));
-    int by2 = sy + (int)(sa * (BODY_HALF + BARREL_LEN));
-    d.drawLine(bx1, by1, bx2, by2, 0xFFFF);
-    d.drawLine(bx1 + (int)(pa), by1 + (int)(pb),
-               bx2 + (int)(pa), by2 + (int)(pb), 0xFFFF);
 }
-
 void AppCombatProx::_drawBullet(const Bullet& b) {
     if (!b.active) return;
     int sx = (int)b.x - _camX;
@@ -632,9 +718,130 @@ void AppCombatProx::_drawArena() {
                 d.fillRect(col*CELL - _camX, row*CELL - _camY, CELL, CELL, C_WALL);
 
     _drawTank(_player, C_PLAYER);
-    for (int e = 0; e < ENEMY_COUNT; e++) _drawTank(_enemies[e], C_ENEMY);
+    for (int e = 0; e < ENEMY_COUNT; e++) {
+        if (_enemies[e].hp <= 0) continue;
+        uint16_t ec = (e == _kamikazeIdx) ? C_KAMIKAZE : C_ENEMY;
+        _drawTank(_enemies[e], ec);
+    }
     for (int i = 0; i < MAX_BULLETS; i++) _drawBullet(_bullets[i]);
+    if (_exploding) _drawExplosion();
     _drawHUD();
+}
+
+void AppCombatProx::_drawExplosion() {
+    static constexpr unsigned long EXPLODE_MS = 600;
+    unsigned long age = millis() - _explodeStart;
+    if (age >= EXPLODE_MS) { _exploding = false; return; }
+    float t   = (float)age / EXPLODE_MS;
+    int   r   = (int)(t * 24.f);
+    uint16_t col = (t < 0.3f) ? 0xFFE0 : (t < 0.6f ? 0xFC00 : 0x8400);
+    auto& d = M5Cardputer.Display;
+    // Expanding ring + random sparks
+    d.drawCircle(_explodeX, _explodeY, r,     col);
+    d.drawCircle(_explodeX, _explodeY, r/2,   col);
+    for (int sp = 0; sp < 6; sp++) {
+        float a = (float)sp * (float)M_PI / 3.f + t * (float)M_PI;
+        int sx = _explodeX + (int)(cosf(a) * r * 1.2f);
+        int sy = _explodeY + (int)(sinf(a) * r * 1.2f);
+        if (sx >= 0 && sx < AW && sy >= 0 && sy < PLAY_H)
+            d.fillCircle(sx, sy, 2, col);
+    }
+}
+
+void AppCombatProx::_spawnReinforcements() {
+    // 0–5 extra tanks spawned off the visible viewport edges
+    int count = (int)(esp_random() % 6);  // 0..5
+    int slot = ARENA_ENEMY_COUNT;
+    const uint8_t biases[5] = { 10, 15, 20, 25, 30 };
+    for (int i = 0; i < count && slot < ENEMY_COUNT - 1; i++, slot++) {
+        // Pick a random edge of the virtual arena outside the current viewport
+        float sx, sy;
+        int edge = esp_random() % 4;
+        if (edge == 0) { sx = (float)(esp_random() % VAW);    sy = 0.f; }
+        else if (edge == 1) { sx = (float)(esp_random() % VAW);    sy = (float)VPLAY_H - 1.f; }
+        else if (edge == 2) { sx = 0.f;                             sy = (float)(esp_random() % VPLAY_H); }
+        else                { sx = (float)VAW - 1.f;               sy = (float)(esp_random() % VPLAY_H); }
+        // Clamp off visible area
+        if (sx > _camX && sx < _camX + AW)   sx = (esp_random()&1) ? (float)(_camX - TANK_R*2) : (float)(_camX + AW + TANK_R*2);
+        if (sy > _camY && sy < _camY + PLAY_H) sy = (esp_random()&1) ? (float)(_camY - TANK_R*2) : (float)(_camY + PLAY_H + TANK_R*2);
+        sx = fclamp(sx, (float)TANK_R, (float)(VAW - TANK_R));
+        sy = fclamp(sy, (float)TANK_R, (float)(VPLAY_H - TANK_R));
+        if (!_circleWall(sx, sy, TANK_R + 2)) {
+            _enemies[slot] = {};
+            _enemies[slot].x           = sx;
+            _enemies[slot].y           = sy;
+            _enemies[slot].angle       = (float)(esp_random() % 628) / 100.f;
+            _enemies[slot].hp          = 1;
+            _enemies[slot].wanderBias  = biases[i % 5];
+        }
+    }
+}
+
+void AppCombatProx::_spawnKamikaze() {
+    // Find a free slot (last slot reserved for kamikaze)
+    int slot = ENEMY_COUNT - 1;
+    float sx, sy;
+    // Spawn at a random arena edge
+    int edge = esp_random() % 4;
+    if (edge == 0)      { sx = (float)(esp_random() % VAW); sy = 0.f; }
+    else if (edge == 1) { sx = (float)(esp_random() % VAW); sy = (float)VPLAY_H - 1.f; }
+    else if (edge == 2) { sx = 0.f;                         sy = (float)(esp_random() % VPLAY_H); }
+    else                { sx = (float)VAW - 1.f;            sy = (float)(esp_random() % VPLAY_H); }
+    sx = fclamp(sx, (float)TANK_R, (float)(VAW - TANK_R));
+    sy = fclamp(sy, (float)TANK_R, (float)(VPLAY_H - TANK_R));
+    _enemies[slot] = {};
+    _enemies[slot].x          = sx;
+    _enemies[slot].y          = sy;
+    _enemies[slot].angle      = atan2f(_player.y - sy, _player.x - sx);
+    _enemies[slot].hp         = KAMIKAZE_HP;
+    _enemies[slot].wanderBias = 0;
+    _enemies[slot].aiState    = 99;  // sentinel: kamikaze mode
+    _kamikazeIdx              = slot;
+}
+
+void AppCombatProx::_drawPreview() {
+    auto& d = M5Cardputer.Display;
+    d.fillScreen(C_BG);
+    const CombatArena& arena = ARENAS[_arenaIdx];
+
+    // Minimap: 480x240 virtual → 240x120 display (0.5x scale)
+    // Each CELL (12px) → 6px tile; top margin 7px to centre vertically
+    static constexpr int MSCALE = 6;
+    static constexpr int MY_OFF = 7;
+
+    d.fillRect(0, MY_OFF, 240, ROWS * MSCALE, 0x1082);
+    for (int row = 0; row < ROWS; row++)
+        for (int col = 0; col < COLS; col++)
+            if (arena.walls[row][col])
+                d.fillRect(col*MSCALE, MY_OFF + row*MSCALE, MSCALE, MSCALE, C_WALL);
+
+    // Player spawn — green 4×4
+    d.fillRect((int)(arena.playerX*0.5f)-2, MY_OFF+(int)(arena.playerY*0.5f)-2, 4, 4, C_PLAYER);
+
+    // Enemy spawns — red 3×3
+    for (int i = 0; i < ARENA_ENEMY_COUNT; i++)
+        d.fillRect((int)(arena.enemyX[i]*0.5f)-1, MY_OFF+(int)(arena.enemyY[i]*0.5f)-1, 3, 3, C_ENEMY);
+
+    // Arena name centred at top
+    d.setTextSize(1);
+    d.setTextColor(0xFFE0, C_BG);
+    d.drawString(arena.name, AW/2 - d.textWidth(arena.name)/2, 1);
+
+    // Countdown
+    static constexpr unsigned long PREVIEW_MS = 7000;
+    unsigned long elapsed = millis() - _phaseEnter;
+    int secsLeft = (int)((PREVIEW_MS - elapsed) / 1000) + 1;
+    if (secsLeft < 1) secsLeft = 1;
+    char buf[32];
+    snprintf(buf, sizeof(buf), "GET READY  %d...  ENTER to skip", secsLeft);
+    d.setTextColor(0xFFFF, C_BG);
+    int botY = AH - 22;  // fixed position leaving room for bar
+    d.drawString(buf, AW/2 - d.textWidth(buf)/2, botY);
+
+    // Progress bar
+    int barW = (int)((float)(PREVIEW_MS - min(elapsed, PREVIEW_MS)) / PREVIEW_MS * AW);
+    d.fillRect(0, AH-8, AW-barW, 8, 0x2104);
+    if (barW > 0) d.fillRect(AW-barW, AH-8, barW, 8, 0x07E0);
 }
 
 void AppCombatProx::_drawSplash() {
@@ -702,7 +909,7 @@ void AppCombatProx::onUpdate() {
         uiManager.notifyInteraction();
         if (ki.esc)        { uiManager.returnToLauncher(); return; }
         if (ki.ch == 'd')  { _reisub = !_reisub; _needsRedraw = true; return; }
-        if (ki.enter)      { _resetGame(); _phase = PH_PLAYING; _needsRedraw = true; }
+        if (ki.enter)      { _resetGame(); _phase = PH_PREVIEW; _phaseEnter = millis(); _needsRedraw = true; }
         return;
     }
 
@@ -716,7 +923,7 @@ void AppCombatProx::onUpdate() {
         if (!ki.anyKey) return;
         uiManager.notifyInteraction();
         if (ki.esc)   { _phase = PH_SPLASH; _needsRedraw = true; return; }
-        if (ki.enter) { _resetGame(); _phase = PH_PLAYING; _needsRedraw = true; }
+        if (ki.enter) { _resetGame(); _phase = PH_PREVIEW; _phaseEnter = millis(); _needsRedraw = true; }
         return;
     }
 
@@ -726,7 +933,29 @@ void AppCombatProx::onUpdate() {
         if (!ki.anyKey) return;
         uiManager.notifyInteraction();
         if (ki.esc)   { _phase = PH_SPLASH; _needsRedraw = true; return; }
-        if (ki.enter) { _resetGame(); _phase = PH_PLAYING; _needsRedraw = true; }
+        if (ki.enter) { _resetGame(); _phase = PH_PREVIEW; _phaseEnter = millis(); _needsRedraw = true; }
+        return;
+    }
+
+    if (_phase == PH_PREVIEW) {
+        static constexpr unsigned long PREVIEW_MS = 7000;
+
+        unsigned long elapsed = millis() - _phaseEnter;
+
+        // Only redraw once per second (when the countdown digit changes) to avoid flicker
+        int secsNow = (int)((PREVIEW_MS - min(elapsed, PREVIEW_MS)) / 1000);
+        if (_needsRedraw || secsNow != _previewLastSec) {
+            _previewLastSec = secsNow;
+            _drawPreview();
+            _needsRedraw = false;
+        }
+
+        KeyInput ki = pollKeys();
+        if (ki.esc)            { _phase = PH_SPLASH; _needsRedraw = true; return; }
+        if (ki.enter || ki.fn) { _phase = PH_PLAYING; _needsRedraw = true; return; }
+        if (elapsed >= PREVIEW_MS) {
+            _phase = PH_PLAYING; _needsRedraw = true;
+        }
         return;
     }
 

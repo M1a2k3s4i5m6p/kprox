@@ -672,11 +672,11 @@ Requires NTP sync. If time is not yet synced the output reflects the Unix epoch 
 
 ---
 
-`{DEVICE_SETTINGS get <label>}` — types the current value of the named setting as HID keyboard output. Label matching is case-insensitive.
+`{DEVICE_SETTINGS get <label>}` — types the current value of the named setting as HID keyboard output. Label matching is case-insensitive. Sensitive settings (`wifi.password`, `api_key`) return `"Ah Ah Ah, You Didn't Say The Magic Word."` instead of their actual value.
 
 `{DEVICE_SETTINGS set <label> <value>}` — updates the named setting in memory and persists it to NVS immediately. Invalid values (wrong type, out-of-range) are silently ignored. Settings that require a reboot to take effect (WiFi credentials, USB identity, BLE enable) are noted below.
 
-`{DEVICE_SETTINGS_REPORT}` — types a complete human-readable summary of every setting and its current value via HID, one `label: value` line per setting followed by a CRLF. Useful for auditing a device over an HID session or logging to a file via `{SD_WRITE}`.
+`{DEVICE_SETTINGS_REPORT}` — types a complete human-readable summary of every setting and its current value via HID, one `label: value` line per setting followed by a CRLF. Sensitive settings are redacted. Useful for auditing a device over an HID session or logging to a file via `{SD_WRITE}`.
 
 ### Settings labels
 

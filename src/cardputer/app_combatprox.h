@@ -28,18 +28,16 @@ public:
     const uint16_t* appIcon() const override { return fa_crosshairs_48; }
 
 private:
-    enum Phase { PH_SPLASH, PH_PLAYING, PH_DEAD, PH_WIN };
+    enum Phase { PH_SPLASH, PH_PREVIEW, PH_PLAYING, PH_DEAD, PH_WIN };
     Phase _phase = PH_SPLASH;
 
-    // Display area (physical screen)
-    static constexpr int   AW     = 240;
-    static constexpr int   AH     = 135;
-    static constexpr int   BAR_H  = 13;
-    static constexpr int   PLAY_H = AH - BAR_H;
+    static constexpr int AW     = 240;
+    static constexpr int AH     = 135;
+    static constexpr int BAR_H  = 13;
+    static constexpr int PLAY_H = AH - BAR_H;
 
-    // Virtual arena (2× the display)
-    static constexpr int   VAW    = 480;
-    static constexpr int   VPLAY_H= 240;
+    static constexpr int VAW     = 480;
+    static constexpr int VPLAY_H = 240;
 
     struct Tank {
         float x, y;
@@ -50,63 +48,76 @@ private:
         int   patrolTimer;
         float patrolTarget;
         int   stuckTicks;
-        // A* path following
         int8_t pathX[32];
         int8_t pathY[32];
         int    pathLen;
         int    pathIdx;
         unsigned long pathTimer;
-        uint8_t wanderBias;   // 0-100: % chance of random detour each waypoint
+        uint8_t wanderBias;
     };
 
     static constexpr float SPEED               = 1.4f;
     static constexpr float BSPEED              = 3.8f;
     static constexpr float MAX_BULLET_DIST     = 200.f;
     static constexpr float ROTATE_SPEED        = 0.07f;
-    static constexpr float AI_TURN_SPEED       = 0.35f;   // sharper turns
+    static constexpr float AI_TURN_SPEED       = 0.35f;
     static constexpr int   TANK_R              = 5;
     static constexpr int   BULLET_R            = 2;
     static constexpr int   FIRE_COOLDOWN       = 350;
-    static constexpr int   ENEMY_FIRE_COOLDOWN = 600;     // faster fire
+    static constexpr int   ENEMY_FIRE_COOLDOWN = 600;
     static constexpr int   PLAYER_HP           = 3;
-    static constexpr int   ENEMY_COUNT         = 3;
-    static constexpr int   AI_TICK             = 60;      // faster AI ticks
-    static constexpr int   PATH_REPLAN_MS      = 700;     // replan more often
-    static constexpr float AGGRO_DIST          = 9999.f;  // always aggressive
+    static constexpr float KAMIKAZE_SPEED      = 3.0f;
+    static constexpr int   KAMIKAZE_HP          = 3;
+    static constexpr uint16_t C_KAMIKAZE        = 0xFD20;  // orange
+    static constexpr int   ENEMY_COUNT         = 9;  // 3 initial + up to 5 reinforcements + 1 kamikaze
+    static constexpr int   AI_TICK             = 60;
+    static constexpr int   PATH_REPLAN_MS      = 700;
+    static constexpr float AGGRO_DIST          = 9999.f;
     static constexpr float MIN_DIST            = 30.f;
     static constexpr float RETREAT_DIST        = 22.f;
-    static constexpr float AI_SPEED_SCALE      = 0.95f;   // near full speed
+    static constexpr float AI_SPEED_SCALE      = 0.95f;
     static constexpr float WAYPOINT_RADIUS     = 8.f;
     static constexpr float REPULSE_DIST        = 20.f;
     static constexpr float REPULSE_STRENGTH    = 0.8f;
 
-    Tank  _player;
-    Tank  _enemies[ENEMY_COUNT];
+    Tank   _player;
+    Tank   _enemies[ENEMY_COUNT];
 
     struct Bullet {
         float x, y, vx, vy;
-        float dist;       // accumulated travel distance
+        float dist;
         bool  active;
         bool  fromPlayer;
     };
     static constexpr int MAX_BULLETS = 8;
     Bullet _bullets[MAX_BULLETS];
 
-    int           _score        = 0;
+    int           _score              = 0;
+    int           _arenaIdx           = 0;
+    int           _activeEnemies      = 0;  // slots 0..2 = initial wave
+    bool          _initialWaveCleared = false;
+    bool          _reinforceSent      = false;
+    bool          _kamikazeSent       = false;
+    int           _kamikazeIdx        = -1;
+    unsigned long _explodeStart       = 0;
+    bool          _exploding          = false;
+    int           _explodeX           = 0, _explodeY = 0;
+    int           _previewLastSec     = -1;
     bool          _needsRedraw   = true;
-    bool          _reisub        = true;   // toggled by secret 'd' key
+    bool          _reisub        = true;
     bool          _pendingReisub = false;
-    unsigned long _lastUpdate   = 0;
-    unsigned long _phaseEnter   = 0;
-    unsigned long _aiTimer      = 0;
-    int           _lastFirer    = -1;     // which enemy last fired
+    unsigned long _lastUpdate    = 0;
+    unsigned long _phaseEnter    = 0;
+    unsigned long _aiTimer       = 0;
+    int           _lastFirer     = -1;
 
     static constexpr int CELL = 12;
-    static constexpr int COLS = VAW    / CELL;   // 40
-    static constexpr int ROWS = VPLAY_H / CELL;  // 20
-    static const uint8_t _wallMap[ROWS][COLS];
+    static constexpr int COLS = VAW    / CELL;
+    static constexpr int ROWS = VPLAY_H / CELL;
 
-    // Scrolling camera — top-left of viewport in virtual coords
+    // Pointer to the active arena's wall data — set in _resetGame()
+    const uint8_t (*_wallMap)[COLS] = nullptr;
+
     int _camX = 0, _camY = 0;
 
     void _resetGame();
@@ -122,6 +133,10 @@ private:
     bool _wallAt(float cx, float cy);
     bool _circleWall(float cx, float cy, float r);
     void _drawSplash();
+    void _drawPreview();
+    void _drawExplosion();
+    void _spawnReinforcements();
+    void _spawnKamikaze();
     void _drawDead();
     void _drawWin();
     void _drawHUD();

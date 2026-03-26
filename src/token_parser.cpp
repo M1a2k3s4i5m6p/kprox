@@ -9,6 +9,8 @@
 #include "mtls.h"
 #include "credential_store.h"
 #include "totp.h"
+#include "led.h"
+#include "constants.h"
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/sha256.h>
@@ -1303,6 +1305,10 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
                 std::function<String()>      get;
                 std::function<bool(String)>  set;  // returns false if value rejected
             };
+            static constexpr const char* REDACTED = "Ah Ah Ah, You Didn't Say The Magic Word.";
+            auto isRedacted = [](const char* lbl) {
+                return strcmp(lbl, "wifi.password") == 0 || strcmp(lbl, "api_key") == 0;
+            };
             static const std::vector<Setting> SETTINGS = {
                 { "wifi.enabled",         []{ return String(wifiEnabled ? 1 : 0); },
                                           [](String v){ wifiEnabled = (v == "1" || v == "true"); saveWifiEnabledSettings(); return true; } },
@@ -1388,7 +1394,7 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
                 // Print all settings as a human-readable report via HID
                 String out = "=== KProx Device Settings ===\r\n";
                 for (const auto& s : SETTINGS) {
-                    out += String(s.label) + ": " + s.get() + "\r\n";
+                    out += String(s.label) + ": " + (isRedacted(s.label) ? REDACTED : s.get()) + "\r\n";
                 }
                 sendPlainText(out);
             } else {
@@ -1418,7 +1424,7 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
                         if (label == String(s.label)) {
                             found = true;
                             if (isGet) {
-                                sendPlainText(s.get());
+                                sendPlainText(isRedacted(s.label) ? String(REDACTED) : s.get());
                             } else {
                                 if (s.set) s.set(value);
                             }
@@ -1796,6 +1802,14 @@ void parseAndSendText(const String& text) {
 void putTokenString(const String& text) {
     g_parserAbort = false;
     isHalted      = false;
+
+    // Solid magenta while the parser runs so the device never looks frozen.
+    // duration=0 means set and leave on (non-blocking).
+    setLED(180, 0, 180, 0);
+
     std::map<String, String> vars;
     parseAndSendText(text, vars);
+
+    // Turn off; flashTxIndicator calls during parsing left the LED on last.
+    setLED(0, 0, 0, 0);
 }

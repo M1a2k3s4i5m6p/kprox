@@ -1,397 +1,499 @@
 #!/usr/bin/env python3
-"""
-CombatProx Arena Editor
-Generates src/cardputer/combatprox_arena.h for the kprox firmware.
-"""
+"""CombatProx Arena Editor — multi-arena support."""
 
 import tkinter as tk
-from tkinter import messagebox
-import os
-import sys
+from tkinter import messagebox, simpledialog, filedialog
+import os, re
 
-COLS      = 40
-ROWS      = 20
-CELL      = 20          # display cell size in pixels (editor canvas)
-ARENA_W   = COLS * CELL
-ARENA_H   = ROWS * CELL
+COLS    = 40
+ROWS    = 20
+CELL    = 20
+CELL_PX = 12
+ARENA_W = COLS * CELL   # 800
+ARENA_H = ROWS * CELL   # 400
+PLAYER_R = 10
 
-CELL_PX   = 12         # firmware pixel size (480x240 virtual play area)
-PLAYER_R  = 12         # display radius for player/enemy icons
-
-COLOUR_BG      = "#1a1a2e"
-COLOUR_GRID    = "#2a2a4e"
-COLOUR_WALL    = "#4a7c59"
-COLOUR_WALL_HL = "#6abf78"
-COLOUR_PLAYER  = "#4fc3f7"
-COLOUR_ENEMY   = "#ef5350"
-COLOUR_EMPTY   = "#0d1117"
-COLOUR_PANEL   = "#16213e"
-COLOUR_BTN     = "#0f3460"
-COLOUR_BTN_HL  = "#533483"
-COLOUR_TEXT    = "#e0e0e0"
+C_EMPTY  = "#0d1117"
+C_PANEL  = "#16213e"
+C_WALL   = "#4a7c59"
+C_GRID   = "#2a2a4e"
+C_PLAYER = "#4fc3f7"
+C_ENEMY  = "#ef5350"
+C_BTN    = "#0f3460"
+C_BTN_HL = "#533483"
+C_SEL    = "#1b4332"
+C_TEXT   = "#e0e0e0"
+C_SEP    = "#3a3a6a"
 
 OUTPUT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "src", "cardputer", "combatprox_arena.h"
 )
 
-# ---- tool modes ----
 MODE_WALL   = "wall"
 MODE_ERASE  = "erase"
 MODE_PLAYER = "player"
 MODE_ENEMY  = "enemy"
 
 
+def empty_walls():
+    return [[0] * COLS for _ in range(ROWS)]
+
+
+class ArenaData:
+    def __init__(self, name="Arena", walls=None, player=None, enemies=None):
+        self.name    = name
+        self.walls   = [r[:] for r in walls] if walls else empty_walls()
+        self.player  = list(player) if player else [2, 9]
+        self.enemies = [list(e) for e in enemies] if enemies else [[37,2],[37,9],[37,17]]
+
+
+# ── I/O ──────────────────────────────────────────────────────────────────────
+
+def load_arenas(path):
+    arenas = []
+    try:
+        text = open(path).read()
+    except Exception as e:
+        messagebox.showerror("Load failed", str(e))
+        return arenas
+
+    if "CombatArena" in text and "ARENAS[" in text:
+        blocks = re.findall(
+            r'\{[ \t]*//[^\n]*Arena \d+[^\n]*\n(.*?)^\s*\}[,]?\s*(?=\n\s*\{|\n\};)',
+            text, re.DOTALL | re.MULTILINE)
+        for block in blocks:
+            name = re.search(r'"([^"]+)"', block)
+            name = name.group(1) if name else "Arena"
+            pm = re.search(r'([\d.]+)\.?f,\s*([\d.]+)\.?f,\s*//\s*player', block)
+            px_val, py_val = (float(pm.group(1)), float(pm.group(2))) if pm else (30.0, 114.0)
+            pc = max(0, min(COLS-1, int(px_val/CELL_PX)))
+            pr = max(0, min(ROWS-1, int(py_val/CELL_PX)))
+            ex_m = re.search(r'\{([^}]+)\},\s*//\s*enemy X', block)
+            ey_m = re.search(r'\{([^}]+)\},\s*//\s*enemy Y', block)
+            enemies = [[37,2],[37,9],[37,17]]
+            if ex_m and ey_m:
+                exs = [float(x.strip().rstrip('f')) for x in ex_m.group(1).split(',') if x.strip()]
+                eys = [float(y.strip().rstrip('f')) for y in ey_m.group(1).split(',') if y.strip()]
+                enemies = []
+                for i in range(min(3, len(exs), len(eys))):
+                    enemies.append([max(0,min(COLS-1,int(exs[i]/CELL_PX))),
+                                    max(0,min(ROWS-1,int(eys[i]/CELL_PX)))])
+                while len(enemies) < 3: enemies.append([37,2])
+            walls = empty_walls()
+            ri = 0
+            for wr in re.findall(r'\{([01,\s]+)\}', block):
+                vals = [int(x.strip()) for x in wr.split(',') if x.strip() in ('0','1')]
+                if len(vals) == COLS and ri < ROWS:
+                    walls[ri] = vals; ri += 1
+                if ri >= ROWS: break
+            if ri == ROWS:
+                arenas.append(ArenaData(name, walls, [pc,pr], enemies))
+    else:
+        # Legacy single-arena format
+        a = ArenaData("Outpost")
+        ri = 0
+        for line in text.splitlines():
+            s = line.strip()
+            if s.startswith("{") and "," in s and ri < ROWS:
+                vals = s.strip("{}").replace(" ","").split(",")
+                if len(vals) >= COLS:
+                    a.walls[ri] = [int(v) for v in vals[:COLS]]; ri += 1
+            if "ARENA_PLAYER_X" in line:
+                v = float(line.split("=")[1].strip().rstrip(";f"))
+                a.player[0] = max(0, min(COLS-1, int(v/CELL_PX)))
+            if "ARENA_PLAYER_Y" in line:
+                v = float(line.split("=")[1].strip().rstrip(";f"))
+                a.player[1] = max(0, min(ROWS-1, int(v/CELL_PX)))
+        arenas.append(a)
+    return arenas
+
+
+def save_arenas(path, arenas):
+    n = len(arenas)
+    L = [
+        "// Auto-generated by combatprox_arena_editor.py — do not edit by hand.",
+        f"// {n} arena(s): " + ", ".join(a.name for a in arenas),
+        "// Arena: 40 cols x 20 rows, CELL=12px  (480x240 play area)",
+        "", "#pragma once", "",
+        "static constexpr int ARENA_COLS        = 40;",
+        "static constexpr int ARENA_ROWS        = 20;",
+        "static constexpr int ARENA_ENEMY_COUNT = 3;",
+        f"static constexpr int ARENA_COUNT       = {n};", "",
+        "struct CombatArena {",
+        "    const char*  name;",
+        "    float        playerX, playerY;",
+        "    float        enemyX[ARENA_ENEMY_COUNT];",
+        "    float        enemyY[ARENA_ENEMY_COUNT];",
+        "    uint8_t      walls[ARENA_ROWS][ARENA_COLS];",
+        "};", "",
+        f"static const CombatArena ARENAS[ARENA_COUNT] = {{",
+    ]
+    for ai, a in enumerate(arenas):
+        pc, pr = a.player
+        px = pc*CELL_PX + CELL_PX//2
+        py = pr*CELL_PX + CELL_PX//2
+        ex = [e[0]*CELL_PX+CELL_PX//2 for e in a.enemies[:3]]
+        ey = [e[1]*CELL_PX+CELL_PX//2 for e in a.enemies[:3]]
+        while len(ex) < 3: ex.append(450); ey.append(114)
+        comma = "," if ai < n-1 else ""
+        L += [
+            f"    {{  // Arena {ai}: {a.name}",
+            f'        "{a.name}",',
+            f"        {px}.f, {py}.f,  // player X, Y",
+            f"        {{ {ex[0]}.f, {ex[1]}.f, {ex[2]}.f }},  // enemy X",
+            f"        {{ {ey[0]}.f, {ey[1]}.f, {ey[2]}.f }},  // enemy Y",
+            f"        {{",
+        ]
+        for row in range(ROWS):
+            cells = ",".join(str(a.walls[row][c]) for c in range(COLS))
+            L.append(f"            {{ {cells} }}{','  if row < ROWS-1 else ''}")
+        L += ["        }", f"    }}{comma}"]
+    L += ["};", ""]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w").write("\n".join(L) + "\n")
+
+
+def validate(arenas):
+    for a in arenas:
+        pc, pr = a.player
+        if a.walls[pr][pc]:
+            return f"Arena '{a.name}': player spawn is inside a wall."
+        for i, (ec, er) in enumerate(a.enemies):
+            if 0<=er<ROWS and 0<=ec<COLS and a.walls[er][ec]:
+                return f"Arena '{a.name}': enemy {i+1} spawn is inside a wall."
+    return None
+
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+
 class ArenaEditor:
-    def __init__(self, root: tk.Tk):
-        self.root = root
-        root.title("CombatProx Arena Editor")
-        root.configure(bg=COLOUR_PANEL)
-        root.resizable(False, False)
-
-        # State
-        self.walls   = [[0]*COLS for _ in range(ROWS)]
-        self.player  = [2, 9]
-        self.enemies = [[37, 2], [37, 9], [37, 17]]
-
-        self._load_defaults()
-
+    def __init__(self, root):
+        self.root    = root
+        self.arenas  = []
+        self._cur    = 0
+        self._dirty  = False
         self.mode    = tk.StringVar(value=MODE_WALL)
         self.status  = tk.StringVar(value="Ready")
-        self._dragging = False
+        self.aname   = tk.StringVar()
+        self._drag   = False
+        self._build()
+        self._auto_load()
 
-        self._build_ui()
-        self._redraw()
+    # ── load ──────────────────────────────────────────────────────────────
+    def _auto_load(self):
+        if os.path.exists(OUTPUT_PATH):
+            loaded = load_arenas(OUTPUT_PATH)
+            if loaded:
+                self.arenas = loaded
+                self._pick(0)
+                self._setstatus(f"Loaded {len(loaded)} arena(s)")
+                return
+        self.arenas = [ArenaData("Outpost")]
+        self._pick(0)
+        self._setstatus("New arena — save when ready")
 
-    # ------------------------------------------------------------------ #
-    #  Load defaults from the current header if it exists                  #
-    # ------------------------------------------------------------------ #
-    def _load_defaults(self):
-        if not os.path.exists(OUTPUT_PATH):
-            return
-        try:
-            with open(OUTPUT_PATH) as f:
-                lines = f.readlines()
-            row_idx = 0
-            for line in lines:
-                s = line.strip()
-                if s.startswith("{") and "," in s and row_idx < ROWS:
-                    vals = s.strip("{}").replace(" ", "").split(",")
-                    for col, v in enumerate(vals[:COLS]):
-                        self.walls[row_idx][col] = int(v)
-                    row_idx += 1
-                if "ARENA_PLAYER_X" in line:
-                    px = float(line.split("=")[1].strip().rstrip(";f"))
-                    self.player[0] = max(0, min(COLS-1, int(px / CELL_PX)))
-                if "ARENA_PLAYER_Y" in line:
-                    py = float(line.split("=")[1].strip().rstrip(";f"))
-                    self.player[1] = max(0, min(ROWS-1, int(py / CELL_PX)))
-                if "arenaEnemySpawns" not in line and ("{" in line) and "." in line:
-                    pass
-            # Parse enemy spawns
-            spawn_lines = []
-            in_spawns = False
-            for line in lines:
-                if "arenaEnemySpawns" in line:
-                    in_spawns = True
-                if in_spawns and "{" in line and "." in line and "arenaEnemySpawns" not in line:
-                    nums = [float(x.strip().rstrip("f")) for x in
-                            line.strip().strip("{},").split(",") if x.strip().rstrip("f")]
-                    if len(nums) >= 2:
-                        spawn_lines.append(nums)
-                if in_spawns and "};" in line:
-                    break
-            for i, sp in enumerate(spawn_lines[:3]):
-                self.enemies[i][0] = max(0, min(COLS-1, int(sp[0] / CELL_PX)))
-                self.enemies[i][1] = max(0, min(ROWS-1, int(sp[1] / CELL_PX)))
-        except Exception:
-            pass  # silently keep defaults on parse error
+    # ── build UI ──────────────────────────────────────────────────────────
+    def _build(self):
+        self.root.title("CombatProx Arena Editor")
+        self.root.configure(bg=C_PANEL)
+        self.root.resizable(False, False)
 
-    # ------------------------------------------------------------------ #
-    #  UI construction                                                      #
-    # ------------------------------------------------------------------ #
-    def _build_ui(self):
-        pad = 8
+        # Menu
+        mb = tk.Menu(self.root, bg=C_PANEL, fg=C_TEXT, tearoff=0,
+                     activebackground=C_BTN_HL, activeforeground=C_TEXT)
+        self.root.config(menu=mb)
+        fm = tk.Menu(mb, bg=C_PANEL, fg=C_TEXT, tearoff=0,
+                     activebackground=C_BTN_HL, activeforeground=C_TEXT)
+        mb.add_cascade(label="File", menu=fm)
+        fm.add_command(label="Load header…",                 command=self._load,      accelerator="Ctrl+O")
+        fm.add_command(label="Save  (combatprox_arena.h)",   command=self._save,      accelerator="Ctrl+S")
+        fm.add_command(label="Save as…",                     command=self._save_as,   accelerator="Ctrl+Shift+S")
+        fm.add_separator()
+        fm.add_command(label="Quit", command=self.root.quit)
+        am = tk.Menu(mb, bg=C_PANEL, fg=C_TEXT, tearoff=0,
+                     activebackground=C_BTN_HL, activeforeground=C_TEXT)
+        mb.add_cascade(label="Arena", menu=am)
+        am.add_command(label="New arena",    command=self._add)
+        am.add_command(label="Delete arena", command=self._del)
+        am.add_command(label="Move up",      command=self._up)
+        am.add_command(label="Move down",    command=self._dn)
+        am.add_separator()
+        am.add_command(label="Clear walls",  command=self._clear)
+        am.add_command(label="Reset spawns", command=self._reset_spawns)
+        self.root.bind("<Control-o>", lambda _: self._load())
+        self.root.bind("<Control-s>", lambda _: self._save())
+        self.root.bind("<Control-S>", lambda _: self._save_as())
+
+        outer = tk.Frame(self.root, bg=C_PANEL, padx=6, pady=6)
+        outer.pack()
 
         # Canvas
-        canvas_frame = tk.Frame(self.root, bg=COLOUR_PANEL, padx=pad, pady=pad)
-        canvas_frame.pack(side=tk.LEFT, fill=tk.BOTH)
+        self.cv = tk.Canvas(outer, width=ARENA_W, height=ARENA_H,
+                            bg=C_EMPTY, highlightthickness=2,
+                            highlightbackground="#3a3a6a")
+        self.cv.pack(side=tk.LEFT, anchor="n")
+        self.cv.bind("<Button-1>",        self._press)
+        self.cv.bind("<B1-Motion>",       self._drag_)
+        self.cv.bind("<ButtonRelease-1>", self._release)
+        self.cv.bind("<Button-3>",        self._rclick)
 
-        self.canvas = tk.Canvas(
-            canvas_frame,
-            width=ARENA_W, height=ARENA_H,
-            bg=COLOUR_EMPTY, highlightthickness=2,
-            highlightbackground="#3a3a6a"
-        )
-        self.canvas.pack()
-        self.canvas.bind("<Button-1>",        self._on_press)
-        self.canvas.bind("<B1-Motion>",       self._on_drag)
-        self.canvas.bind("<ButtonRelease-1>", self._on_release)
-        self.canvas.bind("<Button-3>",        self._on_right)
+        # Sidebar — fixed width, packed directly, no scroll
+        S = tk.Frame(outer, bg=C_PANEL, padx=6, pady=4)
+        S.pack(side=tk.LEFT, anchor="n", padx=(6,0))
 
-        # Sidebar
-        side = tk.Frame(self.root, bg=COLOUR_PANEL, padx=pad, pady=pad, width=160)
-        side.pack(side=tk.RIGHT, fill=tk.Y)
-        side.pack_propagate(False)
+        def sep():
+            tk.Frame(S, bg=C_SEP, height=1).pack(fill=tk.X, pady=4)
 
-        tk.Label(side, text="TOOL", bg=COLOUR_PANEL, fg=COLOUR_TEXT,
-                 font=("Helvetica", 10, "bold")).pack(pady=(8,2))
+        def hdr(t):
+            tk.Label(S, text=t, bg=C_PANEL, fg=C_TEXT,
+                     font=("Helvetica",9,"bold")).pack(anchor="w")
 
-        tools = [
-            ("Wall",         MODE_WALL),
-            ("Erase",        MODE_ERASE),
-            ("Player spawn", MODE_PLAYER),
-            ("Enemy spawn",  MODE_ENEMY),
-        ]
-        for label, mode in tools:
-            rb = tk.Radiobutton(
-                side, text=label, variable=self.mode, value=mode,
-                bg=COLOUR_PANEL, fg=COLOUR_TEXT, selectcolor=COLOUR_BTN,
-                activebackground=COLOUR_PANEL, activeforeground=COLOUR_TEXT,
-                font=("Helvetica", 9), anchor="w"
-            )
-            rb.pack(fill=tk.X, padx=4, pady=1)
+        def row_btns(specs):
+            r = tk.Frame(S, bg=C_PANEL)
+            r.pack(fill=tk.X, pady=1)
+            for txt, cmd, fg in specs:
+                tk.Button(r, text=txt, command=cmd, bg=C_BTN, fg=fg,
+                          relief=tk.FLAT, activebackground=C_BTN_HL,
+                          activeforeground=C_TEXT, font=("Helvetica",9)
+                          ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=1)
+            return r
 
-        tk.Frame(side, bg="#3a3a6a", height=1).pack(fill=tk.X, pady=10)
+        # Arena list
+        hdr("ARENAS")
+        self.lb = tk.Listbox(S, bg=C_EMPTY, fg=C_TEXT, selectbackground=C_SEL,
+                             font=("Helvetica",9), height=3, relief=tk.FLAT,
+                             bd=0, exportselection=False, width=22)
+        self.lb.pack(fill=tk.X)
+        self.lb.bind("<<ListboxSelect>>", self._on_lb)
 
-        tk.Label(side, text="ENEMY SLOTS", bg=COLOUR_PANEL, fg=COLOUR_TEXT,
-                 font=("Helvetica", 10, "bold")).pack(pady=(0,2))
+        r = tk.Frame(S, bg=C_PANEL); r.pack(fill=tk.X, pady=(2,0))
+        for txt, cmd, fg in [("+",self._add,"#a5d6a7"),("✕",self._del,"#ef9a9a"),
+                              ("↑",self._up,"#90caf9"),("↓",self._dn,"#90caf9")]:
+            tk.Button(r, text=txt, command=cmd, bg=C_BTN, fg=fg, relief=tk.FLAT,
+                      activebackground=C_BTN_HL, font=("Helvetica",10,"bold"), width=3
+                      ).pack(side=tk.LEFT, padx=1)
 
-        self.enemy_var = tk.IntVar(value=0)
+        nr = tk.Frame(S, bg=C_PANEL); nr.pack(fill=tk.X, pady=(3,0))
+        tk.Label(nr, text="Name ", bg=C_PANEL, fg=C_TEXT,
+                 font=("Helvetica",8)).pack(side=tk.LEFT)
+        e = tk.Entry(nr, textvariable=self.aname, bg=C_EMPTY, fg=C_TEXT,
+                     relief=tk.FLAT, font=("Helvetica",9),
+                     insertbackground=C_TEXT)
+        e.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.aname.trace_add("write", self._name_changed)
+
+        sep()
+
+        # Tools 2×2
+        hdr("TOOL")
+        tg = tk.Frame(S, bg=C_PANEL); tg.pack(fill=tk.X)
+        for i, (lbl, mode) in enumerate([("Wall",MODE_WALL),("Erase",MODE_ERASE),
+                                          ("Player spawn",MODE_PLAYER),("Enemy spawn",MODE_ENEMY)]):
+            tk.Radiobutton(tg, text=lbl, variable=self.mode, value=mode,
+                           bg=C_PANEL, fg=C_TEXT, selectcolor=C_BTN,
+                           activebackground=C_PANEL, activeforeground=C_TEXT,
+                           font=("Helvetica",9), anchor="w"
+                           ).grid(row=i//2, column=i%2, sticky="w", padx=2, pady=1)
+
+        sep()
+
+        # Enemy slot
+        hdr("ENEMY SLOT")
+        er = tk.Frame(S, bg=C_PANEL); er.pack(fill=tk.X)
+        self.evar = tk.IntVar(value=0)
         for i in range(3):
-            rb = tk.Radiobutton(
-                side, text=f"Enemy {i+1}", variable=self.enemy_var, value=i,
-                bg=COLOUR_PANEL, fg=COLOUR_TEXT, selectcolor=COLOUR_BTN,
-                activebackground=COLOUR_PANEL, activeforeground=COLOUR_TEXT,
-                font=("Helvetica", 9), anchor="w"
-            )
-            rb.pack(fill=tk.X, padx=4, pady=1)
+            tk.Radiobutton(er, text=f"E{i+1}", variable=self.evar, value=i,
+                           bg=C_PANEL, fg=C_TEXT, selectcolor=C_BTN,
+                           activebackground=C_PANEL, font=("Helvetica",9)
+                           ).pack(side=tk.LEFT, padx=4)
 
-        tk.Frame(side, bg="#3a3a6a", height=1).pack(fill=tk.X, pady=10)
+        sep()
 
-        tk.Button(
-            side, text="Clear walls", command=self._clear_walls,
-            bg=COLOUR_BTN, fg=COLOUR_TEXT, relief=tk.FLAT,
-            activebackground=COLOUR_BTN_HL, activeforeground=COLOUR_TEXT,
-            font=("Helvetica", 9)
-        ).pack(fill=tk.X, padx=4, pady=2)
+        row_btns([("Clear walls", self._clear, C_TEXT),
+                  ("Reset spawns", self._reset_spawns, C_TEXT)])
 
-        tk.Button(
-            side, text="Reset spawns", command=self._reset_spawns,
-            bg=COLOUR_BTN, fg=COLOUR_TEXT, relief=tk.FLAT,
-            activebackground=COLOUR_BTN_HL, activeforeground=COLOUR_TEXT,
-            font=("Helvetica", 9)
-        ).pack(fill=tk.X, padx=4, pady=2)
+        sep()
 
-        tk.Frame(side, bg="#3a3a6a", height=1).pack(fill=tk.X, pady=10)
+        # Save — prominent
+        tk.Button(S, text="💾  Save  (combatprox_arena.h)",
+                  command=self._save,
+                  bg="#1b5e20", fg="#a5d6a7", relief=tk.FLAT,
+                  activebackground="#2e7d32", activeforeground="#c8e6c9",
+                  font=("Helvetica",10,"bold"), pady=6
+                  ).pack(fill=tk.X, pady=(0,2))
 
-        tk.Button(
-            side, text="💾  Save Header", command=self._save,
-            bg="#1b5e20", fg="#a5d6a7", relief=tk.FLAT,
-            activebackground="#2e7d32", activeforeground="#c8e6c9",
-            font=("Helvetica", 10, "bold"), pady=6
-        ).pack(fill=tk.X, padx=4, pady=2)
+        row_btns([("📂 Load…", self._load, "#90caf9"),
+                  ("Save as…", self._save_as, C_TEXT)])
 
-        tk.Label(side, textvariable=self.status, bg=COLOUR_PANEL,
-                 fg="#aaaaaa", font=("Helvetica", 8),
-                 wraplength=140, justify=tk.LEFT).pack(pady=(6,0), padx=4)
+        sep()
 
-        # Legend
-        tk.Frame(side, bg="#3a3a6a", height=1).pack(fill=tk.X, pady=8)
-        legend = [
-            (COLOUR_WALL,   "Wall"),
-            (COLOUR_PLAYER, "Player"),
-            (COLOUR_ENEMY,  "Enemy"),
-        ]
-        for col, lbl in legend:
-            f = tk.Frame(side, bg=COLOUR_PANEL)
-            f.pack(fill=tk.X, padx=4, pady=1)
-            tk.Canvas(f, width=12, height=12, bg=col,
-                      highlightthickness=0).pack(side=tk.LEFT, padx=(0,5))
-            tk.Label(f, text=lbl, bg=COLOUR_PANEL, fg=COLOUR_TEXT,
-                     font=("Helvetica", 8)).pack(side=tk.LEFT)
+        tk.Label(S, textvariable=self.status, bg=C_PANEL, fg="#888",
+                 font=("Helvetica",8), wraplength=176, justify=tk.LEFT, anchor="w"
+                 ).pack(fill=tk.X)
 
-        # Hint
-        tk.Label(
-            canvas_frame,
-            text="Left-drag: place  |  Right-click: erase cell  |  Select tool above",
-            bg=COLOUR_PANEL, fg="#666688", font=("Helvetica", 8)
-        ).pack(pady=(4,0))
+    # ── file ops ──────────────────────────────────────────────────────────
+    def _load(self):
+        p = filedialog.askopenfilename(
+            title="Load arena header",
+            initialdir=os.path.dirname(OUTPUT_PATH),
+            filetypes=[("C header","*.h"),("All files","*")])
+        if not p: return
+        loaded = load_arenas(p)
+        if not loaded: messagebox.showwarning("Load","No arenas found."); return
+        self.arenas = loaded; self._dirty = False
+        self._pick(0); self._setstatus(f"Loaded {len(loaded)} arena(s) from {os.path.basename(p)}")
 
-    # ------------------------------------------------------------------ #
-    #  Canvas interaction                                                   #
-    # ------------------------------------------------------------------ #
-    def _cell(self, event):
-        col = event.x // CELL
-        row = event.y // CELL
-        if 0 <= col < COLS and 0 <= row < ROWS:
-            return col, row
-        return None, None
+    def _save(self):
+        err = validate(self.arenas)
+        if err: messagebox.showerror("Validation",err); return
+        try:
+            save_arenas(OUTPUT_PATH, self.arenas)
+            self._dirty = False; self._title()
+            self._setstatus(f"Saved {len(self.arenas)} arena(s)")
+        except Exception as e: messagebox.showerror("Save failed",str(e))
 
-    def _on_press(self, event):
-        self._dragging = True
-        self._apply(event)
+    def _save_as(self):
+        err = validate(self.arenas)
+        if err: messagebox.showerror("Validation",err); return
+        p = filedialog.asksaveasfilename(
+            title="Save arena header",
+            initialdir=os.path.dirname(OUTPUT_PATH),
+            initialfile="combatprox_arena.h",
+            defaultextension=".h",
+            filetypes=[("C header","*.h"),("All files","*")])
+        if not p: return
+        try:
+            save_arenas(p, self.arenas)
+            self._dirty = False; self._title()
+            self._setstatus(f"Saved to {os.path.basename(p)}")
+        except Exception as e: messagebox.showerror("Save failed",str(e))
 
-    def _on_drag(self, event):
-        if self._dragging:
-            self._apply(event)
+    # ── arena list ────────────────────────────────────────────────────────
+    def _refresh(self):
+        self.lb.delete(0, tk.END)
+        for i, a in enumerate(self.arenas):
+            self.lb.insert(tk.END, f"{i+1}. {a.name}")
+        if self._cur < len(self.arenas):
+            self.lb.selection_clear(0, tk.END)
+            self.lb.selection_set(self._cur)
+            self.lb.see(self._cur)
 
-    def _on_release(self, event):
-        self._dragging = False
+    def _pick(self, idx):
+        if not self.arenas: return
+        self._cur = max(0, min(idx, len(self.arenas)-1))
+        self.aname.set(self.arenas[self._cur].name)
+        self._refresh(); self._redraw(); self._title()
 
-    def _on_right(self, event):
-        col, row = self._cell(event)
-        if col is None:
-            return
-        self.walls[row][col] = 0
-        self._redraw()
+    def _on_lb(self, _):
+        sel = self.lb.curselection()
+        if sel: self._pick(sel[0])
 
-    def _apply(self, event):
-        col, row = self._cell(event)
-        if col is None:
-            return
-        mode = self.mode.get()
-        if mode == MODE_WALL:
-            self.walls[row][col] = 1
-        elif mode == MODE_ERASE:
-            self.walls[row][col] = 0
-        elif mode == MODE_PLAYER:
-            self.player = [col, row]
-        elif mode == MODE_ENEMY:
-            idx = self.enemy_var.get()
-            self.enemies[idx] = [col, row]
-        self._redraw()
+    def _name_changed(self, *_):
+        if self.arenas and self._cur < len(self.arenas):
+            self.arenas[self._cur].name = self.aname.get()
+            self._dirty = True; self._refresh(); self._title()
 
-    # ------------------------------------------------------------------ #
-    #  Buttons                                                              #
-    # ------------------------------------------------------------------ #
-    def _clear_walls(self):
-        self.walls = [[0]*COLS for _ in range(ROWS)]
-        self._redraw()
+    def _add(self):
+        n = simpledialog.askstring("New arena","Arena name:",
+                                   initialvalue=f"Arena{len(self.arenas)+1}",parent=self.root)
+        if not n: return
+        self.arenas.append(ArenaData(n)); self._dirty = True
+        self._pick(len(self.arenas)-1)
+
+    def _del(self):
+        if len(self.arenas) <= 1: messagebox.showinfo("Cannot delete","Need at least one arena."); return
+        if not messagebox.askyesno("Delete",f"Delete '{self.arenas[self._cur].name}'?"): return
+        del self.arenas[self._cur]; self._dirty = True
+        self._pick(min(self._cur, len(self.arenas)-1))
+
+    def _up(self):
+        i = self._cur
+        if i > 0:
+            self.arenas[i-1], self.arenas[i] = self.arenas[i], self.arenas[i-1]
+            self._dirty = True; self._pick(i-1)
+
+    def _dn(self):
+        i = self._cur
+        if i < len(self.arenas)-1:
+            self.arenas[i+1], self.arenas[i] = self.arenas[i], self.arenas[i+1]
+            self._dirty = True; self._pick(i+1)
+
+    def _clear(self):
+        self.arenas[self._cur].walls = empty_walls()
+        self._dirty = True; self._redraw()
 
     def _reset_spawns(self):
-        self.player  = [2, 9]
-        self.enemies = [[37, 2], [37, 9], [37, 17]]
-        self._redraw()
+        self.arenas[self._cur].player  = [2, 9]
+        self.arenas[self._cur].enemies = [[37,2],[37,9],[37,17]]
+        self._dirty = True; self._redraw()
 
-    # ------------------------------------------------------------------ #
-    #  Rendering                                                            #
-    # ------------------------------------------------------------------ #
+    # ── canvas ────────────────────────────────────────────────────────────
+    def _cell(self, e): return e.x//CELL, e.y//CELL
+
+    def _press(self, e):   self._drag = True;  self._apply(e)
+    def _drag_(self, e):
+        if self._drag: self._apply(e)
+    def _release(self, e): self._drag = False
+    def _rclick(self, e):
+        c, r = self._cell(e)
+        if 0<=c<COLS and 0<=r<ROWS:
+            self.arenas[self._cur].walls[r][c] = 0
+            self._dirty = True; self._redraw()
+
+    def _apply(self, e):
+        c, r = self._cell(e)
+        if not (0<=c<COLS and 0<=r<ROWS): return
+        a = self.arenas[self._cur]
+        m = self.mode.get()
+        if   m == MODE_WALL:   a.walls[r][c] = 1
+        elif m == MODE_ERASE:  a.walls[r][c] = 0
+        elif m == MODE_PLAYER: a.player = [c, r]
+        elif m == MODE_ENEMY:
+            i = self.evar.get()
+            while len(a.enemies) <= i: a.enemies.append([37, i*6])
+            a.enemies[i] = [c, r]
+        self._dirty = True; self._redraw()
+
+    # ── redraw ────────────────────────────────────────────────────────────
     def _redraw(self):
-        c = self.canvas
-        c.delete("all")
-
+        if not self.arenas: return
+        a = self.arenas[self._cur]
+        cv = self.cv; cv.delete("all")
         for row in range(ROWS):
             for col in range(COLS):
-                x1 = col * CELL
-                y1 = row * CELL
-                x2 = x1 + CELL
-                y2 = y1 + CELL
-                fill = COLOUR_WALL if self.walls[row][col] else COLOUR_EMPTY
-                c.create_rectangle(x1, y1, x2, y2, fill=fill, outline=COLOUR_GRID, width=1)
-
-        # Grid lines
-        for col in range(COLS+1):
-            x = col * CELL
-            c.create_line(x, 0, x, ARENA_H, fill=COLOUR_GRID, width=1)
-        for row in range(ROWS+1):
-            y = row * CELL
-            c.create_line(0, y, ARENA_W, y, fill=COLOUR_GRID, width=1)
-
-        # Cell coordinate labels (small)
+                x1, y1 = col*CELL, row*CELL
+                fill = C_WALL if a.walls[row][col] else C_EMPTY
+                cv.create_rectangle(x1,y1,x1+CELL,y1+CELL,fill=fill,outline=C_GRID,width=1)
+        for c in range(COLS+1): cv.create_line(c*CELL,0,c*CELL,ARENA_H,fill=C_GRID)
+        for r in range(ROWS+1): cv.create_line(0,r*CELL,ARENA_W,r*CELL,fill=C_GRID)
         for row in range(ROWS):
             for col in range(COLS):
-                if not self.walls[row][col]:
-                    cx = col * CELL + 4
-                    cy = row * CELL + 3
-                    c.create_text(cx, cy, text=f"{col},{row}", anchor="nw",
-                                  fill="#333355", font=("Courier", 7))
+                if not a.walls[row][col]:
+                    cv.create_text(col*CELL+3,row*CELL+2,text=f"{col},{row}",
+                                   anchor="nw",fill="#333355",font=("Courier",6))
+        cols = [C_ENEMY,"#ff8a65","#ffb74d"]
+        for i,(ec,er) in enumerate(a.enemies):
+            cx,cy = ec*CELL+CELL//2, er*CELL+CELL//2
+            cv.create_oval(cx-PLAYER_R,cy-PLAYER_R,cx+PLAYER_R,cy+PLAYER_R,
+                           fill=cols[i%3],outline="#fff",width=1)
+            cv.create_text(cx,cy,text=f"E{i+1}",fill="#fff",font=("Helvetica",8,"bold"))
+        px,py = a.player[0]*CELL+CELL//2, a.player[1]*CELL+CELL//2
+        cv.create_oval(px-PLAYER_R,py-PLAYER_R,px+PLAYER_R,py+PLAYER_R,
+                       fill=C_PLAYER,outline="#fff",width=1)
+        cv.create_text(px,py,text="P",fill="#fff",font=("Helvetica",9,"bold"))
 
-        # Enemy spawns
-        enemy_colours = [COLOUR_ENEMY, "#ff8a65", "#ffb74d"]
-        for i, (ec, er) in enumerate(self.enemies):
-            cx = ec * CELL + CELL // 2
-            cy = er * CELL + CELL // 2
-            col = enemy_colours[i % len(enemy_colours)]
-            c.create_oval(cx-PLAYER_R, cy-PLAYER_R, cx+PLAYER_R, cy+PLAYER_R,
-                          fill=col, outline="#ffffff", width=1)
-            c.create_text(cx, cy, text=f"E{i+1}", fill="#ffffff",
-                          font=("Helvetica", 8, "bold"))
+    def _title(self):
+        a = self.arenas[self._cur].name if self.arenas else ""
+        d = " \u2022" if self._dirty else ""
+        self.root.title(f"CombatProx Arena Editor — {a}{d}")
 
-        # Player spawn
-        px = self.player[0] * CELL + CELL // 2
-        py = self.player[1] * CELL + CELL // 2
-        c.create_oval(px-PLAYER_R, py-PLAYER_R, px+PLAYER_R, py+PLAYER_R,
-                      fill=COLOUR_PLAYER, outline="#ffffff", width=1)
-        c.create_text(px, py, text="P", fill="#ffffff",
-                      font=("Helvetica", 9, "bold"))
-
-    # ------------------------------------------------------------------ #
-    #  Header generation                                                    #
-    # ------------------------------------------------------------------ #
-    def _save(self):
-        # Validate: spawns must not be on walls
-        pc, pr = self.player
-        if self.walls[pr][pc]:
-            messagebox.showerror("Invalid", "Player spawn is inside a wall.")
-            return
-        for i, (ec, er) in enumerate(self.enemies):
-            if self.walls[er][ec]:
-                messagebox.showerror("Invalid", f"Enemy {i+1} spawn is inside a wall.")
-                return
-
-        # Convert cell positions to firmware pixel coordinates (centre of cell)
-        px = pc * CELL_PX + CELL_PX // 2
-        py = pr * CELL_PX + CELL_PX // 2
-
-        enemy_lines = ""
-        for i, (ec, er) in enumerate(self.enemies):
-            ex = ec * CELL_PX + CELL_PX // 2
-            ey = er * CELL_PX + CELL_PX // 2
-            comma = "," if i < 2 else ""
-            enemy_lines += f"    {{ {ex:>5.1f}f, {ey:>5.1f}f }}{comma}\n"
-
-        wall_rows = ""
-        for row in range(ROWS):
-            cells = ",".join(str(self.walls[row][col]) for col in range(COLS))
-            comma = "," if row < ROWS-1 else ""
-            wall_rows += f"    {{ {cells} }}{comma}\n"
-
-        header = (
-            "// Auto-generated by combatprox_arena_editor.py — do not edit by hand.\n"
-            f"// Arena: {COLS} cols x {ROWS} rows, CELL={CELL_PX}px  ({COLS*CELL_PX}x{ROWS*CELL_PX} play area)\n"
-            "\n"
-            "#pragma once\n"
-            "\n"
-            f"static constexpr int ARENA_COLS        = {COLS};\n"
-            f"static constexpr int ARENA_ROWS        = {ROWS};\n"
-            f"static constexpr int ARENA_ENEMY_COUNT = {len(self.enemies)};\n"
-            "\n"
-            f"static constexpr float ARENA_PLAYER_X = {px}.f;\n"
-            f"static constexpr float ARENA_PLAYER_Y = {py}.f;\n"
-            "\n"
-            f"static const float arenaEnemySpawns[ARENA_ENEMY_COUNT][2] = {{\n"
-            f"{enemy_lines}"
-            "};\n"
-            "\n"
-            f"const uint8_t AppCombatProx::_wallMap[ARENA_ROWS][ARENA_COLS] = {{\n"
-            f"{wall_rows}"
-            "};\n"
-        )
-
-        try:
-            os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-            with open(OUTPUT_PATH, "w") as f:
-                f.write(header)
-            self.status.set(f"Saved to\n{os.path.relpath(OUTPUT_PATH)}")
-        except Exception as e:
-            messagebox.showerror("Save failed", str(e))
-            self.status.set(f"Error: {e}")
+    def _setstatus(self, msg): self.status.set(msg)
 
 
 def main():
     root = tk.Tk()
-    app = ArenaEditor(root)
+    ArenaEditor(root)
     root.mainloop()
 
 
