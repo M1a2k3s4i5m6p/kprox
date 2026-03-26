@@ -33,6 +33,7 @@
 #include "app_bootprox.h"
 #include "app_timerprox.h"
 #include "app_combatprox.h"
+#include "app_mediacontrol.h"
 #include <M5Cardputer.h>
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -482,6 +483,7 @@ void setup() {
     static Cardputer::AppBootProx    appBootProx;
     static Cardputer::AppTimerProx   appTimerProx;
     static Cardputer::AppCombatProx  appCombatProx;
+    static Cardputer::AppMediaControl appMediaControl;
     static Cardputer::AppSettings    appSettings;
 
     // Registration order determines launcher icon index (0 = launcher, 1..N = user apps)
@@ -502,7 +504,8 @@ void setup() {
     Cardputer::uiManager.addApp(&appBootProx);     // 14
     Cardputer::uiManager.addApp(&appTimerProx);    // 15
     Cardputer::uiManager.addApp(&appCombatProx);   // 16
-    Cardputer::uiManager.addApp(&appSettings); // 17
+    Cardputer::uiManager.addApp(&appMediaControl); // 17
+    Cardputer::uiManager.addApp(&appSettings); // 18
 
     // Load persisted app order/visibility (12 user apps, indices 1..12)
     loadAppLayout((int)Cardputer::uiManager.apps().size() - 1);

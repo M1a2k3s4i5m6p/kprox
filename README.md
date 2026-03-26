@@ -34,6 +34,8 @@ automated form entry on devices where you cannot install software.
 
 | Document | Description |
 |----------|-------------|
+| [quick_start.md](quick_start.md) | Quick start guide — first steps, common tasks, at-a-glance reference |
+| [CARDPUTER_APPS.md](CARDPUTER_APPS.md) | Complete Cardputer app list with descriptions and navigation reference |
 | [TOKEN_REFERENCE.md](TOKEN_REFERENCE.md) | Complete token string DSL reference: all tokens, syntax, examples |
 | [KEYPROX_SCRIPT_REFERENCE.md](KEYPROX_SCRIPT_REFERENCE.md) | KProx Script (.kps) language reference |
 | [API_REFERENCE.md](API_REFERENCE.md) | REST API endpoint reference |
@@ -124,7 +126,7 @@ Credentials support three fields: **password** (default), **username**, and **no
 inside the credential store, fully encrypted at rest.
 
 The store must be unlocked before any credential or TOTP operation is possible. Unlock via the web interface or the
-CredStore Cardputer app.
+CredStore app (see [CARDPUTER_APPS.md](CARDPUTER_APPS.md)).
 
 **Gate modes:**
 
@@ -155,36 +157,33 @@ migrates the database automatically.
 
 ## Cardputer Apps
 
-Use arrow keys to navigate the launcher, ENTER to open an app, and backtick or `esc` to return to the launcher. BtnG0
-returns to the launcher from any app (or plays the active register if the app does not handle it). Press TAB inside any
-app to show its help page.
+See **[CARDPUTER_APPS.md](CARDPUTER_APPS.md)** for the complete app reference including per-app
+controls, icons, BtnG0 behaviour, and the navigation quick reference.
+
+Quick summary — use arrow keys to navigate the launcher, ENTER to open an app, ESC or backtick to
+return. BtnG0 plays the active register from any app that does not override it. TAB shows each
+app's built-in help page.
 
 | App | Description |
 |-----|-------------|
-| **KProx** | Main register playback. Shows active register, IP, SSID, and credential store lock state. |
-| **FuzzyProx** | Fuzzy search across all registers by name or content. |
-| **RegEdit** | Full-screen register editor with token syntax support. |
-| **CredStore** | Credential store manager: unlock, add/update credentials, rekey, configure gate mode, wipe. |
-| **Gadgets** | Browse and install community gadgets from GitHub over WiFi. |
-| **SinkProx** | View and flush the unauthenticated write-only sink buffer. |
-| **Keyboard HID** | Direct keyboard input forwarding to the paired host. |
-| **Clock** | Current time and NTP sync status. |
-| **QRProx** | QR code of the device web URL. BtnG0 types the URL. |
-| **SchedProx** | Scheduled task manager: create and manage time-triggered token string playback. |
-| **TOTProx** | TOTP authenticator: live codes, account management, gate config. BtnG0 types code. Needs CS unlocked. |
-| **Files** | SD card file browser. Arrow keys navigate, ENTER opens, `D` dumps to HID, `DEL` deletes. |
-| **KPScript** | KProx Script runner. Scans SD for `.kps` files. ENTER runs, `R` rescans. |
-| **BootProx** | Boot register config. Fire a register on boot with an optional auto-disable limit. |
-| **TimerProx** | Countdown timer. FIRE DELAY = before register plays. HALT DELAY = before halting. No WiFi. |
-| **psCombatProx** | Combat / `ps` clone. Kill enemy: `kill -9 <pid>`. You die: REISUB. |
-| **Settings** | Device settings and configuration for WiFi, BT, USB HID, API Key, Identity, Sink, HID Timing, Startup App, Layout, CS, SD. |
-
-![psCombatProx](img/combat_title.png)
-![psCombatProx](img/combat2.png)
-![psCombatProx Loss](img/combat_loss.png)
-![psCombatProx Victory](img/combat_victory.png)
-
----
+| **KProx** | Register playback and device status |
+| **FuzzyProx** | Fuzzy-search all registers by name or content |
+| **RegEdit** | Full-screen register editor |
+| **CredStore** | Encrypted credential store — unlock before using `{CREDSTORE}` tokens |
+| **Gadgets** | Install community token strings from GitHub |
+| **SinkProx** | View and execute the unauthenticated sink buffer |
+| **Keyboard** | Direct keyboard HID forwarding to the paired host |
+| **Clock** | Current time, date, and timezone selector |
+| **QRProx** | QR code for the web interface URL |
+| **SchedProx** | Time-triggered register scheduling |
+| **TOTProx** | TOTP 2FA authenticator — BtnG0 types the live code |
+| **Files** | SD card file browser |
+| **KPScript** | Run `.kps` scripts from the SD card |
+| **BootProx** | Fire a register on boot with optional auto-disable |
+| **TimerProx** | Countdown timer with deferred register playback |
+| **psCombatProx** | `ps`-command combat mini-game over HID |
+| **MediaCtrl** | Media transport controls (play, pause, stop, volume, mute) |
+| **Settings** | All device configuration across 15 pages |
 
 ## Web Interface Tabs
 
@@ -227,7 +226,7 @@ Token strings can read, write, and execute files on the SD card. See [TOKEN_REFE
 ## KProx Script
 
 KProx Script (`.kps`) is a line-oriented scripting language that runs directly on the device. Scripts are stored on the
-SD card and can be executed from a token string (`{SD_EXEC /scripts/hello.kps}`), the KPScript Cardputer app, or the
+SD card and can be executed from a token string (`{SD_EXEC /scripts/hello.kps}`), the KPScript app (see [CARDPUTER_APPS.md](CARDPUTER_APPS.md)), or the
 KPScript Editor web tab.
 
 For the full language reference see [KEYPROX_SCRIPT_REFERENCE.md](KEYPROX_SCRIPT_REFERENCE.md).
@@ -255,7 +254,7 @@ echo "${code}{ENTER}"
 ## Gadgets
 
 Gadgets are pre-built token string scripts in the [`gadgets/`](gadgets/) directory. Install them from the Gadgets web
-tab or the Gadgets Cardputer app.
+tab or the Gadgets app (see [CARDPUTER_APPS.md](CARDPUTER_APPS.md)).
 
 ### Gadget format
 

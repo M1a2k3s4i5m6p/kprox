@@ -6,6 +6,7 @@
 #include "connection.h"
 #include "keymap.h"
 #include "storage.h"
+#include "mtls.h"
 #include "credential_store.h"
 #include "totp.h"
 #include <mbedtls/ctr_drbg.h>
@@ -487,11 +488,23 @@ String evaluateAllTokens(const String& text, std::map<String, String>& vars) {
         } else if (upperToken == "WIFI_SSID") {
             replacement = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : String("");
             resolved = true;
+        } else if (upperToken == "WIFI_STATE") {
+            // 1 when WiFi is connected, 0 otherwise
+            replacement = (WiFi.status() == WL_CONNECTED) ? "1" : "0";
+            resolved = true;
 #ifdef BOARD_M5STACK_CARDPUTER
         } else if (upperToken == "BATTERY") {
             replacement = String((int)constrain(M5Cardputer.Power.getBatteryLevel(), 0, 100));
             resolved = true;
 #endif
+        } else if (upperToken == "NTP_STATE") {
+            // 1 when the system clock has been set via NTP (epoch > year 2000), 0 otherwise
+            replacement = (time(nullptr) > 946684800L) ? "1" : "0";
+            resolved = true;
+        } else if (upperToken == "CREDSTORE_STATE") {
+            // 1 when the credential store is unlocked, 0 when locked
+            replacement = credStoreLocked ? "0" : "1";
+            resolved = true;
         }
 
         if (resolved) {
@@ -644,7 +657,8 @@ static bool isControlToken(const String& token) {
             u == "ENDLOOP"  || u == "ENDFOR"  || u == "ENDWHILE"  ||
             u == "ELSE"     || u == "ENDIF"   || u == "BREAK"     ||
             u.startsWith("SLEEP ")      || u.startsWith("CHORD ")       || u.startsWith("HID ")        ||
-            u == "WAIT_WIFI"            || u == "TIME"                  ||
+            u == "WIFI_WAIT"            || u == "WAIT_WIFI"           || u == "NTP_WAIT"           || u == "CREDSTORE_WAIT"      || u == "DEVICE_REBOOT"        || u == "DEVICE_SETTINGS_REPORT" ||
+            u.startsWith("DEVICE_SETTINGS ")                  || u == "TIME"                  ||
             u.startsWith("WIFI ")       || u.startsWith("SETMOUSE ")    || u.startsWith("MOVEMOUSE ")  ||
             u.startsWith("MOUSECLICK")  || u.startsWith("MOUSEPRESS")   ||
             u.startsWith("MOUSERELEASE")|| u.startsWith("MOUSEDOUBLECLICK") ||
@@ -920,12 +934,170 @@ void parseAndSendText(const String& text, std::map<String, String>& vars) {
         }
         else if (u == "HALT")   { haltAllOperations(); return; }
         else if (u == "RESUME") { resumeOperations(); }
-        else if (u == "WAIT_WIFI") {
+        else if (u == "WIFI_WAIT" || u == "WAIT_WIFI") {
             // Block until WiFi connects or execution is aborted
             while (WiFi.status() != WL_CONNECTED && !g_parserAbort) {
                 server.handleClient();
                 delay(200);
                 checkParseInterrupt();
+            }
+        }
+        else if (u == "NTP_WAIT") {
+            // Block until the system clock has been set by NTP or execution is aborted.
+            // Uses epoch > 2001-01-01 as the validity sentinel (same as {NTP_STATE}).
+            while (time(nullptr) <= 946684800L && !g_parserAbort) {
+                server.handleClient();
+                delay(200);
+                checkParseInterrupt();
+            }
+        }
+        else if (u == "CREDSTORE_WAIT") {
+            // Block until the credential store is unlocked or execution is aborted.
+            while (credStoreLocked && !g_parserAbort) {
+                server.handleClient();
+                delay(200);
+                checkParseInterrupt();
+            }
+        }
+        else if (u == "DEVICE_REBOOT") {
+            // Flush any queued HID output then restart the device
+            hidReleaseAll();
+            delay(100);
+            ESP.restart();
+        }
+        else if (u.startsWith("DEVICE_SETTINGS ") || u == "DEVICE_SETTINGS_REPORT") {
+            // ── Settings table ────────────────────────────────────────────────
+            // Each entry: { label, getter lambda, setter lambda (empty = read-only) }
+            // Extending: add a new row here; no other code changes needed.
+            struct Setting {
+                const char* label;
+                std::function<String()>      get;
+                std::function<bool(String)>  set;  // returns false if value rejected
+            };
+            static const std::vector<Setting> SETTINGS = {
+                { "wifi.enabled",         []{ return String(wifiEnabled ? 1 : 0); },
+                                          [](String v){ wifiEnabled = (v == "1" || v == "true"); saveWifiEnabledSettings(); return true; } },
+                { "wifi.ssid",            []{ return wifiSSID; },
+                                          [](String v){ if(v.isEmpty()) return false; wifiSSID = v; saveWiFiSettings(); return true; } },
+                { "wifi.password",        []{ return wifiPassword; },
+                                          [](String v){ if(v.isEmpty()) return false; wifiPassword = v; saveWiFiSettings(); return true; } },
+                { "bt.enabled",           []{ return String(bluetoothEnabled ? 1 : 0); },
+                                          [](String v){ bluetoothEnabled = (v == "1" || v == "true"); saveBtSettings(); return true; } },
+                { "bt.keyboard",          []{ return String(bleKeyboardEnabled ? 1 : 0); },
+                                          [](String v){ bleKeyboardEnabled = (v == "1" || v == "true"); saveBtSettings(); return true; } },
+                { "bt.mouse",             []{ return String(bleMouseEnabled ? 1 : 0); },
+                                          [](String v){ bleMouseEnabled = (v == "1" || v == "true"); saveBtSettings(); return true; } },
+                { "bt.intl_keyboard",     []{ return String(bleIntlKeyboardEnabled ? 1 : 0); },
+                                          [](String v){ bleIntlKeyboardEnabled = (v == "1" || v == "true"); saveBtSettings(); return true; } },
+#ifdef BOARD_HAS_USB_HID
+                { "usb.enabled",          []{ return String(usbEnabled ? 1 : 0); },
+                                          [](String v){ usbEnabled = (v == "1" || v == "true"); saveUSBSettings(); return true; } },
+                { "usb.keyboard",         []{ return String(usbKeyboardEnabled ? 1 : 0); },
+                                          [](String v){ usbKeyboardEnabled = (v == "1" || v == "true"); saveUSBSettings(); return true; } },
+                { "usb.mouse",            []{ return String(usbMouseEnabled ? 1 : 0); },
+                                          [](String v){ usbMouseEnabled = (v == "1" || v == "true"); saveUSBSettings(); return true; } },
+                { "usb.intl_keyboard",    []{ return String(usbIntlKeyboardEnabled ? 1 : 0); },
+                                          [](String v){ usbIntlKeyboardEnabled = (v == "1" || v == "true"); saveUSBSettings(); return true; } },
+                { "usb.manufacturer",     []{ return usbManufacturer; },
+                                          [](String v){ usbManufacturer = v; saveUSBIdentitySettings(); return true; } },
+                { "usb.product",          []{ return usbProduct; },
+                                          [](String v){ usbProduct = v; saveUSBIdentitySettings(); return true; } },
+#endif
+                { "api_key",              []{ return apiKey; },
+                                          [](String v){ if(v.isEmpty()) return false; apiKey = v; saveApiKeySettings(); return true; } },
+                { "hostname",             []{ return hostnameStr; },
+                                          [](String v){ if(v.isEmpty()) return false; hostnameStr = v; hostname = hostnameStr.c_str(); saveHostnameSettings(); return true; } },
+                { "keymap",               []{ return activeKeymap; },
+                                          [](String v){ if(v.isEmpty()) return false; activeKeymap = v; keymapInit(); saveKeymapSettings(); return true; } },
+                { "led.enabled",          []{ return String(ledEnabled ? 1 : 0); },
+                                          [](String v){ ledEnabled = (v == "1" || v == "true"); saveLEDSettings(); return true; } },
+                { "led.r",                []{ return String(ledColorR); },
+                                          [](String v){ int i = v.toInt(); if(i<0||i>255) return false; ledColorR = i; saveLEDSettings(); return true; } },
+                { "led.g",                []{ return String(ledColorG); },
+                                          [](String v){ int i = v.toInt(); if(i<0||i>255) return false; ledColorG = i; saveLEDSettings(); return true; } },
+                { "led.b",                []{ return String(ledColorB); },
+                                          [](String v){ int i = v.toInt(); if(i<0||i>255) return false; ledColorB = i; saveLEDSettings(); return true; } },
+                { "utc_offset",           []{ return String((long)utcOffsetSeconds); },
+                                          [](String v){ utcOffsetSeconds = v.toInt(); saveUtcOffsetSettings(); return true; } },
+                { "sink.max_size",        []{ return String(maxSinkSize); },
+                                          [](String v){ maxSinkSize = v.toInt(); saveSinkSettings(); return true; } },
+                { "timing.key_press",     []{ return String(g_keyPressDelay); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; g_keyPressDelay=i; saveTimingSettings(); return true; } },
+                { "timing.key_release",   []{ return String(g_keyReleaseDelay); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; g_keyReleaseDelay=i; saveTimingSettings(); return true; } },
+                { "timing.between_keys",  []{ return String(g_betweenKeysDelay); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; g_betweenKeysDelay=i; saveTimingSettings(); return true; } },
+                { "timing.between_send",  []{ return String(g_betweenSendTextDelay); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; g_betweenSendTextDelay=i; saveTimingSettings(); return true; } },
+                { "timing.special_key",   []{ return String(g_specialKeyDelay); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; g_specialKeyDelay=i; saveTimingSettings(); return true; } },
+                { "timing.token",         []{ return String(g_tokenDelay); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; g_tokenDelay=i; saveTimingSettings(); return true; } },
+                { "display.brightness",   []{ return String(g_displayBrightness); },
+                                          [](String v){ int i=v.toInt(); if(i<16||i>255) return false; g_displayBrightness=i; saveDisplaySettings(); return true; } },
+                { "display.timeout_ms",   []{ return String((unsigned long)g_screenTimeoutMs); },
+                                          [](String v){ unsigned long l=strtoul(v.c_str(),nullptr,10); if(l<5000||l>60000) return false; g_screenTimeoutMs=l; saveDisplaySettings(); return true; } },
+                { "cs.auto_lock_secs",    []{ return String(csAutoLockSecs); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; csAutoLockSecs=i; saveCsSecuritySettings(); return true; } },
+                { "cs.auto_wipe_attempts",[]{ return String(csAutoWipeAttempts); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; csAutoWipeAttempts=i; saveCsSecuritySettings(); return true; } },
+                { "cs.storage",           []{ return csStorageLocation; },
+                                          [](String v){ if(v!="nvs"&&v!="sd") return false; csStorageLocation=v; saveCsStorageLocation(); return true; } },
+                { "boot_reg.enabled",     []{ return String(bootRegEnabled ? 1 : 0); },
+                                          [](String v){ bootRegEnabled=(v=="1"||v=="true"); saveBootRegSettings(); return true; } },
+                { "boot_reg.index",       []{ return String(bootRegIndex); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; bootRegIndex=i; saveBootRegSettings(); return true; } },
+                { "boot_reg.limit",       []{ return String(bootRegLimit); },
+                                          [](String v){ int i=v.toInt(); if(i<0) return false; bootRegLimit=i; saveBootRegSettings(); return true; } },
+                { "default_app",          []{ return String(defaultAppIndex); },
+                                          [](String v){ int i=v.toInt(); if(i<1) return false; defaultAppIndex=i; saveDefaultAppSettings(); return true; } },
+                { "mtls.enabled",         []{ return String(mtlsEnabled ? 1 : 0); },
+                                          nullptr },  // read-only — use the web UI for cert management
+            };
+
+            if (u == "DEVICE_SETTINGS_REPORT") {
+                // Print all settings as a human-readable report via HID
+                String out = "=== KProx Device Settings ===\r\n";
+                for (const auto& s : SETTINGS) {
+                    out += String(s.label) + ": " + s.get() + "\r\n";
+                }
+                sendPlainText(out);
+            } else {
+                // DEVICE_SETTINGS get <label>  |  DEVICE_SETTINGS set <label> <value>
+                String args = token.substring(16);  // strip "DEVICE_SETTINGS "
+                args.trim();
+                String argsU = args; argsU.toUpperCase();
+                bool isSet = argsU.startsWith("SET ");
+                bool isGet = argsU.startsWith("GET ");
+                if (isSet || isGet) {
+                    String rest = args.substring(4);  // strip "get " / "set "
+                    rest.trim();
+                    String label, value;
+                    if (isSet) {
+                        int sp = rest.indexOf(' ');
+                        if (sp > 0) {
+                            label = rest.substring(0, sp);
+                            value = rest.substring(sp + 1);
+                            value.trim();
+                        }
+                    } else {
+                        label = rest;
+                    }
+                    label.toLowerCase();
+                    bool found = false;
+                    for (const auto& s : SETTINGS) {
+                        if (label == String(s.label)) {
+                            found = true;
+                            if (isGet) {
+                                sendPlainText(s.get());
+                            } else {
+                                if (s.set) s.set(value);
+                            }
+                            break;
+                        }
+                    }
+                    (void)found;
+                }
             }
         }
         else if (u == "TIME") {

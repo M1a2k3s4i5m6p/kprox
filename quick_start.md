@@ -99,6 +99,9 @@ See [KEYPROX_SCRIPT_REFERENCE.md](KEYPROX_SCRIPT_REFERENCE.md) for the full lang
 
 ## Cardputer at a glance
 
+See [CARDPUTER_APPS.md](CARDPUTER_APPS.md) for the full app reference.
+
+
 Arrow keys navigate the launcher. ENTER opens an app. BtnG0 always plays the active register.
 
 | App         | What it does                                                       |

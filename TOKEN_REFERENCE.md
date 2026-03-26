@@ -459,6 +459,9 @@ All random output uses `mbedtls_ctr_drbg_random` seeded from the hardware entrop
 | `{KPROX_IP}` | Current WiFi IP address; empty string when not connected |
 | `{WIFI_SSID}` | Connected network name; empty string when not connected |
 | `{WIFI_RSSI}` | WiFi signal strength in dBm; empty string when not connected |
+| `{WIFI_STATE}` | `1` when WiFi is connected, `0` otherwise |
+| `{NTP_STATE}` | `1` when the system clock has been set via NTP, `0` otherwise |
+| `{CREDSTORE_STATE}` | `1` when the credential store is unlocked, `0` when locked |
 | `{FREE_HEAP}` | Free heap memory in bytes |
 | `{UPTIME}` | Seconds since last boot |
 | `{BATTERY}` | Battery level 0-100 (Cardputer only) |
@@ -466,6 +469,7 @@ All random output uses `mbedtls_ctr_drbg_random` seeded from the hardware entrop
 ```
 http://{KPROX_IP}
 SSID: {WIFI_SSID}  RSSI: {WIFI_RSSI} dBm
+WiFi: {WIFI_STATE}  NTP: {NTP_STATE}  CredStore: {CREDSTORE_STATE}
 Heap: {FREE_HEAP} bytes  Uptime: {UPTIME}s
 Battery: {BATTERY}%
 ```
@@ -515,10 +519,91 @@ Requires NTP sync. If time is not yet synced the output reflects the Unix epoch 
 
 ## Network — —
 
-`{WAIT_WIFI}` — blocks execution until WiFi is connected or the user aborts (ESC / BtnA). Useful at the top of scripts that require network access.
+`{WIFI_WAIT}` — blocks execution until WiFi is connected or the user aborts (ESC / BtnA). `{WIFI_WAIT}` is a retained alias.
+
+`{NTP_WAIT}` — blocks execution until the system clock has been synchronised via NTP, or the user aborts (ESC / BtnA). The validity sentinel is `epoch > 2001-01-01 00:00:00 UTC`; the same threshold used by `{NTP_STATE}`. Combine with `{WIFI_WAIT}` when WiFi is not guaranteed to be up before the script runs.
+
+`{CREDSTORE_WAIT}` — blocks execution until the on-device credential store is unlocked by the user, or execution is aborted (ESC / BtnA). Use before any `{CREDSTORE …}` or `{TOTP …}` tokens in unattended scripts that run at boot before the user has had a chance to unlock the store.
 
 ```
-{WAIT_WIFI}{TOTP mysite}{ENTER}
+{WIFI_WAIT}{TOTP mysite}{ENTER}
+{WIFI_WAIT}{NTP_WAIT}{DATE %Y-%m-%d %H:%M:%S}{ENTER}
+{CREDSTORE_WAIT}{CREDSTORE username corp}{TAB}{CREDSTORE corp}{ENTER}
+{CREDSTORE_WAIT}{WIFI_WAIT}{NTP_WAIT}{TOTP mysite}{ENTER}
+```
+
+---
+
+## Device Management — BLE+USB
+
+`{DEVICE_REBOOT}` — immediately reboots the KProx device via `ESP.restart()`. Any pending HID output is flushed first. Useful at the end of a provisioning script that changes settings which take effect only after a restart (e.g. WiFi credentials, USB identity, BLE toggle).
+
+```
+{DEVICE_SETTINGS set wifi.ssid MyNetwork}{DEVICE_SETTINGS set wifi.password s3cr3t}{DEVICE_REBOOT}
+```
+
+---
+
+`{DEVICE_SETTINGS get <label>}` — types the current value of the named setting as HID keyboard output. Label matching is case-insensitive.
+
+`{DEVICE_SETTINGS set <label> <value>}` — updates the named setting in memory and persists it to NVS immediately. Invalid values (wrong type, out-of-range) are silently ignored. Settings that require a reboot to take effect (WiFi credentials, USB identity, BLE enable) are noted below.
+
+`{DEVICE_SETTINGS_REPORT}` — types a complete human-readable summary of every setting and its current value via HID, one `label: value` line per setting followed by a CRLF. Useful for auditing a device over an HID session or logging to a file via `{SD_WRITE}`.
+
+### Settings labels
+
+| Label | Type | Description | Reboot? |
+|-------|------|-------------|---------|
+| `wifi.enabled` | bool (0/1) | WiFi enabled at boot | Yes |
+| `wifi.ssid` | string | WiFi network name | Yes |
+| `wifi.password` | string | WiFi password | Yes |
+| `bt.enabled` | bool (0/1) | Bluetooth enabled at boot | Yes |
+| `bt.keyboard` | bool (0/1) | BLE keyboard report enabled | Yes |
+| `bt.mouse` | bool (0/1) | BLE mouse report enabled | Yes |
+| `bt.intl_keyboard` | bool (0/1) | BLE extended keyboard report enabled | Yes |
+| `usb.enabled` | bool (0/1) | USB HID enabled at boot (Cardputer) | Yes |
+| `usb.keyboard` | bool (0/1) | USB keyboard sub-device enabled | Yes |
+| `usb.mouse` | bool (0/1) | USB mouse sub-device enabled | Yes |
+| `usb.intl_keyboard` | bool (0/1) | USB extended keyboard report enabled | Yes |
+| `usb.manufacturer` | string | USB manufacturer string | Yes |
+| `usb.product` | string | USB product string | Yes |
+| `api_key` | string | REST API authentication key | No |
+| `hostname` | string | mDNS/network hostname | Yes |
+| `keymap` | string | Active keyboard layout (e.g. `en`, `de`, `dvorak`) | No |
+| `led.enabled` | bool (0/1) | Status LED enabled | No |
+| `led.r` | int 0–255 | LED red component | No |
+| `led.g` | int 0–255 | LED green component | No |
+| `led.b` | int 0–255 | LED blue component | No |
+| `utc_offset` | int (seconds) | UTC timezone offset in seconds | No |
+| `sink.max_size` | int (bytes) | Maximum sink buffer size; 0 = unlimited | No |
+| `timing.key_press` | int (ms) | Key press hold duration | No |
+| `timing.key_release` | int (ms) | Key release delay | No |
+| `timing.between_keys` | int (ms) | Delay between key strokes | No |
+| `timing.between_send` | int (ms) | Delay between `sendText` calls | No |
+| `timing.special_key` | int (ms) | Delay after special keys | No |
+| `timing.token` | int (ms) | Delay between token evaluations | No |
+| `display.brightness` | int 16–255 | Display backlight brightness (Cardputer) | No |
+| `display.timeout_ms` | int 5000–60000 | Screen timeout in milliseconds (Cardputer) | No |
+| `cs.auto_lock_secs` | int (seconds) | Credential store auto-lock timeout; 0 = disabled | No |
+| `cs.auto_wipe_attempts` | int | Failed unlock attempts before wipe; 0 = disabled | No |
+| `cs.storage` | `nvs` / `sd` | Credential store backend | Yes |
+| `boot_reg.enabled` | bool (0/1) | Boot register fire enabled | No |
+| `boot_reg.index` | int (0-based) | Register index to fire on boot | No |
+| `boot_reg.limit` | int | Max times to fire; 0 = every boot | No |
+| `default_app` | int (1-based) | Cardputer app to launch on boot | No |
+| `mtls.enabled` | bool (0/1) | mTLS enabled (read-only — manage via web UI) | — |
+
+Bool settings accept `1`/`0` or `true`/`false`. `usb.*` settings are only present on builds with USB HID support.
+
+**New settings added to the firmware are automatically included** in `{DEVICE_SETTINGS_REPORT}` and accessible via `get`/`set` — no token changes are required.
+
+```
+{DEVICE_SETTINGS get wifi.ssid}
+{DEVICE_SETTINGS set led.enabled 0}
+{DEVICE_SETTINGS set timing.between_keys 10}
+{DEVICE_SETTINGS_REPORT}
+{SD_WRITE "/audit.txt" {DEVICE_SETTINGS_REPORT}}
+{SET cur_map {DEVICE_SETTINGS get keymap}}{cur_map}{ENTER}
 ```
 
 ---
@@ -535,7 +620,7 @@ Requires WiFi + NTP sync to have occurred before use. The code is computed at th
 {SET code {TOTP myaccount}}{code}{ENTER}
 ```
 
-Add accounts via the **TOTProx** cardputer app or the web interface (TOTProx tab). Account secrets are encrypted on-device using the credential store key (`kprox_totp` NVS namespace).
+Add accounts via the **TOTProx** app (see [CARDPUTER_APPS.md](CARDPUTER_APPS.md)) or the web interface (TOTProx tab). Account secrets are encrypted on-device using the credential store key (`kprox_totp` NVS namespace).
 
 **The credential store must be unlocked** to view accounts, add accounts, delete accounts, or evaluate `{TOTP name}` tokens. When the store is locked, `{TOTP name}` resolves to an empty string.
 

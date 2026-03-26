@@ -121,10 +121,16 @@ void AppLauncher::_drawIcon(int appIndex, int screenX, bool selected) {
     disp.setTextSize(1);
     uint16_t labelColor = selected ? TFT_YELLOW : disp.color565(200, 200, 200);
     disp.setTextColor(labelColor, TFT_BLACK);
-    int tw = disp.textWidth(name);
+
+    // Truncate label to fit within the slot width, preventing overlap with neighbours
+    String label = name;
+    while (label.length() > 1 && disp.textWidth(label.c_str()) > slotW - 2)
+        label = label.substring(0, label.length() - 1);
+
+    int tw = disp.textWidth(label.c_str());
     int labelX = screenX + (slotW - tw) / 2;
     int labelY = TOP_MARGIN + ICON_SEL_SIZE + 4;
-    disp.drawString(name, labelX, labelY);
+    disp.drawString(label.c_str(), labelX, labelY);
 }
 
 void AppLauncher::_drawMenu() {

@@ -1,6 +1,6 @@
 # KProx Script (.kps) Language Reference
 
-KProx Script is a line-oriented scripting language that runs directly on the KProx device. Scripts are stored as `.kps` files on the SD card and executed via `{SD_EXEC /path/to/script.kps}` from any token string, the KPScript cardputer app, or the KPScript web editor.
+KProx Script is a line-oriented scripting language that runs directly on the KProx device. Scripts are stored as `.kps` files on the SD card and executed via `{SD_EXEC /path/to/script.kps}` from any token string, the KPScript app (see [CARDPUTER_APPS.md](CARDPUTER_APPS.md)), or the KPScript web editor.
 
 Every `{TOKEN}` from the Token Reference works inside KPS string expressions. Variables are accessed as `${varname}`.
 
