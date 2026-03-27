@@ -284,6 +284,152 @@ void loadAppLayout(int numApps) {
     }
 }
 
+void saveAllSettings() {
+    saveWiFiSettings();
+    saveWifiEnabledSettings();
+    saveBtSettings();
+    saveUSBSettings();
+    saveUSBIdentitySettings();
+    saveApiKeySettings();
+    saveUtcOffsetSettings();
+    saveLEDSettings();
+    saveKeymapSettings();
+    saveSinkSettings();
+    saveTimingSettings();
+    saveHostnameSettings();
+    saveDefaultAppSettings();
+    saveAppLayout();
+    saveCsSecuritySettings();
+    saveCsStorageLocation();
+    saveBootRegSettings();
+    saveTimerProxSettings();
+    saveDisplaySettings();
+}
+
+void serializeAllSettings(JsonObject& obj) {
+    obj["wifiSSID"]               = wifiSSID;
+    obj["wifiPassword"]           = wifiPassword;
+    obj["wifiEnabled"]            = wifiEnabled;
+    obj["bluetoothEnabled"]       = bluetoothEnabled;
+    obj["bleKeyboardEnabled"]     = bleKeyboardEnabled;
+    obj["bleMouseEnabled"]        = bleMouseEnabled;
+    obj["bleIntlKeyboardEnabled"] = bleIntlKeyboardEnabled;
+#ifdef BOARD_HAS_USB_HID
+    obj["usbEnabled"]             = usbEnabled;
+    obj["usbKeyboardEnabled"]     = usbKeyboardEnabled;
+    obj["usbMouseEnabled"]        = usbMouseEnabled;
+    obj["usbIntlKeyboardEnabled"] = usbIntlKeyboardEnabled;
+    obj["fido2Enabled"]           = fido2Enabled;
+#endif
+    obj["usbManufacturer"]        = usbManufacturer;
+    obj["usbProduct"]             = usbProduct;
+    obj["hostnameStr"]            = hostnameStr;
+    obj["usbSerialNumber"]        = usbSerialNumber;
+    obj["apiKey"]                 = apiKey;
+    obj["utcOffsetSeconds"]       = utcOffsetSeconds;
+    obj["ledEnabled"]             = ledEnabled;
+    obj["ledColorR"]              = ledColorR;
+    obj["ledColorG"]              = ledColorG;
+    obj["ledColorB"]              = ledColorB;
+    obj["activeKeymap"]           = activeKeymap;
+    obj["maxSinkSize"]            = maxSinkSize;
+    obj["keyPressDelay"]          = g_keyPressDelay;
+    obj["keyReleaseDelay"]        = g_keyReleaseDelay;
+    obj["betweenKeysDelay"]       = g_betweenKeysDelay;
+    obj["betweenSendTextDelay"]   = g_betweenSendTextDelay;
+    obj["specialKeyDelay"]        = g_specialKeyDelay;
+    obj["tokenDelay"]             = g_tokenDelay;
+    obj["defaultApp"]             = defaultAppIndex;
+    obj["csAutoLockSecs"]         = csAutoLockSecs;
+    obj["csAutoWipeAttempts"]     = csAutoWipeAttempts;
+    obj["csStorageLocation"]      = csStorageLocation;
+    obj["bootRegEnabled"]         = bootRegEnabled;
+    obj["bootRegIndex"]           = bootRegIndex;
+    obj["bootRegLimit"]           = bootRegLimit;
+    obj["bootRegFiredCount"]      = bootRegFiredCount;
+    obj["timerProxRegIdx"]        = timerProxRegIdx;
+    obj["timerProxFireH"]         = timerProxFireH;
+    obj["timerProxFireM"]         = timerProxFireM;
+    obj["timerProxFireS"]         = timerProxFireS;
+    obj["timerProxHaltH"]         = timerProxHaltH;
+    obj["timerProxHaltM"]         = timerProxHaltM;
+    obj["timerProxHaltS"]         = timerProxHaltS;
+    obj["timerProxRepH"]          = timerProxRepH;
+    obj["timerProxRepM"]          = timerProxRepM;
+    obj["timerProxRepS"]          = timerProxRepS;
+    obj["displayBrightness"]      = g_displayBrightness;
+    obj["screenTimeoutMs"]        = (uint32_t)g_screenTimeoutMs;
+
+    JsonArray orderArr = obj["appOrder"].to<JsonArray>();
+    JsonArray hidArr   = obj["appHidden"].to<JsonArray>();
+    for (size_t i = 0; i < appOrder.size(); i++) {
+        orderArr.add(appOrder[i]);
+        hidArr.add(i < appHidden.size() ? appHidden[i] : false);
+    }
+}
+
+void deserializeAllSettings(const JsonObject& obj) {
+    if (!obj["wifiSSID"].isNull())     wifiSSID     = obj["wifiSSID"].as<String>();
+    if (!obj["wifiPassword"].isNull()) wifiPassword = obj["wifiPassword"].as<String>();
+    wifiEnabled            = obj["wifiEnabled"]            | wifiEnabled;
+    bluetoothEnabled       = obj["bluetoothEnabled"]       | bluetoothEnabled;
+    bleKeyboardEnabled     = obj["bleKeyboardEnabled"]     | bleKeyboardEnabled;
+    bleMouseEnabled        = obj["bleMouseEnabled"]        | bleMouseEnabled;
+    bleIntlKeyboardEnabled = obj["bleIntlKeyboardEnabled"] | bleIntlKeyboardEnabled;
+#ifdef BOARD_HAS_USB_HID
+    usbEnabled             = obj["usbEnabled"]             | usbEnabled;
+    usbKeyboardEnabled     = obj["usbKeyboardEnabled"]     | usbKeyboardEnabled;
+    usbMouseEnabled        = obj["usbMouseEnabled"]        | usbMouseEnabled;
+    usbIntlKeyboardEnabled = obj["usbIntlKeyboardEnabled"] | usbIntlKeyboardEnabled;
+    fido2Enabled           = obj["fido2Enabled"]           | fido2Enabled;
+#endif
+    if (!obj["usbManufacturer"].isNull())   usbManufacturer  = obj["usbManufacturer"].as<String>();
+    if (!obj["usbProduct"].isNull())        usbProduct       = obj["usbProduct"].as<String>();
+    if (!obj["hostnameStr"].isNull())       { hostnameStr = obj["hostnameStr"].as<String>(); hostname = hostnameStr.c_str(); }
+    if (!obj["usbSerialNumber"].isNull())   usbSerialNumber  = obj["usbSerialNumber"].as<String>();
+    if (!obj["apiKey"].isNull())            apiKey           = obj["apiKey"].as<String>();
+    utcOffsetSeconds       = obj["utcOffsetSeconds"]       | utcOffsetSeconds;
+    ledEnabled             = obj["ledEnabled"]             | ledEnabled;
+    ledColorR              = obj["ledColorR"]              | ledColorR;
+    ledColorG              = obj["ledColorG"]              | ledColorG;
+    ledColorB              = obj["ledColorB"]              | ledColorB;
+    if (!obj["activeKeymap"].isNull())      activeKeymap     = obj["activeKeymap"].as<String>();
+    maxSinkSize            = obj["maxSinkSize"]            | maxSinkSize;
+    g_keyPressDelay        = obj["keyPressDelay"]          | g_keyPressDelay;
+    g_keyReleaseDelay      = obj["keyReleaseDelay"]        | g_keyReleaseDelay;
+    g_betweenKeysDelay     = obj["betweenKeysDelay"]       | g_betweenKeysDelay;
+    g_betweenSendTextDelay = obj["betweenSendTextDelay"]   | g_betweenSendTextDelay;
+    g_specialKeyDelay      = obj["specialKeyDelay"]        | g_specialKeyDelay;
+    g_tokenDelay           = obj["tokenDelay"]             | g_tokenDelay;
+    defaultAppIndex        = obj["defaultApp"]             | defaultAppIndex;
+    csAutoLockSecs         = obj["csAutoLockSecs"]         | csAutoLockSecs;
+    csAutoWipeAttempts     = obj["csAutoWipeAttempts"]     | csAutoWipeAttempts;
+    if (!obj["csStorageLocation"].isNull()) csStorageLocation = obj["csStorageLocation"].as<String>();
+    bootRegEnabled         = obj["bootRegEnabled"]         | bootRegEnabled;
+    bootRegIndex           = obj["bootRegIndex"]           | bootRegIndex;
+    bootRegLimit           = obj["bootRegLimit"]           | bootRegLimit;
+    bootRegFiredCount      = obj["bootRegFiredCount"]      | bootRegFiredCount;
+    timerProxRegIdx        = obj["timerProxRegIdx"]        | timerProxRegIdx;
+    timerProxFireH         = obj["timerProxFireH"]         | timerProxFireH;
+    timerProxFireM         = obj["timerProxFireM"]         | timerProxFireM;
+    timerProxFireS         = obj["timerProxFireS"]         | timerProxFireS;
+    timerProxHaltH         = obj["timerProxHaltH"]         | timerProxHaltH;
+    timerProxHaltM         = obj["timerProxHaltM"]         | timerProxHaltM;
+    timerProxHaltS         = obj["timerProxHaltS"]         | timerProxHaltS;
+    timerProxRepH          = obj["timerProxRepH"]          | timerProxRepH;
+    timerProxRepM          = obj["timerProxRepM"]          | timerProxRepM;
+    timerProxRepS          = obj["timerProxRepS"]          | timerProxRepS;
+    g_displayBrightness    = obj["displayBrightness"]      | g_displayBrightness;
+    if (!obj["screenTimeoutMs"].isNull())
+        g_screenTimeoutMs  = obj["screenTimeoutMs"].as<uint32_t>();
+
+    if (obj["appOrder"].is<JsonArray>() && obj["appHidden"].is<JsonArray>()) {
+        appOrder.clear(); appHidden.clear();
+        for (int v  : obj["appOrder"].as<JsonArray>())  appOrder.push_back(v);
+        for (bool v : obj["appHidden"].as<JsonArray>()) appHidden.push_back(v);
+    }
+}
+
 void wipeAllSettings() {
     preferences.begin("kprox", false);
     preferences.clear();

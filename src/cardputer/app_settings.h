@@ -93,6 +93,9 @@ private:
     void            _backupRefresh();
     bool            _backupCreate(bool includeRegs, bool includeSettings);
     bool            _backupRestore(const String& path);
+
+    // SD storage confirmation state
+    bool            _sdConfirmPending = false;
     void _connectWifi();
     void _drawInputField(int x, int y, int w, const String& text, bool active, bool masked = false);
     void _drawToggleRow(int y, bool selected, const char* label, bool enabled,

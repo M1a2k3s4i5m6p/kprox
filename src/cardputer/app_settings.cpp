@@ -1111,15 +1111,60 @@ void AppSettings::_drawPage11() {
         disp.drawString(_editBuf, 4, y);
     }
 
-    _drawBottomBar("up/dn=select  ENTER=apply  fn+</>= page");
+    if (_sdConfirmPending) {
+        int ox = 4, oy = disp.height() - BAR_BOT_H - 58;
+        int ow = disp.width() - 8, oh = 54;
+        uint16_t obg = disp.color565(70, 30, 10);
+        disp.fillRoundRect(ox, oy, ow, oh, 4, obg);
+        disp.drawRoundRect(ox, oy, ow, oh, 4, disp.color565(220, 140, 40));
+        disp.setTextSize(1);
+        disp.setTextColor(TFT_WHITE, obg);
+        disp.drawString("SD database exists!", ox + 4, oy + 4);
+        disp.setTextColor(disp.color565(255, 200, 100), obg);
+        disp.drawString("NVS data migrates to SD then", ox + 4, oy + 16);
+        disp.drawString("NVS is wiped. Delete/rename", ox + 4, oy + 28);
+        disp.drawString("/kprox.kdbx to cancel.", ox + 4, oy + 40);
+        _drawBottomBar("Y = proceed and wipe NVS  N = cancel");
+    } else {
+        _drawBottomBar("up/dn=select  ENTER=apply  fn+</>= page");
+    }
 }
 
 void AppSettings::_handlePage11(KeyInput ki) {
     if (ki.arrowLeft && !_editing) {
-        _page = 10; _toggleSel = 0; _editing = false; _editBuf = ""; _idSaved = false; _needsRedraw = true; return;
+        _page = 10; _toggleSel = 0; _editing = false; _editBuf = ""; _idSaved = false;
+        _sdConfirmPending = false; _needsRedraw = true; return;
     }
     if (ki.arrowRight && !_editing) {
-        _page = 12; _backupSel = 0; _backupScroll = 0; _backupStatus = ""; _backupRefresh(); _needsRedraw = true; return;
+        _page = 12; _backupSel = 0; _backupScroll = 0; _backupStatus = ""; _backupRefresh();
+        _sdConfirmPending = false; _needsRedraw = true; return;
+    }
+
+    // Handle pending SD overwrite confirmation
+    if (_sdConfirmPending) {
+        if (ki.ch == 'y' || ki.ch == 'Y') {
+            _sdConfirmPending = false;
+            // Proceed with switch to SD
+            String oldLoc = csStorageLocation;
+            csStorageLocation = "sd";
+            if (!credStoreLocked) {
+                if (writeKDBX(credStoreRuntimeKey)) {
+                    if (oldLoc == "nvs") { preferences.begin("kprox_db", false); preferences.clear(); preferences.end(); }
+                    saveCsStorageLocation();
+                    _idSaved = true;
+                } else {
+                    csStorageLocation = oldLoc;
+                    _editBuf = "Write failed";
+                }
+            } else {
+                saveCsStorageLocation();
+                _idSaved = true;
+            }
+        } else if (ki.ch == 'n' || ki.ch == 'N' || ki.esc) {
+            _sdConfirmPending = false;
+            _editBuf = "Cancelled";
+        }
+        _needsRedraw = true; return;
     }
 
     if (ki.arrowUp)   { _toggleSel = (_toggleSel - 1 + 3) % 3; _idSaved = false; _editBuf = ""; _needsRedraw = true; return; }
@@ -1153,6 +1198,11 @@ void AppSettings::_handlePage11(KeyInput ki) {
         // Set SD
         if (!sdAvailable()) { _editBuf = "SD not found"; _needsRedraw = true; return; }
         if (csStorageLocation != "sd") {
+            // Warn before overwriting an existing SD database
+            if (sdExists()) {
+                _sdConfirmPending = true;
+                _needsRedraw = true; return;
+            }
             String oldLoc = csStorageLocation;
             csStorageLocation = "sd";
             if (!credStoreLocked) {
@@ -1193,6 +1243,7 @@ void AppSettings::onEnter() {
     _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = "";
     _keymapSaved = false; _dispSel = 0; _dispEditing = false;
     _keymapSel = 0;
+    _sdConfirmPending = false;
     for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } }
     _needsRedraw = true;
 }
@@ -1243,12 +1294,13 @@ void AppSettings::onUpdate() {
         _needsRedraw = false;
     }
 
-    bool isEditing = _wifiEditing || _editing || _dispEditing;
+    bool isEditing = _wifiEditing || _editing;
     KeyInput ki = pollKeys(isEditing);
     if (!ki.anyKey) return;
     uiManager.notifyInteraction();
 
     if (ki.esc) {
+        if (_sdConfirmPending) { _sdConfirmPending = false; _editBuf = "Cancelled"; _needsRedraw = true; return; }
         if (_wifiEditing) { _wifiEditing = false; _wifiInputBuf = ""; _needsRedraw = true; return; }
         if (_editing)     { _editing = false; _editBuf = ""; _needsRedraw = true; return; }
         uiManager.returnToLauncher();
@@ -1337,28 +1389,7 @@ bool AppSettings::_backupCreate(bool includeRegs, bool includeSettings) {
 
     if (includeSettings) {
         JsonObject s = doc["settings"].to<JsonObject>();
-        s["wifiSSID"]           = wifiSSID;
-        s["wifiPassword"]       = wifiPassword;
-        s["hostname"]           = hostname;
-        s["deviceName"]         = deviceName;
-        s["bluetoothEnabled"]   = bluetoothEnabled;
-        s["usbEnabled"]         = usbEnabled;
-        s["ledEnabled"]         = ledEnabled;
-        s["defaultApp"]         = defaultAppIndex;
-        s["maxSinkSize"]        = maxSinkSize;
-        s["csAutoLockSecs"]     = csAutoLockSecs;
-        s["csAutoWipeAttempts"] = csAutoWipeAttempts;
-        s["csStorageLocation"]  = csStorageLocation;
-        s["bootRegEnabled"]     = bootRegEnabled;
-        s["bootRegIndex"]       = bootRegIndex;
-        s["bootRegLimit"]       = bootRegLimit;
-        // appOrder / appHidden
-        JsonArray orderArr = s["appOrder"].to<JsonArray>();
-        JsonArray hidArr   = s["appHidden"].to<JsonArray>();
-        for (size_t i = 0; i < appOrder.size(); i++) {
-            orderArr.add(appOrder[i]);
-            hidArr.add(i < appHidden.size() ? appHidden[i] : false);
-        }
+        serializeAllSettings(s);
     }
 
     String json;
@@ -1393,39 +1424,9 @@ bool AppSettings::_backupRestore(const String& filename) {
     }
 
     if (doc["settings"].is<JsonObject>()) {
-        JsonObject s = doc["settings"];
-        if (!s["wifiSSID"].isNull()) wifiSSID = s["wifiSSID"].as<String>();
-        if (!s["wifiPassword"].isNull()) wifiPassword = s["wifiPassword"].as<String>();
-        if (!s["hostname"].isNull()) { hostnameStr = s["hostname"].as<String>(); hostname = hostnameStr.c_str(); }
-        if (!s["deviceName"].isNull()) { static String _devNameBuf; _devNameBuf = s["deviceName"].as<String>(); deviceName = _devNameBuf.c_str(); }
-        bluetoothEnabled = s["bluetoothEnabled"] | bluetoothEnabled;
-        usbEnabled = s["usbEnabled"] | usbEnabled;
-        ledEnabled = s["ledEnabled"] | ledEnabled;
-        defaultAppIndex = s["defaultApp"] | defaultAppIndex;
-        maxSinkSize = s["maxSinkSize"] | maxSinkSize;
-        csAutoLockSecs = s["csAutoLockSecs"] | csAutoLockSecs;
-        csAutoWipeAttempts = s["csAutoWipeAttempts"] | csAutoWipeAttempts;
-        if (!s["csStorageLocation"].isNull()) csStorageLocation = s["csStorageLocation"].as<String>();
-        bootRegEnabled = s["bootRegEnabled"] | bootRegEnabled;
-        bootRegIndex = s["bootRegIndex"] | bootRegIndex;
-        bootRegLimit = s["bootRegLimit"] | bootRegLimit;
-        if (s["appOrder"].is<JsonArray>() && s["appHidden"].is<JsonArray>()) {
-            appOrder.clear(); appHidden.clear();
-            for (int v : s["appOrder"].as<JsonArray>()) appOrder.push_back(v);
-            for (bool v : s["appHidden"].as<JsonArray>()) appHidden.push_back(v);
-        }
-        saveWiFiSettings();
-        saveWifiEnabledSettings();
-        saveBtSettings();
-        saveUSBSettings();
-        saveUSBIdentitySettings();
-        saveHostnameSettings();
-        saveSinkSettings();
-        saveLEDSettings();
-        saveCsSecuritySettings();
-        saveBootRegSettings();
-        saveAppLayout();
-        saveDefaultAppSettings();
+        JsonObject s = doc["settings"].as<JsonObject>();
+        deserializeAllSettings(s);
+        saveAllSettings();
     }
 
     _backupStatus = "Restored"; _backupStatusOk = true;
@@ -1629,29 +1630,35 @@ void AppSettings::_drawPage14() {
 
     // Brightness row
     {
-        bool sel = (_dispSel == 0);
-        uint16_t bg = sel ? d.color565(20, 60, 120) : (uint16_t)0x0000;
+        bool sel     = (_dispSel == 0);
+        bool editing = (sel && _dispEditing);
+        uint16_t bg  = editing ? d.color565(20, 80, 20)
+                     : sel    ? d.color565(20, 60, 120)
+                     :          (uint16_t)0x0000;
         if (sel) d.fillRect(0, y - 2, d.width(), 14, bg);
-        d.setTextColor(sel ? TFT_WHITE : d.color565(160,160,160), bg);
-        d.drawString("Brightness:", 4, y);
-        // Draw bar
-        int barX = 90, barW = d.width() - barX - 8;
-        d.drawRect(barX, y, barW, 10, d.color565(60,60,60));
+        d.setTextColor(sel ? TFT_WHITE : d.color565(160, 160, 160), bg);
+        d.drawString(editing ? "> Brightness:" : "  Brightness:", 4, y);
+        int barX = 100, barW = d.width() - barX - 28;
+        d.drawRect(barX, y, barW, 10, d.color565(60, 60, 60));
         int fill = (int)((long)barW * g_displayBrightness / 255);
-        if (fill > 0) d.fillRect(barX + 1, y + 1, fill, 8, d.color565(80,160,255));
+        if (fill > 0) d.fillRect(barX + 1, y + 1, fill,
+                                  8, editing ? d.color565(80, 220, 80) : d.color565(80, 160, 255));
         char vbuf[8]; snprintf(vbuf, sizeof(vbuf), "%d", g_displayBrightness);
-        d.setTextColor(sel ? TFT_WHITE : d.color565(140,140,140), 0x0000);
+        d.setTextColor(editing ? TFT_GREEN : sel ? TFT_WHITE : d.color565(140, 140, 140), 0x0000);
         d.drawString(vbuf, barX + barW + 3, y);
         y += 22;
     }
 
     // Timeout row
     {
-        bool sel = (_dispSel == 1);
-        uint16_t bg = sel ? d.color565(20, 60, 120) : (uint16_t)0x0000;
+        bool sel     = (_dispSel == 1);
+        bool editing = (sel && _dispEditing);
+        uint16_t bg  = editing ? d.color565(20, 80, 20)
+                     : sel    ? d.color565(20, 60, 120)
+                     :          (uint16_t)0x0000;
         if (sel) d.fillRect(0, y - 2, d.width(), 14, bg);
-        d.setTextColor(sel ? TFT_WHITE : d.color565(160,160,160), bg);
-        d.drawString("Timeout:", 4, y);
+        d.setTextColor(sel ? TFT_WHITE : d.color565(160, 160, 160), bg);
+        d.drawString(editing ? "> Timeout:" : "  Timeout:", 4, y);
 
         static const unsigned long timeoutOpts[]  = {5000, 10000, 30000, 60000};
         static const char*         timeoutLabels[] = {"5s", "10s", "30s", "1min"};
@@ -1660,8 +1667,9 @@ void AppSettings::_drawPage14() {
         int tx = 80;
         for (int i = 0; i < TIMEOUT_COUNT; i++) {
             bool active = (g_screenTimeoutMs == timeoutOpts[i]);
-            uint16_t tbg = active ? d.color565(30, 90, 30) : d.color565(35,35,35);
-            uint16_t ttc = active ? TFT_GREEN : d.color565(150,150,150);
+            uint16_t tbg = active ? (editing ? d.color565(20, 100, 20) : d.color565(30, 90, 30))
+                                  : d.color565(35, 35, 35);
+            uint16_t ttc = active ? TFT_GREEN : d.color565(150, 150, 150);
             int tw = d.textWidth(timeoutLabels[i]) + 6;
             d.fillRoundRect(tx, y, tw, 12, 2, tbg);
             d.setTextColor(ttc, tbg);
@@ -1671,24 +1679,23 @@ void AppSettings::_drawPage14() {
         y += 22;
     }
 
-    _drawBottomBar("up/dn=row  ENTER=edit  </>=adjust  </>=page");
+    if (_dispEditing)
+        _drawBottomBar("</> adjust  ENTER save  ESC cancel");
+    else
+        _drawBottomBar("up/dn=row  ENTER=edit  fn+</>= page");
 }
 
 void AppSettings::_handlePage14(KeyInput ki) {
-    if (ki.arrowUp || ki.arrowDown) {
-        _dispSel = (_dispSel + 1) % 2;
-        _dispEditing = false;
-        _needsRedraw = true;
-        return;
-    }
-
-    // ENTER toggles edit mode on any row
-    if (ki.enter) { _dispEditing = !_dispEditing; _needsRedraw = true; return; }
-
     if (_dispEditing) {
+        // ESC or ENTER exits edit mode (changes are saved on each adjustment)
+        if (ki.esc || ki.enter) {
+            _dispEditing = false;
+            _needsRedraw = true;
+            return;
+        }
         if (_dispSel == 0) {
-            if (ki.arrowLeft)  { g_displayBrightness = max(16,  g_displayBrightness - 16); }
-            if (ki.arrowRight) { g_displayBrightness = min(255, g_displayBrightness + 16); }
+            if (ki.arrowLeft)  g_displayBrightness = max(16,  g_displayBrightness - 16);
+            if (ki.arrowRight) g_displayBrightness = min(255, g_displayBrightness + 16);
             if (ki.arrowLeft || ki.arrowRight) {
                 M5Cardputer.Display.setBrightness((uint8_t)g_displayBrightness);
                 saveDisplaySettings();
@@ -1707,10 +1714,28 @@ void AppSettings::_handlePage14(KeyInput ki) {
                 _needsRedraw = true;
             }
         }
-    } else {
-        // Not editing — left/right navigates pages
-        if (ki.arrowLeft)  { _page = 13; for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } } _keymapSaved = false; _needsRedraw = true; return; }
-        if (ki.arrowRight) { _page = 0; _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = ""; _wifiStatusMsg = ""; _wifiEditing = false; _wifiSel = 0; _needsRedraw = true; return; }
+        return;
+    }
+
+    // Not editing
+    if (ki.arrowUp || ki.arrowDown) {
+        _dispSel = (_dispSel + 1) % 2;
+        _needsRedraw = true;
+        return;
+    }
+    if (ki.enter) {
+        _dispEditing = true;
+        _needsRedraw = true;
+        return;
+    }
+    if (ki.arrowLeft)  {
+        _page = 13;
+        for (int i = 0; i < S_BUILTIN_COUNT; i++) { if (activeKeymap == s_builtinKeymapIds[i]) { _keymapSel = i; break; } }
+        _keymapSaved = false; _needsRedraw = true; return;
+    }
+    if (ki.arrowRight) {
+        _page = 0; _wifiState = WS_SSID; _wifiInputBuf = ""; _newSSID = "";
+        _wifiStatusMsg = ""; _wifiEditing = false; _wifiSel = 0; _needsRedraw = true; return;
     }
 }
 

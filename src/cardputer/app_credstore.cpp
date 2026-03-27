@@ -287,8 +287,10 @@ void AppCredStore::_handlePage0(CSRawKey rk) {
     bool totpOnly = (gate == CSGateMode::TOTP_ONLY);
 
     if (!locked) {
-        // Unlocked: ENTER to confirm lock, ESC to exit
+        // Unlocked: navigate pages, ENTER to confirm lock, ESC to exit
         if (rk.esc)   { uiManager.returnToLauncher(); return; }
+        if (rk.ch==',') { _page=NUM_PAGES-1; _needsRedraw=true; return; }
+        if (rk.ch=='/')  { _page=1;           _needsRedraw=true; return; }
         if (rk.enter) { _confirmingLock=true; _needsRedraw=true; }
         return;
     }

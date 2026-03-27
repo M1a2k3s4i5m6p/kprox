@@ -2300,12 +2300,15 @@ function _updateCsNtpBadge(timeReady) {
     });
 }
 
+let _csLastData = {};
+
 async function csRefresh() {
     if (!isConnected) return;
     const endpoint = getApiEndpoint();
     try {
         const resp = await apiFetch(`${endpoint}/api/credstore`, { method: 'GET' });
         const data = await resp.json();
+        _csLastData = data;
         const badge = document.getElementById('credStoreLockBadge');
         const count = document.getElementById('credStoreCountLabel');
         const list  = document.getElementById('csCredentialList');
@@ -2342,9 +2345,11 @@ async function csRefresh() {
         // Failed attempts badge — update both credstore tab and global sidebar
         _updateCsFailedBadge(data.failed_attempts || 0, data.auto_wipe_at || 0);
         // Storage location badges
-        const locBadge  = document.getElementById('csStorageLocationBadge');
-        const sdBadge   = document.getElementById('csSdAvailableBadge');
-        const fmtBtn    = document.getElementById('csSdFormatBtn');
+        const locBadge    = document.getElementById('csStorageLocationBadge');
+        const sdBadge     = document.getElementById('csSdAvailableBadge');
+        const nvsDbBadge  = document.getElementById('csNvsHasDbBadge');
+        const sdDbBadge   = document.getElementById('csSdHasDbBadge');
+        const fmtBtn      = document.getElementById('csSdFormatBtn');
         if (locBadge) {
             const loc = data.storage_location || 'nvs';
             locBadge.textContent  = `Location: ${loc === 'sd' ? 'SD card' : 'NVS (flash)'}`;
@@ -2356,6 +2361,20 @@ async function csRefresh() {
             sdBadge.textContent  = avail ? 'SD: available' : 'SD: not found';
             sdBadge.style.background = avail ? '#198754' : '#6c757d';
             sdBadge.style.color = '#fff';
+        }
+        if (nvsDbBadge) {
+            const has = !!data.nvs_has_db;
+            nvsDbBadge.style.display    = '';
+            nvsDbBadge.textContent      = has ? 'NVS: has db' : 'NVS: empty';
+            nvsDbBadge.style.background = has ? '#6f42c1' : '#343a40';
+            nvsDbBadge.style.color      = '#fff';
+        }
+        if (sdDbBadge) {
+            const has = !!data.sd_has_db;
+            sdDbBadge.style.display    = data.sd_available ? '' : 'none';
+            sdDbBadge.textContent      = has ? 'SD: has db' : 'SD: empty';
+            sdDbBadge.style.background = has ? '#6f42c1' : '#343a40';
+            sdDbBadge.style.color      = '#fff';
         }
         if (fmtBtn) fmtBtn.style.display = data.sd_available ? '' : 'none';
 
@@ -2487,9 +2506,35 @@ async function csLock() {
 
 async function csSetStorageLocation(loc) {
     if (!isConnected) return;
+    const cur      = _csLastData.storage_location || 'nvs';
+    const sdHasDb  = !!_csLastData.sd_has_db;
+    const nvsHasDb = !!_csLastData.nvs_has_db;
+
+    if (loc === cur) return;
+
+    if (loc === 'sd' && sdHasDb) {
+        const msg =
+            'An existing database is already on the SD card.\n\n' +
+            'Switching will migrate your NVS database to the SD card, ' +
+            'overwriting the file /kprox.kdbx.\n\n' +
+            'To keep the SD file, cancel and rename or delete /kprox.kdbx first.\n\n' +
+            'Proceed and overwrite the SD database?';
+        if (!confirm(msg)) return;
+    }
+
+    if (loc === 'nvs' && nvsHasDb) {
+        const msg =
+            'An existing database is already in NVS (built-in flash).\n\n' +
+            'Switching will migrate your SD database to NVS, ' +
+            'overwriting the data currently stored there.\n\n' +
+            'Proceed and overwrite the NVS database?';
+        if (!confirm(msg)) return;
+    }
+
     try {
         const resp = await apiFetch(`${getApiEndpoint()}/api/credstore`, {
-            method: 'POST', body: JSON.stringify({ action: 'set_storage_location', location: loc })
+            method: 'POST',
+            body: JSON.stringify({ action: 'set_storage_location', location: loc, force: true })
         });
         const data = await resp.json();
         if (resp.ok) {

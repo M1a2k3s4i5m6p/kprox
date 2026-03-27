@@ -1563,12 +1563,14 @@ void handleCredStore() {
         doc["locked"] = credStoreLocked;
         doc["count"]  = credStoreCount();
         {
-            bool hasDb = (csStorageLocation == "sd")
-                ? sdExists()
-                : ([]{ preferences.begin("kprox_db", true);
-                       bool h = preferences.getInt("cs_db_n", 0) > 0;
-                       preferences.end(); return h; })();
+            bool nvsHasDb = ([]{ preferences.begin("kprox_db", true);
+                                  bool h = preferences.getInt("cs_db_n", 0) > 0;
+                                  preferences.end(); return h; })();
+            bool sdHasDb  = sdExists();
+            bool hasDb    = (csStorageLocation == "sd") ? sdHasDb : nvsHasDb;
             doc["has_db"]           = hasDb;
+            doc["nvs_has_db"]       = nvsHasDb;
+            doc["sd_has_db"]        = sdHasDb;
             doc["storage_location"] = csStorageLocation;
             doc["sd_available"]     = sdAvailable();
         }
@@ -1716,6 +1718,21 @@ void handleCredStore() {
                     if (oldLoc == "sd") sdRemove();
                     else { preferences.begin("kprox_db", false); preferences.clear(); preferences.end(); }
                 } else {
+                    // Locked — pointer-only move. Warn if destination already has data
+                    // (the web app confirms before calling, but enforce server-side too
+                    //  unless the client explicitly passes force:true).
+                    bool force = doc["force"] | false;
+                    if (!force) {
+                        bool destHasDb = (loc == "sd")
+                            ? sdExists()
+                            : ([]{ preferences.begin("kprox_db", true);
+                                   bool h = preferences.getInt("cs_db_n", 0) > 0;
+                                   preferences.end(); return h; })();
+                        if (destHasDb) {
+                            sendEncrypted(409, "{\"error\":\"Destination already has a database\",\"code\":\"dest_has_db\"}");
+                            server.client().stop(); requestComplete(); return;
+                        }
+                    }
                     csStorageLocation = loc;
                 }
                 saveCsStorageLocation();

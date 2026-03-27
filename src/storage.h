@@ -56,4 +56,8 @@ void loadTimerProxSettings();
 void saveDisplaySettings();
 void loadDisplaySettings();
 
+void saveAllSettings();
+void serializeAllSettings(JsonObject& obj);
+void deserializeAllSettings(const JsonObject& obj);
+
 void wipeAllSettings();

@@ -88,8 +88,16 @@ ota: build-ota ## Build and upload firmware + filesystem via OTA
 	@echo "${GREEN}Full OTA complete.${NC}"
 	make filesystem_check
 
-## clean: Remove all build artifacts and node modules
-.PHONY: clean
+ESPTOOL := $(HOME)/.platformio/packages/tool-esptoolpy/esptool.py
+
+## wipe: Completely erase internal flash (NVS, firmware, SPIFFS, OTA data)
+.PHONY: wipe
+wipe: ## Erase entire internal flash — device will need a full reflash afterwards
+	@echo "${YELLOW}Erasing entire internal flash...${NC}"
+	python3 $(ESPTOOL) --chip esp32s3 erase_flash
+	@echo "${GREEN}Flash erased. Run 'make build' to reflash.${NC}"
+
+
 clean: ## Remove data, node_modules, and .pio folders
 	rm -rf data node_modules .pio package-lock.json *.bin
 	cd android && make clean
