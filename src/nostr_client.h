@@ -61,6 +61,15 @@ public:
 
     void setLocalName(const String& name) { _localName = name; }
 
+    // Publish kind 0 metadata (name/display_name) so others can resolve our handle
+    bool publishMetadata(const String& privkeyHex, const String& name);
+
+    // Subscribe to kind 0 metadata for a list of full pubkeys (comma-separated or array)
+    bool subscribeMetadata(const String& pubkeys);
+
+    // Returns comma-separated full pubkeys of all senders currently in the feed
+    String seenPubkeys() const;
+
     // Remove the most recently published message from the local feed.
     // Call this when the relay rejects the event so it doesn't stay in the feed.
     void removePendingMessage();
@@ -81,6 +90,16 @@ private:
     String        _lastRelayMsg;
     String        _localName;   // display name for locally published messages
     String        _rxBuf;
+
+    // Name cache: maps pubkey-prefix (8 chars) → display name from kind 0 events
+    static constexpr int NAME_CACHE_SIZE = 16;
+    struct NameEntry { char pubkey64[65]; char name[17]; };
+    NameEntry _nameCache[NAME_CACHE_SIZE];
+    int       _nameCacheCount = 0;
+    String    _metaSubId;     // subscription id for kind 0 requests
+
+    void _cacheSetName(const char* pubkey64, const char* name);
+    const char* _cacheLookupName(const char* pubkey8) const;
     String        _pendingEventId;  // event id of the most recently published event
     bool          _lastPublishOk = true;
 

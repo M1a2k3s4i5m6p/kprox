@@ -686,10 +686,33 @@ void NostrClient::_processEvent(const String& json) {
     const char* pubkey  = ev["pubkey"] | "";
     const char* eventId = ev["id"]     | "";
     const char* content = ev["content"] | "";
-    uint32_t ts = ev["created_at"] | (uint32_t)0;
+    int         kind    = ev["kind"]    | 1;
+    uint32_t    ts      = ev["created_at"] | (uint32_t)0;
 
-    if (strlen(pubkey) < 8 || strlen(content) == 0) return;
-    _pushMessage(pubkey, eventId, ts, content);
+    if (strlen(pubkey) < 8) return;
+
+    // kind 0 = metadata — extract name and update cache
+    if (kind == 0) {
+        JsonDocument meta;
+        if (!deserializeJson(meta, content)) {
+            const char* n = meta["name"] | meta["display_name"] | (const char*)nullptr;
+            if (n && *n) _cacheSetName(pubkey, n);
+        }
+        return;
+    }
+
+    if (strlen(content) == 0) return;
+
+    // Ensure this pubkey is in the name cache so seenPubkeys() can return it.
+    // If we already have a name, use it; otherwise seed with pubkey prefix.
+    const char* cachedName = _cacheLookupName(pubkey);
+    if (!cachedName) {
+        // Seed with pubkey prefix — will be overwritten when kind 0 arrives
+        char prefix[9]; strncpy(prefix, pubkey, 8); prefix[8] = '\0';
+        _cacheSetName(pubkey, prefix);
+        cachedName = nullptr;  // not a real name yet
+    }
+    _pushMessage(pubkey, eventId, ts, content, cachedName);
 }
 
 // ---- Public API -------------------------------------------------------------
@@ -752,12 +775,135 @@ void NostrClient::removePendingMessage() {
     const char* prefix = _pendingEventId.c_str();
     for (int i = 0; i < _msgCount; i++) {
         if (strncmp(_msgs[i].eventId, prefix, 8) == 0) {
-            // Shift remaining messages down
             for (int j = i; j < _msgCount - 1; j++) _msgs[j] = _msgs[j + 1];
             _msgCount--;
             break;
         }
     }
+}
+
+// ---- Name cache -------------------------------------------------------------
+
+void NostrClient::_cacheSetName(const char* pubkey64, const char* name) {
+    if (!pubkey64 || strlen(pubkey64) < 8 || !name || !*name) return;
+    // Update existing entry
+    for (int i = 0; i < _nameCacheCount; i++) {
+        if (strncmp(_nameCache[i].pubkey64, pubkey64, 8) == 0) {
+            // Store full key if we now have it
+            if (strlen(pubkey64) == 64)
+                strncpy(_nameCache[i].pubkey64, pubkey64, 64);
+            _nameCache[i].pubkey64[64] = '\0';
+            strncpy(_nameCache[i].name, name, 16);
+            _nameCache[i].name[16] = '\0';
+            for (int j = 0; j < _msgCount; j++) {
+                if (strncmp(_msgs[j].pubkey, pubkey64, 8) == 0) {
+                    strncpy(_msgs[j].name, name, 16);
+                    _msgs[j].name[16] = '\0';
+                }
+            }
+            return;
+        }
+    }
+    // Insert new entry (evict oldest if full)
+    int slot = _nameCacheCount < NAME_CACHE_SIZE
+               ? _nameCacheCount++ : NAME_CACHE_SIZE - 1;
+    if (_nameCacheCount == NAME_CACHE_SIZE) {
+        for (int i = 0; i < NAME_CACHE_SIZE - 1; i++) _nameCache[i] = _nameCache[i + 1];
+    }
+    strncpy(_nameCache[slot].pubkey64, pubkey64, 64);
+    _nameCache[slot].pubkey64[64] = '\0';
+    strncpy(_nameCache[slot].name, name, 16);
+    _nameCache[slot].name[16] = '\0';
+    // Back-fill existing messages
+    for (int j = 0; j < _msgCount; j++) {
+        if (strncmp(_msgs[j].pubkey, pubkey64, 8) == 0 &&
+            strncmp(_msgs[j].name, pubkey64, 8) == 0) {
+            strncpy(_msgs[j].name, name, 16);
+            _msgs[j].name[16] = '\0';
+        }
+    }
+}
+
+const char* NostrClient::_cacheLookupName(const char* pubkey8) const {
+    for (int i = 0; i < _nameCacheCount; i++) {
+        if (strncmp(_nameCache[i].pubkey64, pubkey8, 8) == 0)
+            return _nameCache[i].name;
+    }
+    return nullptr;
+}
+
+String NostrClient::seenPubkeys() const {
+    // Collect unique full pubkeys seen in the feed via the name cache
+    String result;
+    for (int i = 0; i < _nameCacheCount; i++) {
+        if (strlen(_nameCache[i].pubkey64) == 64) {
+            if (!result.isEmpty()) result += ',';
+            result += _nameCache[i].pubkey64;
+        }
+    }
+    return result;
+}
+
+bool NostrClient::publishMetadata(const String& privkeyHex, const String& name) {
+    if (_state != NostrState::CONNECTED) return false;
+    if (privkeyHex.length() != 64 || name.isEmpty()) return false;
+
+    // kind 0 content: {"name":"...","display_name":"..."}
+    String content = "{\"name\":\"" + name + "\",\"display_name\":\"" + name + "\"}";
+
+    uint8_t priv[32], pub[32];
+    if (!_fromHex(privkeyHex.c_str(), priv, 32)) return false;
+
+    mbedtls_ecp_group grp; mbedtls_mpi d; mbedtls_ecp_point P;
+    mbedtls_ecp_group_init(&grp); mbedtls_mpi_init(&d); mbedtls_ecp_point_init(&P);
+    bool ok = false;
+    if (mbedtls_ecp_group_load(&grp, MBEDTLS_ECP_DP_SECP256K1) == 0 &&
+        mbedtls_mpi_read_binary(&d, priv, 32) == 0 &&
+        mbedtls_ecp_mul(&grp, &P, &d, &grp.G, _rng, nullptr) == 0) {
+        feedWatchdog();
+        ok = (mbedtls_mpi_write_binary(&P.X, pub, 32) == 0);
+    }
+    mbedtls_ecp_group_free(&grp); mbedtls_mpi_free(&d); mbedtls_ecp_point_free(&P);
+    if (!ok) return false;
+
+    String ev = _buildEventJson(priv, pub, 0, content, "");
+    if (ev.isEmpty()) return false;
+
+    // Cache locally immediately
+    char pubHex[65]; _toHex(pub, 32, pubHex);
+    _cacheSetName(pubHex, name.c_str());
+
+    return _wsSendText("[\"EVENT\"," + ev + "]");
+}
+
+bool NostrClient::subscribeMetadata(const String& pubkeys) {
+    if (_state != NostrState::CONNECTED || pubkeys.isEmpty()) return false;
+
+    // Close previous metadata subscription
+    if (!_metaSubId.isEmpty()) {
+        _wsSendText("[\"CLOSE\",\"" + _metaSubId + "\"]");
+    }
+
+    uint32_t r = esp_random();
+    char sid[9]; snprintf(sid, sizeof(sid), "%08lxm", (unsigned long)r);
+    _metaSubId = String(sid).substring(0, 8) + "m";
+
+    // pubkeys is a comma-separated list of full 64-char hex pubkeys
+    String authorsArr = "[";
+    int start = 0;
+    while (start < (int)pubkeys.length()) {
+        int comma = pubkeys.indexOf(',', start);
+        String pk = (comma < 0) ? pubkeys.substring(start) : pubkeys.substring(start, comma);
+        pk.trim();
+        if (pk.length() == 64) { authorsArr += "\"" + pk + "\","; }
+        if (comma < 0) break;
+        start = comma + 1;
+    }
+    if (authorsArr.endsWith(",")) authorsArr.remove(authorsArr.length() - 1);
+    authorsArr += "]";
+
+    String msg = "[\"REQ\",\"" + _metaSubId + "\",{\"kinds\":[0],\"authors\":" + authorsArr + ",\"limit\":20}]";
+    return _wsSendText(msg);
 }
 
 bool NostrClient::publish(const String& privkeyHex, const String& content,

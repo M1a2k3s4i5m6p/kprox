@@ -23,6 +23,9 @@ help page. Apps can be reordered and hidden via **Settings → App Layout**.
 | **TimerProx** | Countdown timer with deferred register playback. No WiFi or NTP required. |
 | **psCombatProx** | `ps`-command combat mini-game over HID. Requires a root terminal on the target. |
 | **MediaCtrl** | Media transport controls: Prev, Stop, Play/Pause, Next, Mute, Vol −, Vol +. |
+| **NostrProx** | Nostr decentralised chat client. Configurable relay, channel, and display name. Keys stored in CredStore (unlock first). 3 pages: feed + compose, status + keygen, config. |
+| **IRCProx** | IRC chat client. Configurable server, channel, nick, and optional NickServ password (stored in CredStore). TLS and plain connections supported. 3 pages: feed + compose, status + connect, config. |
+| **KProxChat** | KProx community chat on `relay.damus.io / #kprox`. No account needed. |
 | **Settings** | All device configuration across 15 pages: WiFi, BT, USB, timing, layout, security, OTA, and more. |
 
 ## Navigation Quick Reference

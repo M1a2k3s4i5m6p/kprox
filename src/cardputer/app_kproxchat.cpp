@@ -210,6 +210,8 @@ void AppKProxChat::_handlePage0(KeyInput ki) {
                 _compBuf = ""; _compEditing = false;
                 _feedScrollPinned = true;
                 _pendingRelayCheck = true;
+                // Re-publish profile with every message so the name is always on the relay
+                if (!_name.isEmpty()) _client.publishMetadata(_privkey, _name);
             } else {
                 _compStatus = "Send failed"; _compStatusOk = false;
             }
@@ -320,6 +322,9 @@ void AppKProxChat::_handlePage1(KeyInput ki) {
                 preferences.begin(NVS_KPROXCHAT, false);
                 preferences.putString("name", _name);
                 preferences.end();
+                // Publish kind 0 so others see the updated name
+                if (_client.isConnected() && _keysReady)
+                    _client.publishMetadata(_privkey, _name);
                 _statusMsg = "Nick saved"; _statusOk = true;
             }
             _nickEditing = false; _nickBuf = ""; _needsRedraw = true; return;
@@ -347,6 +352,9 @@ void AppKProxChat::_handlePage1(KeyInput ki) {
             } else if (_client.connect(KPROXCHAT_RELAY)) {
                 _client.subscribe(KPROXCHAT_CHANNEL);
                 _lastRefreshMs = millis();
+                if (_keysReady && !_name.isEmpty())
+                    _client.publishMetadata(_privkey, _name);
+                _fetchPendingMetadata = true;
                 _statusMsg = "Connected!"; _statusOk = true;
                 _page = 0;
             } else {
@@ -373,6 +381,7 @@ void AppKProxChat::onEnter() {
     _page             = 0;
     _lastPollMs       = 0;
     _lastRefreshMs    = 0;
+    _fetchPendingMetadata = false;
 
     feedWatchdog();
     _initIdentity();
@@ -404,10 +413,21 @@ void AppKProxChat::onUpdate() {
         if (_client.connect(KPROXCHAT_RELAY)) {
             _client.subscribe(KPROXCHAT_CHANNEL);
             _lastRefreshMs = millis();
+            if (_keysReady && !_name.isEmpty())
+                _client.publishMetadata(_privkey, _name);
+            // Request names for any pubkeys already in feed (from prior session)
+            _fetchPendingMetadata = true;
         } else {
             _statusMsg = _client.lastError(); _statusOk = false;
         }
         _needsRedraw = true;
+    }
+
+    // After feed loads, fetch kind 0 for all seen pubkeys so names resolve
+    if (_fetchPendingMetadata && _client.isConnected()) {
+        String pubkeys = _client.seenPubkeys();
+        if (!pubkeys.isEmpty()) _client.subscribeMetadata(pubkeys);
+        _fetchPendingMetadata = false;
     }
 
     if (now - _lastPollMs >= 50) {
@@ -417,7 +437,6 @@ void AppKProxChat::onUpdate() {
         if (_pendingRelayCheck && !_client.lastRelayMsg().isEmpty()) {
             const String& rm = _client.lastRelayMsg();
             if (rm.startsWith("REJECT")) {
-                // Remove the optimistically-inserted message from the feed
                 _client.removePendingMessage();
                 _compStatus   = rm.length() > 28 ? rm.substring(0, 27) + "~" : rm;
                 _compStatusOk = false;
@@ -433,6 +452,9 @@ void AppKProxChat::onUpdate() {
     if (_client.isConnected() && _lastRefreshMs > 0 &&
         now - _lastRefreshMs >= 60000UL) {
         _client.subscribe(KPROXCHAT_CHANNEL);
+        // Also refresh names for any new senders
+        String pubkeys = _client.seenPubkeys();
+        if (!pubkeys.isEmpty()) _client.subscribeMetadata(pubkeys);
         _lastRefreshMs = now;
         _needsRedraw = true;
     }

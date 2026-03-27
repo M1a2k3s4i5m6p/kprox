@@ -74,6 +74,7 @@ private:
     unsigned long _lastRedrawMs  = 0;
     unsigned long _lastRefreshMs = 0;
     bool          _autoConnect   = false;
+    bool          _fetchPendingMetadata = false;
 
     NostrClient _client;   // own client instance — independent of nostrClient global
 

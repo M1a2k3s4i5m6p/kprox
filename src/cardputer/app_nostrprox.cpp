@@ -646,6 +646,9 @@ void AppNostrProx::_handlePage2(KeyInput ki) {
             if (nostrClient.isConnected()) {
                 nostrClient.subscribe(_channel);
                 _lastRefreshMs = millis();
+                // Re-publish metadata if name changed
+                if (_cfgSel == CF_NAME && _keysLoaded && !_name.isEmpty())
+                    nostrClient.publishMetadata(_privkey, _name);
             }
             _needsRedraw = true; return;
         }
@@ -727,7 +730,9 @@ void AppNostrProx::onUpdate() {
         if (nostrClient.connect(_relay)) {
             nostrClient.subscribe(_channel);
             _lastRefreshMs = millis();
-            _p0Status = ""; // clear on success — feed speaks for itself
+            _p0Status = "";
+            if (_keysLoaded && !_name.isEmpty())
+                nostrClient.publishMetadata(_privkey, _name);
         } else {
             _p0Status = nostrClient.lastError();
             _p0StatusOk = false;
