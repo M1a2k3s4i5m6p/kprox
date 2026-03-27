@@ -1,12 +1,15 @@
 #ifdef BOARD_M5STACK_CARDPUTER
 
 #include "../globals.h"
+#include "../credential_store.h"
 #include "app_ircprox.h"
+#include <mbedtls/base64.h>
 
 namespace Cardputer {
 
 static constexpr const char* DEFAULT_IRC_SERVER  = "irc.libera.chat:6697";
 static constexpr const char* DEFAULT_IRC_CHANNEL = "#kprox";
+static constexpr const char* CS_IRC_PASSWORD     = "__irc__password";
 
 // ---- Config persistence -----------------------------------------------------
 
@@ -22,11 +25,13 @@ void AppIRCProx::_loadConfig() {
         char buf[IRC_NICK_MAX];
         snprintf(buf, sizeof(buf), "KProx%04X", (unsigned)(r & 0xFFFF));
         _nick = String(buf);
-        // Persist the generated default
         preferences.begin("kprox_irc", false);
         preferences.putString("nick", _nick);
         preferences.end();
     }
+
+    // Password lives in CredStore — only load when unlocked
+    _password = credStoreLocked ? "" : credStoreGet(CS_IRC_PASSWORD);
 }
 
 void AppIRCProx::_saveConfig() {
@@ -37,10 +42,15 @@ void AppIRCProx::_saveConfig() {
     preferences.end();
 }
 
+void AppIRCProx::_savePassword() {
+    if (!credStoreLocked)
+        credStoreSet(CS_IRC_PASSWORD, _password);
+}
+
 // ---- IRC TCP layer ----------------------------------------------------------
 
 bool AppIRCProx::_connect() {
-    _disconnect();
+    _disconnect();   // always starts with a clean slate
     _lastError = "";
 
     String host = _server;
@@ -56,21 +66,30 @@ bool AppIRCProx::_connect() {
 
     _state = IrcState::CONNECTING;
 
+    // Allocate a fresh client object — never reuse a stopped TLS context
     if (tls) {
-        _secureCli.setInsecure();
-        _client = &_secureCli;
+        _secureCli = new WiFiClientSecure();
+        _secureCli->setInsecure();
+        _client = _secureCli;
     } else {
-        _client = &_plainCli;
+        _plainCli = new WiFiClient();
+        _client = _plainCli;
     }
 
+    feedWatchdog();
     if (!_client->connect(host.c_str(), port)) {
         _lastError = "TCP connect failed";
         _state = IrcState::ERROR;
+        // Free immediately on failure
+        delete _secureCli; _secureCli = nullptr;
+        delete _plainCli;  _plainCli  = nullptr;
+        _client = nullptr;
         return false;
     }
 
-    _state = IrcState::REGISTERING;
+    _state            = IrcState::REGISTERING;
     _capAcked         = false;
+    _saslPending      = false;
     _historyRequested = false;
     _capLsAccum       = "";
     _joinedChannel    = false;
@@ -88,9 +107,15 @@ void AppIRCProx::_disconnect() {
         _client->stop();
         _client = nullptr;
     }
+    // Free and null the heap objects — next connect gets a fresh context
+    delete _secureCli; _secureCli = nullptr;
+    delete _plainCli;  _plainCli  = nullptr;
+
     _state            = IrcState::DISCONNECTED;
     _rxBuf            = "";
     _lastSysMsg       = "";
+    _histStatus       = "";
+    _saslPending      = false;
     _capAcked         = false;
     _historyRequested = false;
     _joinedChannel    = false;
@@ -101,6 +126,7 @@ void AppIRCProx::_disconnect() {
 void AppIRCProx::_sendRaw(const String& line) {
     if (!_client || !_client->connected()) return;
     _client->print(line + "\r\n");
+    _client->flush();
 }
 
 void AppIRCProx::_processLine(const String& raw) {
@@ -147,36 +173,104 @@ void AppIRCProx::_processLine(const String& raw) {
             if (colon >= 0) _capLsAccum += subCmd.substring(colon + 1) + " ";
 
             if (isLast) {
-                // Build a combined request for everything we want
-                String req = "batch";
-                bool hasCH     = _capLsAccum.indexOf("chathistory") >= 0 &&
-                                 _capLsAccum.indexOf("draft/chathistory") < 0;
-                bool hasDraftCH = _capLsAccum.indexOf("draft/chathistory") >= 0;
-                if (hasCH)      req += " chathistory";
-                if (hasDraftCH) req += " draft/chathistory";
+                String padded   = " " + _capLsAccum + " ";
+                bool hasCH      = padded.indexOf(" chathistory ")       >= 0;
+                bool hasDraftCH = padded.indexOf(" draft/chathistory ") >= 0;
+                bool hasSASL    = padded.indexOf(" sasl ")              >= 0;
                 _capLsAccum = "";
 
-                if (hasCH || hasDraftCH) {
+                String req = "batch";
+                if (hasCH)      req += " chathistory";
+                if (hasDraftCH) req += " draft/chathistory";
+                if (hasSASL && _hasPassword()) { req += " sasl"; _saslPending = true; }
+
+                bool wantCaps = hasCH || hasDraftCH || (hasSASL && _hasPassword());
+                if (wantCaps) {
                     _sendRaw("CAP REQ :" + req);
+                    _histStatus = "CAP REQ sent";
                 } else {
+                    _histStatus = "No chathistory cap";
                     _sendRaw("CAP END");
                 }
             }
         } else if (subCmd.startsWith("ACK")) {
-            // Server granted (some of) our caps — check for any chathistory variant
             int colon = subCmd.indexOf(':');
-            String acked = (colon >= 0) ? subCmd.substring(colon + 1) : subCmd;
-            if (acked.indexOf("chathistory") >= 0)  // covers both variants
+            String acked  = " " + ((colon >= 0) ? subCmd.substring(colon + 1) : subCmd) + " ";
+            if (acked.indexOf(" chathistory ")       >= 0 ||
+                acked.indexOf(" draft/chathistory ") >= 0) {
                 _capAcked = true;
-            _sendRaw("CAP END");
+                _histStatus = "CAP ACK ok";
+            }
+            if (_saslPending && acked.indexOf(" sasl ") >= 0) {
+                _sendRaw("AUTHENTICATE PLAIN");
+                // Don't send CAP END yet — wait for 903 or 904
+            } else {
+                _saslPending = false;
+                _sendRaw("CAP END");
+            }
         } else if (subCmd.startsWith("NAK")) {
+            _saslPending = false;
+            _histStatus = "CAP NAK";
             _sendRaw("CAP END");
         }
         return;
     }
 
-    // ---- BATCH — just ignore start/end, history PRIVMSGs flow through normally ----
-    if (cmd == "BATCH") return;
+    // BATCH: track message count for history diagnostics
+    if (cmd == "BATCH") {
+        if (_historyRequested && params.startsWith("-")) {
+            // Batch closed — update status with how many messages arrived
+            char buf[32];
+            snprintf(buf, sizeof(buf), "History: %d msgs", _msgCount);
+            _histStatus = buf;
+        }
+        return;
+    }
+
+    // ---- SASL PLAIN authentication ----
+    if (cmd == "AUTHENTICATE") {
+        if (_saslPending && params == "+") {
+            // Build PLAIN token: \0nick\0password (base64-encoded)
+            String plain = String('\0') + _nick + String('\0') + _password;
+            size_t inLen = plain.length();
+            size_t outLen = 0;
+            mbedtls_base64_encode(nullptr, 0, &outLen,
+                                  (const unsigned char*)plain.c_str(), inLen);
+            uint8_t* b64 = (uint8_t*)malloc(outLen + 1);
+            if (b64) {
+                mbedtls_base64_encode(b64, outLen + 1, &outLen,
+                                      (const unsigned char*)plain.c_str(), inLen);
+                b64[outLen] = '\0';
+                _sendRaw("AUTHENTICATE " + String((char*)b64));
+                free(b64);
+            } else {
+                _sendRaw("AUTHENTICATE *");  // abort
+                _saslPending = false;
+                _sendRaw("CAP END");
+            }
+        }
+        return;
+    }
+
+    // 900 = RPL_LOGGEDIN (informational, ignore)
+    if (cmd == "900") return;
+
+    // 903 = RPL_SASLSUCCESS
+    if (cmd == "903") {
+        _saslPending = false;
+        _lastSysMsg = "Identified!";
+        _sendRaw("CAP END");
+        return;
+    }
+
+    // 904 = ERR_SASLFAIL
+    if (cmd == "904") {
+        _saslPending = false;
+        _lastError = "SASL auth failed";
+        _sendRaw("AUTHENTICATE *");
+        _sendRaw("CAP END");
+        return;
+    }
 
     if (cmd == "001") {
         _state = IrcState::CONNECTED;
@@ -193,8 +287,10 @@ void AppIRCProx::_processLine(const String& raw) {
             _historyRequested = true;
             String ch = _channel;
             if (!ch.startsWith("#")) ch = "#" + ch;
-            // Try both the stable and draft capability names
             _sendRaw("CHATHISTORY LATEST " + ch + " * 50");
+            _histStatus = "History requested";
+        } else if (!_capAcked) {
+            _histStatus = "No history (cap not acked)";
         }
         _joinedChannel = true;
         return;
@@ -206,6 +302,27 @@ void AppIRCProx::_processLine(const String& raw) {
         String ch = _channel;
         if (!ch.startsWith("#")) ch = "#" + ch;
         _sendRaw("CHATHISTORY LATEST " + ch + " * 50");
+        _histStatus = "History requested (late)";
+        return;
+    }
+
+    // FAIL = IRCv3 standard error reply for CHATHISTORY and other commands
+    if (cmd == "FAIL") {
+        int sp2 = params.indexOf(' ');
+        String failCmd = (sp2 > 0) ? params.substring(0, sp2) : params;
+        if (failCmd == "CHATHISTORY") {
+            String rest = (sp2 > 0) ? params.substring(sp2 + 1) : "";
+            int sp3 = rest.indexOf(' ');
+            String code = (sp3 > 0) ? rest.substring(0, sp3) : rest;
+            _histStatus = "FAIL: " + code;
+        }
+        return;
+    }
+
+    // 421 = ERR_UNKNOWNCOMMAND — server doesn't recognise CHATHISTORY at all
+    if (cmd == "421") {
+        if (params.indexOf("CHATHISTORY") >= 0)
+            _histStatus = "No history (421)";
         return;
     }
 
@@ -263,6 +380,8 @@ void AppIRCProx::_poll() {
     // A TLS ping-timeout leaves connected()=true but reads block forever.
     // Detect it: if we sent a PING and got no data for DEAD_SECS, force-close.
     static constexpr unsigned long DEAD_MS = 40000UL; // 40s > Libera's 30s ping window
+    // Stale-connection guard: track last received byte time.
+    // _lastPingMs=0 disables dead detection until we've actually sent a ping.
     unsigned long now = millis();
     if (_state == IrcState::CONNECTED && _lastPingMs > 0 &&
         now - _lastRxMs > DEAD_MS) {
@@ -535,10 +654,15 @@ void AppIRCProx::_drawPage1() {
 
     if (!_p1Status.isEmpty()) {
         d.setTextColor(_p1StatusOk ? TFT_GREEN : d.color565(220, 80, 80), IP_BG);
-        d.drawString(_p1Status, 4, y);
+        d.drawString(_p1Status, 4, y); y += 12;
     } else if (!_lastError.isEmpty()) {
         d.setTextColor(d.color565(220, 80, 80), IP_BG);
-        d.drawString(_lastError, 4, y);
+        d.drawString(_lastError, 4, y); y += 12;
+    }
+
+    if (!_histStatus.isEmpty()) {
+        d.setTextColor(d.color565(120, 180, 120), IP_BG);
+        d.drawString(_histStatus, 4, y);
     }
 
     const char* connLabel = (_state == IrcState::CONNECTED) ? "ENTER=disconnect" : "ENTER=connect";
@@ -579,26 +703,56 @@ void AppIRCProx::_drawPage2() {
     int y = BAR_H + 4;
     d.setTextSize(1);
 
-    struct { const char* label; const String* val; CfgField field; } rows[CF_COUNT] = {
-        { "Server:",  &_server,  CF_SERVER  },
-        { "Channel:", &_channel, CF_CHANNEL },
-        { "Nick:",    &_nick,    CF_NICK    },
-    };
+    // Each row: 10px label + 14px field box + 2px gap = 26px
+    static constexpr int ROW_H = 26;
+    static constexpr int FLD_H = 13;
 
-    for (int i = 0; i < CF_COUNT; i++) {
+    struct { const char* label; const String* val; } plainRows[3] = {
+        { "Server:",  &_server  },
+        { "Channel:", &_channel },
+        { "Nick:",    &_nick    },
+    };
+    for (int i = 0; i < 3; i++) {
         bool sel  = (_cfgSel == (CfgField)i);
         bool edit = (sel && _cfgEditing);
         uint16_t rowBg = sel ? d.color565(10, 40, 60) : (uint16_t)IP_BG;
-        if (sel) d.fillRect(0, y - 1, d.width(), 28, rowBg);
+        if (sel) d.fillRect(0, y - 1, d.width(), ROW_H + 1, rowBg);
         d.setTextColor(sel ? d.color565(140, 210, 255) : d.color565(140, 140, 140), rowBg);
-        d.drawString(rows[i].label, 4, y); y += 12;
+        d.drawString(plainRows[i].label, 4, y); y += 10;
         uint16_t fbg = edit ? d.color565(20, 55, 80) : d.color565(10, 25, 45);
-        d.fillRoundRect(4, y, d.width() - 8, 13, 2, fbg);
+        d.fillRoundRect(4, y, d.width() - 8, FLD_H, 2, fbg);
         d.setTextColor(TFT_WHITE, fbg);
-        String val = edit ? (_cfgBuf + "_") : *rows[i].val;
+        String val = edit ? (_cfgBuf + "_") : *plainRows[i].val;
         if ((int)val.length() > 36) val = val.substring(val.length() - 36);
         d.drawString(val, 6, y + 2);
-        y += 18;
+        y += FLD_H + 3;
+    }
+
+    // Password row — CredStore gated
+    {
+        bool sel  = (_cfgSel == CF_PASSWORD);
+        bool edit = (sel && _cfgEditing);
+        uint16_t rowBg = sel ? d.color565(10, 40, 60) : (uint16_t)IP_BG;
+        if (sel) d.fillRect(0, y - 1, d.width(), ROW_H + 1, rowBg);
+        d.setTextColor(sel ? d.color565(140, 210, 255) : d.color565(140, 140, 140), rowBg);
+        d.drawString("Password:", 4, y); y += 10;
+        uint16_t fbg = edit ? d.color565(20, 55, 80) : d.color565(10, 25, 45);
+        d.fillRoundRect(4, y, d.width() - 8, FLD_H, 2, fbg);
+        if (credStoreLocked) {
+            d.setTextColor(d.color565(160, 100, 40), fbg);
+            d.drawString("Unlock CredStore to edit", 6, y + 2);
+        } else {
+            d.setTextColor(TFT_WHITE, fbg);
+            String val;
+            if (edit) {
+                val = _cfgBuf + "_";                              // plaintext while typing
+            } else {
+                val = _password.isEmpty() ? "(none)" : String(_password.length(), '*');
+            }
+            if ((int)val.length() > 36) val = val.substring(val.length() - 36);
+            d.drawString(val, 6, y + 2);
+        }
+        y += FLD_H + 3;
     }
 
     if (!_cfgStatus.isEmpty()) {
@@ -610,15 +764,33 @@ void AppIRCProx::_drawPage2() {
     else             _drawBottomBar("up/dn=row  ENTER=edit  </>=page  ESC");
 }
 
+// Returns true if s looks like the auto-generated "KProxXXXX" nick
+static bool isAutoNick(const String& s) {
+    if (s.length() != 9 || !s.startsWith("KProx")) return false;
+    for (int i = 5; i < 9; i++) {
+        char c = s.charAt(i);
+        if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))) return false;
+    }
+    return true;
+}
+
 void AppIRCProx::_handlePage2(KeyInput ki) {
     if (_cfgEditing) {
+        // Re-check lock if user locked CredStore while editing the password field
+        if (_cfgSel == CF_PASSWORD && credStoreLocked) {
+            _cfgEditing = false; _cfgBuf = "";
+            _cfgStatus = "CredStore locked"; _cfgStatusOk = false;
+            _needsRedraw = true; return;
+        }
         if (ki.esc)   { _cfgEditing = false; _cfgBuf = ""; _cfgStatus = ""; _needsRedraw = true; return; }
         if (ki.del && !_cfgBuf.isEmpty()) { _cfgBuf.remove(_cfgBuf.length() - 1); _needsRedraw = true; return; }
         if (ki.enter) {
-            if      (_cfgSel == CF_SERVER)  _server  = _cfgBuf.isEmpty() ? String(DEFAULT_IRC_SERVER)  : _cfgBuf;
-            else if (_cfgSel == CF_CHANNEL) _channel = _cfgBuf.isEmpty() ? String(DEFAULT_IRC_CHANNEL) : _cfgBuf;
-            else if (_cfgSel == CF_NICK)    _nick    = _cfgBuf.isEmpty() ? _nick : _cfgBuf;
-            _saveConfig();
+            if      (_cfgSel == CF_SERVER)   _server  = _cfgBuf.isEmpty() ? String(DEFAULT_IRC_SERVER)  : _cfgBuf;
+            else if (_cfgSel == CF_CHANNEL)  _channel = _cfgBuf.isEmpty() ? String(DEFAULT_IRC_CHANNEL) : _cfgBuf;
+            else if (_cfgSel == CF_NICK && !_cfgBuf.isEmpty()) _nick = _cfgBuf;
+            else if (_cfgSel == CF_PASSWORD) { _password = _cfgBuf; _savePassword(); }
+
+            if (_cfgSel != CF_PASSWORD) _saveConfig();
             _cfgEditing = false; _cfgBuf = "";
             _cfgStatus = "Saved"; _cfgStatusOk = true;
             _needsRedraw = true; return;
@@ -634,10 +806,15 @@ void AppIRCProx::_handlePage2(KeyInput ki) {
         _cfgStatus = ""; _needsRedraw = true; return;
     }
     if (ki.enter) {
+        if (_cfgSel == CF_PASSWORD && credStoreLocked) {
+            _cfgStatus = "Unlock CredStore first"; _cfgStatusOk = false; _needsRedraw = true; return;
+        }
         switch (_cfgSel) {
-            case CF_SERVER:  _cfgBuf = _server;  break;
-            case CF_CHANNEL: _cfgBuf = _channel; break;
-            case CF_NICK:    _cfgBuf = _nick;     break;
+            case CF_SERVER:   _cfgBuf = _server;   break;
+            case CF_CHANNEL:  _cfgBuf = _channel;  break;
+            // For auto-generated nick start blank so user types fresh; otherwise pre-fill
+            case CF_NICK:     _cfgBuf = isAutoNick(_nick) ? "" : _nick; break;
+            case CF_PASSWORD: _cfgBuf = "";         break;  // always blank for security
             default: break;
         }
         _cfgEditing = true; _cfgStatus = ""; _needsRedraw = true;
@@ -675,6 +852,7 @@ void AppIRCProx::onEnter() {
 }
 
 void AppIRCProx::onExit() {
+    _disconnect();
     _compEditing = false;
     _cfgEditing  = false;
 }

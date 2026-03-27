@@ -274,7 +274,11 @@ void loadAppLayout(int numApps) {
     for (int i = 1; i <= numApps; i++) {
         bool found = false;
         for (int v : appOrder) if (v == i) { found = true; break; }
-        if (!found) appOrder.push_back(i);
+        if (!found) {
+            appOrder.push_back(i);
+            // NostrProx (18) and IRCProx (19) are hidden by default
+            appHidden.push_back(i == 18 || i == 19);
+        }
     }
     // Ensure appHidden is same length as appOrder, defaulting to false.
     while ((int)appHidden.size() < (int)appOrder.size()) appHidden.push_back(false);

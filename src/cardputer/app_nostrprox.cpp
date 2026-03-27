@@ -217,7 +217,10 @@ bool AppNostrProx::_reloadKeys() {
     preferences.begin("kprox_nostr", true);
     _relay   = preferences.getString("relay",   DEFAULT_RELAY);
     _channel = preferences.getString("channel", DEFAULT_CHANNEL);
+    _name    = preferences.getString("name",    "");
     preferences.end();
+
+    nostrClient.setLocalName(_name);
 
     if (credStoreLocked) { _keysLoaded = false; return false; }
     _privkey = credStoreGet(CS_NOSTR_PRIVKEY);
@@ -235,7 +238,9 @@ void AppNostrProx::_saveConfig() {
     preferences.begin("kprox_nostr", false);
     preferences.putString("relay",   _relay);
     preferences.putString("channel", _channel);
+    preferences.putString("name",    _name);
     preferences.end();
+    nostrClient.setLocalName(_name);
 }
 
 // ---- Shared UI helpers ------------------------------------------------------
@@ -328,7 +333,7 @@ void AppNostrProx::_drawPage0() {
         for (int i = 0; i < feedRows && (_feedScroll + i) < total; i++) {
             const NostrMsg& m = nostrClient.msg(_feedScroll + i);
             d.setTextSize(1);
-            char pfx[10]; snprintf(pfx, sizeof(pfx), "%s: ", m.pubkey);
+            char pfx[20]; snprintf(pfx, sizeof(pfx), "%s: ", m.name);
             int pfxW = d.textWidth(pfx);
             d.setTextColor(d.color565(140, 100, 200), NP_BG);
             d.drawString(pfx, 4, y);
@@ -592,22 +597,24 @@ void AppNostrProx::_drawPage2() {
     struct { const char* label; const String* val; CfgField field; } rows[CF_COUNT] = {
         { "Relay URL:", &_relay,   CF_RELAY   },
         { "Channel:",   &_channel, CF_CHANNEL },
+        { "Name:",      &_name,    CF_NAME    },
     };
 
     for (int i = 0; i < CF_COUNT; i++) {
         bool sel  = (_cfgSel == (CfgField)i);
         bool edit = (sel && _cfgEditing);
         uint16_t rowBg = sel ? d.color565(30,10,60) : (uint16_t)NP_BG;
-        if (sel) d.fillRect(0, y-1, d.width(), 28, rowBg);
+        if (sel) d.fillRect(0, y-1, d.width(), 26, rowBg);
         d.setTextColor(sel ? d.color565(200,160,255) : d.color565(140,140,140), rowBg);
-        d.drawString(rows[i].label, 4, y); y += 12;
+        d.drawString(rows[i].label, 4, y); y += 10;
         uint16_t fbg = edit ? d.color565(40,20,80) : d.color565(20,15,40);
         d.fillRoundRect(4, y, d.width()-8, 13, 2, fbg);
         d.setTextColor(TFT_WHITE, fbg);
         String val = edit ? (_cfgBuf + "_") : *rows[i].val;
+        if (val.isEmpty() && !edit) val = "(none)";
         if ((int)val.length() > 36) val = val.substring(val.length()-36);
         d.drawString(val, 6, y+2);
-        y += 18;
+        y += 16;
     }
 
     if (!_cfgStatus.isEmpty()) {
@@ -632,10 +639,10 @@ void AppNostrProx::_handlePage2(KeyInput ki) {
         if (ki.enter) {
             if (_cfgSel == CF_RELAY)   _relay   = _cfgBuf.isEmpty() ? String(DEFAULT_RELAY)   : _cfgBuf;
             if (_cfgSel == CF_CHANNEL) _channel = _cfgBuf.isEmpty() ? String(DEFAULT_CHANNEL) : _cfgBuf;
+            if (_cfgSel == CF_NAME)    _name    = _cfgBuf;
             _saveConfig();
             _cfgEditing = false; _cfgBuf = "";
             _cfgStatus = "Saved"; _cfgStatusOk = true;
-            // If connected, re-subscribe with new channel immediately
             if (nostrClient.isConnected()) {
                 nostrClient.subscribe(_channel);
                 _lastRefreshMs = millis();
@@ -653,7 +660,9 @@ void AppNostrProx::_handlePage2(KeyInput ki) {
         _cfgStatus = ""; _needsRedraw = true; return;
     }
     if (ki.enter) {
-        _cfgBuf    = (_cfgSel == CF_RELAY) ? _relay : _channel;
+        if      (_cfgSel == CF_RELAY)   _cfgBuf = _relay;
+        else if (_cfgSel == CF_CHANNEL) _cfgBuf = _channel;
+        else if (_cfgSel == CF_NAME)    _cfgBuf = _name;
         _cfgEditing = true; _cfgStatus = ""; _needsRedraw = true;
     }
 }

@@ -72,10 +72,10 @@ void AppKProx::_drawScreen() {
     // ---- Body ----
     int y = BODY_TOP;
 
-    // Reg ID + name on one line
+    // Reg ID + name on one line — display as 1-indexed
     disp.setTextColor(TFT_YELLOW, BG);
-    String regLine = "Reg " + String(activeRegister);
-    if (!registers.empty()) regLine += "/" + String((int)registers.size() - 1);
+    String regLine = "Reg " + String(activeRegister + 1);
+    if (!registers.empty()) regLine += "/" + String((int)registers.size());
     if (!registerNames.empty() && activeRegister < (int)registerNames.size()
         && registerNames[activeRegister].length() > 0) {
         regLine += "  " + registerNames[activeRegister];
@@ -211,8 +211,8 @@ void AppKProx::onUpdate() {
     String newSSID    = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : "";
     String newNetLine = newIP + newSSID;
     String newRegContent  = registers.empty() ? "" : registers[activeRegister];
-    String newRegLine     = "Reg " + String(activeRegister);
-    if (!registers.empty()) newRegLine += "/" + String((int)registers.size() - 1);
+    String newRegLine     = "Reg " + String(activeRegister + 1);
+    if (!registers.empty()) newRegLine += "/" + String((int)registers.size());
     if (!registerNames.empty() && activeRegister < (int)registerNames.size()
         && registerNames[activeRegister].length() > 0) {
         newRegLine += "  " + registerNames[activeRegister];
@@ -262,7 +262,7 @@ void AppKProx::onUpdate() {
     }
     if (ki.ch >= '0' && ki.ch <= '9') { _numberBuf += ki.ch; _needsRedraw = true; return; }
     if (ki.enter && _numberBuf.length() > 0) {
-        int target = _numberBuf.toInt();
+        int target = _numberBuf.toInt() - 1;  // user types 1-based, convert to 0-based
         _numberBuf = "";
         if (!registers.empty()) {
             activeRegister = constrain(target, 0, (int)registers.size() - 1);

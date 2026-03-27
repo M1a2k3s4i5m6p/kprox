@@ -12,6 +12,7 @@
 struct NostrMsg {
     char pubkey[9];           // first 8 hex chars + NUL
     char eventId[9];          // first 8 hex chars + NUL
+    char name[17];            // display name (up to 16 chars) or pubkey prefix
     char content[NOSTR_CONTENT_MAX + 1];
     uint32_t created_at;
 };
@@ -58,6 +59,8 @@ public:
     const String& lastRelayMsg()  const { return _lastRelayMsg; }
     bool          lastPublishOk() const { return _lastPublishOk; }
 
+    void setLocalName(const String& name) { _localName = name; }
+
 private:
     bool          _isSecure  = false;
     WiFiClient    _plain;
@@ -70,6 +73,7 @@ private:
     String        _subId;
     String        _lastError;
     String        _lastRelayMsg;
+    String        _localName;   // display name for locally published messages
     String        _rxBuf;
     String        _pendingEventId;  // event id of the most recently published event
     bool          _lastPublishOk = true;
@@ -83,7 +87,8 @@ private:
     bool _wsSendText(const String& text);
     bool _wsPollFrame(String& out);
     void _pushMessage(const char* pubkey64, const char* eventId64,
-                      uint32_t ts, const char* content);
+                      uint32_t ts, const char* content,
+                      const char* name = nullptr);
     void _processEvent(const String& json);
 
     // Schnorr BIP-340

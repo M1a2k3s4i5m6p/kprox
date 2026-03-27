@@ -56,13 +56,17 @@ private:
     String _server;
     String _channel;
     String _nick;
+    String _password;          // stored in CredStore; empty = unregistered
+    bool   _saslPending = false;
     void _loadConfig();
     void _saveConfig();
+    void _savePassword();
+    bool _hasPassword() const { return !credStoreLocked && !_password.isEmpty(); }
 
-    // IRC TCP client
-    WiFiClientSecure _secureCli;
-    WiFiClient       _plainCli;
-    Client*          _client   = nullptr;
+    // IRC TCP client — heap-allocated so each connect gets a fresh TLS context
+    WiFiClientSecure* _secureCli = nullptr;
+    WiFiClient*       _plainCli  = nullptr;
+    Client*           _client    = nullptr;
     IrcState         _state    = IrcState::DISCONNECTED;
     String           _rxBuf;
     String           _lastError;
@@ -93,7 +97,7 @@ private:
     bool   _p1StatusOk = false;
 
     // Page 2 — Config
-    enum CfgField { CF_SERVER = 0, CF_CHANNEL = 1, CF_NICK = 2, CF_COUNT = 3 };
+    enum CfgField { CF_SERVER = 0, CF_CHANNEL = 1, CF_NICK = 2, CF_PASSWORD = 3, CF_COUNT = 4 };
     CfgField _cfgSel     = CF_SERVER;
     bool     _cfgEditing = false;
     String   _cfgBuf;
@@ -108,6 +112,7 @@ private:
     bool          _historyRequested = false;
     bool          _joinedChannel    = false;
     String        _capLsAccum;
+    String        _histStatus;   // diagnostic: shown on status page
 
     // State-change tracking to prevent spurious redraws
     IrcState      _prevState    = IrcState::DISCONNECTED;

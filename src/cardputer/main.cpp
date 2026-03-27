@@ -36,6 +36,7 @@
 #include "app_mediacontrol.h"
 #include "app_nostrprox.h"
 #include "app_ircprox.h"
+#include "app_kproxchat.h"
 #include <M5Cardputer.h>
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -389,6 +390,7 @@ void setup() {
     static Cardputer::AppMediaControl appMediaControl;
     static Cardputer::AppNostrProx   appNostrProx;
     static Cardputer::AppIRCProx     appIRCProx;
+    static Cardputer::AppKProxChat   appKProxChat;
     static Cardputer::AppSettings    appSettings;
 
     // Registration order determines launcher icon index (0 = launcher, 1..N = user apps)
@@ -410,12 +412,29 @@ void setup() {
     Cardputer::uiManager.addApp(&appTimerProx);    // 15
     Cardputer::uiManager.addApp(&appCombatProx);   // 16
     Cardputer::uiManager.addApp(&appMediaControl); // 17
-    Cardputer::uiManager.addApp(&appNostrProx);    // 18
-    Cardputer::uiManager.addApp(&appIRCProx);      // 19
-    Cardputer::uiManager.addApp(&appSettings); // 20
+    Cardputer::uiManager.addApp(&appNostrProx);    // 18 — hidden by default
+    Cardputer::uiManager.addApp(&appIRCProx);      // 19 — hidden by default
+    Cardputer::uiManager.addApp(&appKProxChat);    // 20
+    Cardputer::uiManager.addApp(&appSettings); // 21
 
-    // Load persisted app order/visibility (12 user apps, indices 1..12)
+    // Load persisted app order/visibility
     loadAppLayout((int)Cardputer::uiManager.apps().size() - 1);
+
+    // On first flash (no saved layout), hide NostrProx (18) and IRCProx (19) by default.
+    // loadAppLayout appends new apps at the end of appOrder as visible; we override here
+    // if these are freshly added (user can always unhide via Settings).
+    {
+        preferences.begin("kprox", true);
+        bool hasLayout = preferences.isKey("appOrder");
+        preferences.end();
+        if (!hasLayout) {
+            // Mark indices 18 and 19 hidden in appOrder
+            for (size_t i = 0; i < appOrder.size(); i++) {
+                if (appOrder[i] == 18 || appOrder[i] == 19)
+                    appHidden[i] = true;
+            }
+        }
+    }
 
     int numApps = (int)Cardputer::uiManager.apps().size();
 

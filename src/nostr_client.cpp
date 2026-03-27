@@ -613,7 +613,8 @@ const NostrMsg& NostrClient::msg(int i) const {
 void NostrClient::clearMessages() { _msgCount = 0; }
 
 void NostrClient::_pushMessage(const char* pubkey64, const char* eventId64,
-                                uint32_t ts, const char* content) {
+                                uint32_t ts, const char* content,
+                                const char* name) {
     for (int i = 0; i < _msgCount; i++) {
         if (strncmp(_msgs[i].eventId, eventId64, 8) == 0) return;
     }
@@ -631,7 +632,6 @@ void NostrClient::_pushMessage(const char* pubkey64, const char* eventId64,
         if (pos == 0) return;           // older than everything — discard
         pos--;                           // shift window: evict oldest ([0])
         for (int i = 0; i < pos; i++) _msgs[i] = _msgs[i + 1];
-        // pos now points to insertion slot near the end
     }
 
     NostrMsg& m = _msgs[pos];
@@ -640,6 +640,9 @@ void NostrClient::_pushMessage(const char* pubkey64, const char* eventId64,
     m.created_at = ts;
     strncpy(m.content, content, NOSTR_CONTENT_MAX);
     m.content[NOSTR_CONTENT_MAX] = '\0';
+    // Use provided name or fall back to pubkey prefix
+    const char* n = (name && *name) ? name : pubkey64;
+    strncpy(m.name, n, 16); m.name[16] = '\0';
 }
 
 // ---- Event parsing ----------------------------------------------------------
@@ -773,14 +776,13 @@ bool NostrClient::publish(const String& privkeyHex, const String& content,
     // This ensures the message appears in the feed regardless of relay echo.
     {
         char pubHex[65]; _toHex(pub, 32, pubHex);
-        // id is the first field: {"id":"<64 hex>",...}
         int idStart = ev.indexOf("\"id\":\"");
         if (idStart >= 0) {
             idStart += 6;
             String idHex = ev.substring(idStart, idStart + 64);
             _pendingEventId = idHex;
             uint32_t ts = (uint32_t)time(nullptr);
-            _pushMessage(pubHex, idHex.c_str(), ts, content.c_str());
+            _pushMessage(pubHex, idHex.c_str(), ts, content.c_str(), _localName.c_str());
         }
     }
     _lastPublishOk = true;

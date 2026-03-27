@@ -42,6 +42,7 @@ private:
     String _pubkey;
     String _relay;
     String _channel;
+    String _name;
     bool   _keysLoaded  = false;
     bool _reloadKeys();
     void _saveKeys();
@@ -62,7 +63,7 @@ private:
     bool   _p0GenConfirm = false;
 
     // Page 2 — Config
-    enum CfgField { CF_RELAY = 0, CF_CHANNEL = 1, CF_COUNT = 2 };
+    enum CfgField { CF_RELAY = 0, CF_CHANNEL = 1, CF_NAME = 2, CF_COUNT = 3 };
     CfgField _cfgSel     = CF_RELAY;
     bool     _cfgEditing = false;
     String   _cfgBuf;
