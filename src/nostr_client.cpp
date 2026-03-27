@@ -747,6 +747,19 @@ bool NostrClient::subscribe(const String& channelId) {
     return _wsSendText(msg);
 }
 
+void NostrClient::removePendingMessage() {
+    if (_pendingEventId.isEmpty()) return;
+    const char* prefix = _pendingEventId.c_str();
+    for (int i = 0; i < _msgCount; i++) {
+        if (strncmp(_msgs[i].eventId, prefix, 8) == 0) {
+            // Shift remaining messages down
+            for (int j = i; j < _msgCount - 1; j++) _msgs[j] = _msgs[j + 1];
+            _msgCount--;
+            break;
+        }
+    }
+}
+
 bool NostrClient::publish(const String& privkeyHex, const String& content,
                            const String& channelId) {
     if (_state != NostrState::CONNECTED) return false;

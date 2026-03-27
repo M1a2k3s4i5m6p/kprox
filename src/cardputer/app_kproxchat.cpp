@@ -69,20 +69,38 @@ void AppKProxChat::_drawTopBar(int page) {
     d.drawString(labels[page], 4, 3);
     drawTabHint(4 + d.textWidth(labels[page]) + 3);
 
-    NostrState st = _client.state();
-    uint16_t sb = (st == NostrState::CONNECTED) ? d.color565(20, 100, 20)
-                : (st == NostrState::CONNECTING || st == NostrState::HANDSHAKING)
-                                                 ? d.color565(100, 80, 0)
-                :                                  d.color565(80, 20, 20);
-    const char* sl = (st == NostrState::CONNECTED) ? "CONN"
-                   : (st == NostrState::CONNECTING || st == NostrState::HANDSHAKING) ? "..."
-                   : "OFF";
+    // Right side: [relay status badge] [connection badge]
+    int bx = d.width() - 4;
 
-    int bw = d.textWidth(sl) + 8;
-    int bx = d.width() - 2 - bw;
-    d.fillRoundRect(bx, 2, bw, BAR_H - 4, 2, sb);
+    NostrState st = _client.state();
+    const char* sl;
+    uint16_t    sb;
+    if (st == NostrState::CONNECTED) {
+        sl = "Connected";    sb = d.color565(20, 120, 20);
+    } else if (st == NostrState::CONNECTING || st == NostrState::HANDSHAKING) {
+        sl = "Connecting";   sb = d.color565(140, 90, 0);
+    } else {
+        sl = "Disconnected"; sb = d.color565(160, 20, 20);
+    }
+    int connW = d.textWidth(sl) + 8;
+    bx -= connW;
+    d.fillRoundRect(bx, 2, connW, BAR_H - 4, 2, sb);
     d.setTextColor(TFT_WHITE, sb);
     d.drawString(sl, bx + 4, 3);
+
+    // Relay response badge — only when there's a recent status to show
+    const String& rm = _client.lastRelayMsg();
+    if (!rm.isEmpty()) {
+        String label = rm.startsWith("REJECT") ? rm.substring(0, min((int)rm.length(), 10))
+                                               : rm.substring(0, min((int)rm.length(), 8));
+        uint16_t rmCol = rm.startsWith("REJECT") ? d.color565(160, 60, 0)
+                                                  : d.color565(0, 80, 60);
+        int rmW = d.textWidth(label) + 6;
+        bx -= rmW + 2;
+        d.fillRoundRect(bx, 2, rmW, BAR_H - 4, 2, rmCol);
+        d.setTextColor(TFT_WHITE, rmCol);
+        d.drawString(label, bx + 3, 3);
+    }
 }
 
 void AppKProxChat::_drawBottomBar(const char* hint) {
@@ -399,20 +417,36 @@ void AppKProxChat::onUpdate() {
         if (_pendingRelayCheck && !_client.lastRelayMsg().isEmpty()) {
             const String& rm = _client.lastRelayMsg();
             if (rm.startsWith("REJECT")) {
+                // Remove the optimistically-inserted message from the feed
+                _client.removePendingMessage();
                 _compStatus   = rm.length() > 28 ? rm.substring(0, 27) + "~" : rm;
                 _compStatusOk = false;
-                got = true;
             }
             _pendingRelayCheck = false;
+            got = true;
         }
 
         if (got) _needsRedraw = true;
     }
 
+    // Periodic subscribe — pull for new messages once per minute
     if (_client.isConnected() && _lastRefreshMs > 0 &&
         now - _lastRefreshMs >= 60000UL) {
         _client.subscribe(KPROXCHAT_CHANNEL);
         _lastRefreshMs = now;
+        _needsRedraw = true;
+    }
+
+    // Auto-reconnect if dropped
+    if (!_client.isConnected() &&
+        _client.state() == NostrState::DISCONNECTED &&
+        _lastRefreshMs > 0 &&
+        now - _lastRefreshMs >= 30000UL &&
+        WiFi.status() == WL_CONNECTED && _keysReady) {
+        _lastRefreshMs = now;
+        if (_client.connect(KPROXCHAT_RELAY)) {
+            _client.subscribe(KPROXCHAT_CHANNEL);
+        }
         _needsRedraw = true;
     }
 

@@ -61,6 +61,12 @@ public:
 
     void setLocalName(const String& name) { _localName = name; }
 
+    // Remove the most recently published message from the local feed.
+    // Call this when the relay rejects the event so it doesn't stay in the feed.
+    void removePendingMessage();
+
+    const String& pendingEventId() const { return _pendingEventId; }
+
 private:
     bool          _isSecure  = false;
     WiFiClient    _plain;
