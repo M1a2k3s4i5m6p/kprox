@@ -28,7 +28,7 @@ public:
     const uint16_t* appIcon() const override { return fa_crosshairs_48; }
 
 private:
-    enum Phase { PH_SPLASH, PH_PREVIEW, PH_PLAYING, PH_DEAD, PH_WIN };
+    enum Phase { PH_SPLASH, PH_PREVIEW, PH_PLAYING, PH_DEAD, PH_ROUND_CLEAR };
     Phase _phase = PH_SPLASH;
 
     static constexpr int AW     = 240;
@@ -54,6 +54,8 @@ private:
         int    pathIdx;
         unsigned long pathTimer;
         uint8_t wanderBias;
+        uint8_t role;   // 0=direct, 1=flank-L, 2=flank-R, 3=rear, 99=kamikaze
+        uint8_t type;   // ET_STANDARD/SCOUT/HEAVY/SNIPER
     };
 
     static constexpr float SPEED               = 1.4f;
@@ -66,19 +68,26 @@ private:
     static constexpr int   FIRE_COOLDOWN       = 350;
     static constexpr int   ENEMY_FIRE_COOLDOWN = 600;
     static constexpr int   PLAYER_HP           = 3;
-    static constexpr float KAMIKAZE_SPEED      = 3.0f;
-    static constexpr int   KAMIKAZE_HP          = 3;
-    static constexpr uint16_t C_KAMIKAZE        = 0xFD20;  // orange
+    static constexpr float KAMIKAZE_SPEED      = 1.8f;
+    static constexpr int   KAMIKAZE_HP         = 3;
+    static constexpr uint16_t C_KAMIKAZE       = 0xFD20;  // orange
     static constexpr int   ENEMY_COUNT         = 9;  // 3 initial + up to 5 reinforcements + 1 kamikaze
     static constexpr int   AI_TICK             = 60;
     static constexpr int   PATH_REPLAN_MS      = 700;
-    static constexpr float AGGRO_DIST          = 9999.f;
     static constexpr float MIN_DIST            = 30.f;
     static constexpr float RETREAT_DIST        = 22.f;
+    static constexpr float PANIC_DIST          = 14.f;   // back-up-and-fire threshold
+    static constexpr float SNIPER_PREF_DIST    = 80.f;   // sniper preferred engagement range
     static constexpr float AI_SPEED_SCALE      = 0.95f;
     static constexpr float WAYPOINT_RADIUS     = 8.f;
     static constexpr float REPULSE_DIST        = 20.f;
     static constexpr float REPULSE_STRENGTH    = 0.8f;
+
+    // Enemy types
+    static constexpr uint8_t ET_STANDARD = 0;  // 1HP, balanced
+    static constexpr uint8_t ET_SCOUT    = 1;  // 1HP, fast, aggressive flanker
+    static constexpr uint8_t ET_HEAVY    = 2;  // 3HP, slow, direct
+    static constexpr uint8_t ET_SNIPER   = 3;  // 1HP, stays at range, fires often
 
     Tank   _player;
     Tank   _enemies[ENEMY_COUNT];
@@ -93,8 +102,9 @@ private:
     Bullet _bullets[MAX_BULLETS];
 
     int           _score              = 0;
+    int           _round              = 1;
     int           _arenaIdx           = 0;
-    int           _activeEnemies      = 0;  // slots 0..2 = initial wave
+    int           _activeEnemies      = 0;
     bool          _initialWaveCleared = false;
     bool          _reinforceSent      = false;
     bool          _kamikazeSent       = false;
@@ -110,6 +120,8 @@ private:
     unsigned long _phaseEnter    = 0;
     unsigned long _aiTimer       = 0;
     int           _lastFirer     = -1;
+    const char*   _notifyMsg     = nullptr;
+    unsigned long _notifyEnd     = 0;
 
     static constexpr int CELL = 12;
     static constexpr int COLS = VAW    / CELL;
@@ -121,6 +133,7 @@ private:
     int _camX = 0, _camY = 0;
 
     void _resetGame();
+    void _startNextRound();
     void _spawnEnemies();
     void _update(unsigned long now);
     void _drawArena();
@@ -129,7 +142,7 @@ private:
     void _fireBullet(Tank& shooter, bool fromPlayer);
     void _aiStep(unsigned long now);
     bool _astar(int sx, int sy, int gx, int gy, Tank& e);
-    void _pathStep(Tank& e, int enemyIdx, unsigned long now);
+    void _pathStep(Tank& e, int enemyIdx, unsigned long now, int gc, int gr);
     bool _wallAt(float cx, float cy);
     bool _circleWall(float cx, float cy, float r);
     void _drawSplash();
@@ -138,15 +151,18 @@ private:
     void _spawnReinforcements();
     void _spawnKamikaze();
     void _drawDead();
-    void _drawWin();
+    void _drawRoundClear();
     void _drawHUD();
-    void _onPlayerKill();
+    void _onPlayerKill(int points);
     void _onPlayerDied();
 
     static constexpr uint16_t C_BG      = 0x0000;
     static constexpr uint16_t C_WALL    = 0x630C;
     static constexpr uint16_t C_PLAYER  = 0x07E0;
-    static constexpr uint16_t C_ENEMY   = 0xF800;
+    static constexpr uint16_t C_ENEMY   = 0xF800;  // standard: red
+    static constexpr uint16_t C_SCOUT   = 0x07FF;  // cyan
+    static constexpr uint16_t C_HEAVY   = 0x7800;  // dark maroon
+    static constexpr uint16_t C_SNIPER  = 0xF81F;  // magenta
     static constexpr uint16_t C_BULLET_P= 0xFFE0;
     static constexpr uint16_t C_BULLET_E= 0xFC00;
     static constexpr uint16_t C_HUD_BG  = 0x1082;
